@@ -4,16 +4,27 @@
 //! progress tracking and cancellation support.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
-use tauri::{Emitter, Window};
+use std::sync::{Arc, Mutex};
+use tauri::{Emitter, State, Window};
 
 use klyric_renderer::model::KLyricDocumentV2;
 use crate::video::encoder::VideoEncoder; // Still need VideoEncoder for check_ffmpeg
 use crate::video::pipeline::{run_render_pipeline, RenderOptions, RenderResult, PipelineError};
 
-// Global render state for cancellation support
-static RENDER_CANCELLED: AtomicBool = AtomicBool::new(false);
-static RENDER_PROGRESS: AtomicU32 = AtomicU32::new(0);
+// Render state managed by Tauri
+pub struct RenderState {
+    pub cancellation_token: Mutex<Option<Arc<AtomicBool>>>,
+    pub progress: Arc<AtomicU32>,
+}
+
+impl Default for RenderState {
+    fn default() -> Self {
+        Self {
+            cancellation_token: Mutex::new(None),
+            progress: Arc::new(AtomicU32::new(0)),
+        }
+    }
+}
 
 /// Check if FFmpeg is available
 #[tauri::command]
@@ -39,6 +50,7 @@ impl From<PipelineError> for String {
 #[tauri::command]
 pub async fn render_video(
     window: Window,
+    state: State<'_, RenderState>,
     klyric_json: String,
     audio_path: Option<String>,
     output_path: String,
@@ -46,9 +58,17 @@ pub async fn render_video(
 ) -> Result<RenderResult, String> {
     println!("🎥 Rust: render_video command received from window: {}", window.label());
 
-    // Reset cancellation flag
-    RENDER_CANCELLED.store(false, Ordering::SeqCst);
-    RENDER_PROGRESS.store(0, Ordering::SeqCst);
+    // Reset progress
+    state.progress.store(0, Ordering::SeqCst);
+
+    // Create new cancellation token
+    let cancellation_token = Arc::new(AtomicBool::new(false));
+
+    // Store token in state
+    {
+        let mut token_guard = state.cancellation_token.lock().unwrap();
+        *token_guard = Some(cancellation_token.clone());
+    }
 
     println!("🎥 Rust: JSON length: {}", klyric_json.len());
     if klyric_json.len() > 500 {
@@ -66,20 +86,7 @@ pub async fn render_video(
 
     // Clone values for the blocking task
     let window_clone = window.clone();
-    let cancellation_token = Arc::new(AtomicBool::new(false)); // Use Arc for thread safety
-    let token_clone = cancellation_token.clone();
-
-    // Spawn a monitoring thread to sync cancellation state
-    // (This is a bit of a hack to bridge the global static with the Arc)
-    tauri::async_runtime::spawn(async move {
-        loop {
-            if RENDER_CANCELLED.load(Ordering::SeqCst) {
-                token_clone.store(true, Ordering::SeqCst);
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        }
-    });
+    let progress_tracker = state.progress.clone();
 
     // Run pipeline in blocking task
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -93,8 +100,7 @@ pub async fn render_video(
             cancellation_token,
             move |progress| {
                 // Update global progress
-                // RENDER_PROGRESS.store(progress.current_frame, Ordering::Relaxed); // Global static, hard to access from here safely if modified?
-                // Actually static is fine.
+                progress_tracker.store(progress.current_frame, Ordering::Relaxed);
 
                 // Emit event
                 let _ = window_clone.emit("render-progress", progress);
@@ -117,14 +123,16 @@ pub async fn render_video(
 
 /// Cancel an ongoing render operation
 #[tauri::command]
-pub fn cancel_render() -> Result<(), String> {
+pub fn cancel_render(state: State<'_, RenderState>) -> Result<(), String> {
     log::info!("Render cancellation requested");
-    RENDER_CANCELLED.store(true, Ordering::SeqCst);
+    if let Some(token) = &*state.cancellation_token.lock().unwrap() {
+        token.store(true, Ordering::SeqCst);
+    }
     Ok(())
 }
 
 /// Get current render progress
 #[tauri::command]
-pub fn get_render_progress() -> u32 {
-    RENDER_PROGRESS.load(Ordering::SeqCst)
+pub fn get_render_progress(state: State<'_, RenderState>) -> u32 {
+    state.progress.load(Ordering::SeqCst)
 }
