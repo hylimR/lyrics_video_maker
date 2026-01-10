@@ -1,16 +1,90 @@
-# React + Vite
+# Lyric Video Maker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A professional **Lyric Video Generator** built with **React**, **Vite**, and **Tauri**.
+The application allows users to create high-quality lyric videos with advanced timing (K-Timing), per-character animations, and visual effects.
 
-Currently, two official plugins are available:
+## 🚀 Project Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**Core Architecture:**
+- **Hybrid Rendering:**
+  - **Preview:** Uses a custom **Rust** rendering engine compiled to **WASM** (`crates/klyric-renderer`) for high-performance browser preview.
+  - **Export:** Uses the same Rust crate natively via **Tauri** and **FFmpeg** for high-quality video encoding.
+- **State Sync:** Multi-window support (Editor/Preview) synchronized via `BroadcastChannel` and **Zustand**.
+- **Data Format:** Custom **KLyric v2.0** JSON format for rich styling and animation definition.
 
-## React Compiler
+## 🛠️ Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| **Frontend** | React 19 + Vite | Core UI framework (Latest React) |
+| **State** | Zustand | Global state management with cross-tab sync |
+| **Preview** | Rust -> WASM | `klyric-renderer` compiled to WebAssembly |
+| **Desktop** | Tauri v2 + Rust | Native shell, file system, system integration |
+| **Video** | FFmpeg | Video encoding (via `ffmpeg-sidecar`) |
+| **Graphics** | tiny-skia | 2D CPU rendering (Rust) |
 
-## Expanding the ESLint configuration
+## 📂 Directory Structure
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```
+├── src/                        # Frontend Application
+│   ├── components/             # React UI Components
+│   │   ├── WasmPreview.jsx     # Main Preview Component (WASM consumer)
+│   │   └── ...
+│   ├── store/                  # Zustand Store (Sync logic)
+│   ├── wasm/                   # Compiled WASM Output
+│   └── ...
+├── src-tauri/                  # Tauri Backend
+│   ├── src/                    # Native Rust Logic
+│   └── Cargo.toml              # Native Dependencies
+├── crates/                     # Shared Rust Logic
+│   └── klyric-renderer/        # Core Rendering Engine (Lib)
+│       ├── src/
+│       │   ├── lib.rs          # Crate Entry (WASM/Native exports)
+│       │   ├── model.rs        # KLyric Data Models
+│       │   └── renderer.rs     # Rendering Logic (tiny-skia)
+│       └── Cargo.toml
+└── .agent/                     # Agent Context & Specs
+    └── specs/                  # KLyric Format Specs
+```
+
+## 🧠 Key Concepts
+
+### KLyric Format (v2.0)
+The project relies on a custom JSON-based format for lyrics, defined in `crates/klyric-renderer/src/model.rs`.
+It supports:
+- **Hierarchical Structure:** Project -> Theme -> Styles -> Lines -> Syllables/Chars.
+- **Rich Styling:** CSS-like properties (font, fill, stroke, shadow).
+- **Animation:** Per-character effects (fadeIn, move, scale) and transitions.
+
+### Rendering Pipeline
+1.  **Input:** User edits lyrics/styles in React UI.
+2.  **State:** Updates `useAppStore` (Zustand).
+3.  **Preview (WASM):**
+    - State -> JSON -> `KLyricWasmRenderer` (WASM).
+    - Rust parses JSON -> Layouts Text -> Renders to `Uint8ClampedArray`.
+    - JS puts image data onto `<canvas>`.
+4.  **Export (Native):**
+    - State -> JSON -> Tauri Command -> Rust Backend.
+    - Rust renders frames -> Pipes to FFmpeg -> Writes MP4.
+
+### Master/Client Sync
+- **Master:** The main editor window. Handles logic, history (Undo/Redo), and broadcasts state.
+- **Client:** Preview windows. Receive state updates and request changes.
+- **Election:** Implemented in `src/store/useAppStore.js` using `localStorage` and heartbeats.
+
+## ⚡ Development Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Frontend (Browser mode) |
+| `npm run tauri:dev` | Start Desktop App (Tauri mode) |
+| `npm run build:wasm` | **Crucial:** Recompile Rust renderer to WASM |
+| `npm run build` | Build Frontend for production |
+| `npm run tauri:build` | Build Desktop Installer |
+
+## ⚠️ Guidelines & Best Practices
+
+- **WASM Changes:** If you modify `crates/klyric-renderer`, you **MUST** run `npm run build:wasm` to see changes in the preview.
+- **Schema Safety:** The Rust structs in `model.rs` are the source of truth for the KLyric format. Ensure JSON generated by JS matches this.
+- **Performance:** The WASM renderer re-renders the full frame. Avoid unnecessary re-renders in `WasmPreview.jsx`.
+- **Rust Style:** Follow standard Rust idioms. Use `cargo fmt` and `cargo clippy`.
