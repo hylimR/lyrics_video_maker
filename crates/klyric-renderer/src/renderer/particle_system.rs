@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use tiny_skia::{Pixmap, Color, Paint, FillRule, PathBuilder, Rect, Transform as SkiaTransform};
-use crate::particle::{Particle, ParticleEmitter, ParticleShape, BlendMode, color_to_rgba};
+use crate::particle::{Particle, ParticleEmitter, ParticleShape, BlendMode, color_to_rgba, ParticleConfig, SpawnPattern, RangeValue, ParticlePhysics};
 use crate::presets::{CharBounds, EffectPreset, PresetFactory};
 
 pub struct ParticleRenderSystem {
@@ -117,6 +117,131 @@ impl ParticleRenderSystem {
                  }
              }
          }
+    }
+
+    /// Create and register a one-shot disintegration emitter from a pixmap
+    pub fn ensure_disintegration_emitter(
+        &mut self,
+        key: String,
+        pixmap: &Pixmap,
+        bounds: CharBounds,
+        seed: u64,
+        config: Option<ParticleConfig>,
+    ) {
+        if self.particle_emitters.contains_key(&key) {
+             if let Some(emitter) = self.particle_emitters.get_mut(&key) {
+                // Ensure it stays alive while needed, though usually this is a one-shot burst
+                emitter.active = true;
+             }
+            return;
+        }
+
+        let mut rng = crate::particle::Rng::new(seed);
+
+        let mut base_config = config.unwrap_or_else(|| ParticleConfig {
+            count: 0, // Ignored for manual spawn
+            spawn_rate: 0.0,
+            lifetime: RangeValue::Range(0.5, 1.2),
+            speed: RangeValue::Range(20.0, 60.0),
+            direction: RangeValue::Range(220.0, 320.0), // Up-Left to Up-Right
+            spread: 45.0,
+            start_size: RangeValue::Range(2.0, 4.0),
+            end_size: RangeValue::Single(0.0),
+            rotation_speed: RangeValue::Range(-90.0, 90.0),
+            color: "#FFFFFF".to_string(),
+            shape: ParticleShape::Square,
+            physics: ParticlePhysics {
+                gravity: 200.0, // Fall down eventually
+                drag: 0.5,
+                wind_x: 0.0,
+                wind_y: 0.0,
+            },
+            blend_mode: BlendMode::Normal,
+        });
+
+        // Disable automatic spawning
+        base_config.spawn_rate = 0.0;
+
+        let mut emitter = ParticleEmitter::new(
+            base_config.clone(),
+            SpawnPattern::Point { x: 0.0, y: 0.0 }, // Dummy pattern
+            seed,
+        );
+
+        // Sampling step - don't spawn a particle for every single pixel, that's too heavy
+        // Dynamically adjust step based on size to keep particle count reasonable
+        let pixel_count = pixmap.width() * pixmap.height();
+        let step = if pixel_count > 5000 {
+            3
+        } else if pixel_count > 1000 {
+            2
+        } else {
+            1
+        };
+
+        let pm_w = pixmap.width() as f32;
+        let pm_h = pixmap.height() as f32;
+
+        // Map pixmap coordinates to screen bounds
+        // bounds.x/y is top-left on screen
+
+        let data = pixmap.data();
+        let stride = pixmap.width() as usize * 4;
+
+        for y in (0..pixmap.height()).step_by(step) {
+            for x in (0..pixmap.width()).step_by(step) {
+                let idx = (y as usize) * stride + (x as usize) * 4;
+                if idx + 3 >= data.len() { break; }
+
+                let a = data[idx + 3];
+                if a > 10 { // Threshold alpha
+                    let r = data[idx];
+                    let g = data[idx + 1];
+                    let b = data[idx + 2];
+
+                    // Create particle
+                    let px = bounds.x + (x as f32 / pm_w) * bounds.width;
+                    let py = bounds.y + (y as f32 / pm_h) * bounds.height;
+
+                    let color: u32 = ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32);
+
+                    // Manual spawn logic from emitter
+                    // Calculate velocity from direction + spread
+                    let base_dir = base_config.direction.sample(&mut rng);
+                    let spread_offset = rng.range(-base_config.spread / 2.0, base_config.spread / 2.0);
+                    let dir_rad = (base_dir + spread_offset).to_radians();
+
+                    let speed = base_config.speed.sample(&mut rng);
+                    let vx = dir_rad.cos() * speed;
+                    let vy = dir_rad.sin() * speed;
+
+                    // Add some random jitter to position so grid isn't obvious
+                    let jx = rng.range(-1.0, 1.0);
+                    let jy = rng.range(-1.0, 1.0);
+
+                    let particle = Particle {
+                        x: px + jx,
+                        y: py + jy,
+                        vx,
+                        vy,
+                        life: 0.0,
+                        max_life: base_config.lifetime.sample(&mut rng),
+                        size: base_config.start_size.sample(&mut rng),
+                        start_size: base_config.start_size.sample(&mut rng),
+                        end_size: base_config.end_size.sample(&mut rng),
+                        rotation: rng.range(0.0, 360.0),
+                        rotation_speed: base_config.rotation_speed.sample(&mut rng),
+                        color,
+                        opacity: 1.0,
+                        shape: base_config.shape.clone(),
+                    };
+
+                    emitter.particles.push(particle);
+                }
+            }
+        }
+
+        self.particle_emitters.insert(key, emitter);
     }
 
     pub fn clear(&mut self) {
