@@ -1,0 +1,106 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+
+@layer base {
+  :root {
+    /* Main Variables will be overridden by .dark class usually, 
+       but setting defaults here for consistency if class is missing */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    
+    /* Force Tailwind V4 spacing */
+    --spacing: 0.25rem;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 217 91% 60%; /* Neon Blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --radius: 0.3rem;
+
+    /* Legacy Variables Mapping */
+    --color-bg: #0a0a0f;
+    --color-bg-secondary: #1a1a2e;
+    --color-accent: #2c7bf6; /* Matching primary */
+    --color-text: #ffffff;
+    --color-text-muted: rgba(255, 255, 255, 0.6);
+  }
+
+  /* Dark mode by default for this app generally */
+  .dark {
+    --background: 240 10% 4%;     /* Deep Blue-Black #0a0a0e */
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 6%;           /* Slightly lighter than bg */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 5%;        /* Popup bg */
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 212 100% 50%;      /* Bright Neon Blue */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 5% 14%;      /* Dark Gray/Blue for secondary items */
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 5% 14%;
+    --muted-foreground: 240 5% 60%;
+
+    --accent: 212 100% 50%;       /* Match Primary for coherence */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 5% 18%;         /* Subtle border */
+    --input: 240 5% 18%;          
+    --ring: 212 100% 50%;         /* Focus ring color (neon blue) */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Legacy global styles */
+body {
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+ font-family: inherit;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}

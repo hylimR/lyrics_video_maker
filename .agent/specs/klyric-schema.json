@@ -1,0 +1,548 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://lyricvideomaker.io/schemas/klyric-v2.json",
+    "title": "KLyric Format v2.0",
+    "description": "A JSON-based karaoke lyric format with per-character transforms, animations, and hierarchical layouts",
+    "type": "object",
+    "required": [
+        "version",
+        "lines"
+    ],
+    "properties": {
+        "version": {
+            "type": "string",
+            "enum": [
+                "2.0"
+            ],
+            "description": "KLyric format version"
+        },
+        "project": {
+            "$ref": "#/definitions/Project"
+        },
+        "theme": {
+            "$ref": "#/definitions/Theme"
+        },
+        "styles": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/Style"
+            },
+            "description": "Named style definitions"
+        },
+        "effects": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/Effect"
+            },
+            "description": "Named effect definitions"
+        },
+        "lines": {
+            "type": "array",
+            "items": {
+                "$ref": "#/definitions/Line"
+            },
+            "description": "Array of lyric lines"
+        }
+    },
+    "definitions": {
+        "Project": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string"
+                },
+                "artist": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "number"
+                },
+                "resolution": {
+                    "type": "object",
+                    "properties": {
+                        "width": {
+                            "type": "integer"
+                        },
+                        "height": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            }
+        },
+        "Theme": {
+            "type": "object",
+            "properties": {
+                "background": {
+                    "type": "object",
+                    "properties": {
+                        "color": {
+                            "$ref": "#/definitions/Color"
+                        },
+                        "image": {
+                            "type": "string"
+                        },
+                        "video": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "Line": {
+            "type": "object",
+            "required": [
+                "start",
+                "end"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "start": {
+                    "type": "number"
+                },
+                "end": {
+                    "type": "number"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "style": {
+                    "type": "string"
+                },
+                "effects": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "layout": {
+                    "$ref": "#/definitions/Layout"
+                },
+                "transform": {
+                    "$ref": "#/definitions/Transform"
+                },
+                "position": {
+                    "$ref": "#/definitions/Position"
+                },
+                "chars": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Char"
+                    }
+                }
+            }
+        },
+        "Char": {
+            "type": "object",
+            "required": [
+                "char",
+                "start",
+                "end"
+            ],
+            "properties": {
+                "char": {
+                    "type": "string"
+                },
+                "start": {
+                    "type": "number"
+                },
+                "end": {
+                    "type": "number"
+                },
+                "style": {
+                    "type": "string"
+                },
+                "effects": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "transform": {
+                    "$ref": "#/definitions/Transform"
+                }
+            }
+        },
+        "Layout": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "horizontal",
+                        "vertical",
+                        "path"
+                    ],
+                    "default": "horizontal"
+                },
+                "align": {
+                    "type": "string",
+                    "enum": [
+                        "left",
+                        "center",
+                        "right"
+                    ],
+                    "default": "center"
+                },
+                "justify": {
+                    "type": "string",
+                    "enum": [
+                        "top",
+                        "middle",
+                        "bottom"
+                    ],
+                    "default": "middle"
+                },
+                "gap": {
+                    "type": "number",
+                    "default": 0
+                },
+                "wrap": {
+                    "type": "boolean",
+                    "default": false
+                },
+                "maxWidth": {
+                    "type": "number"
+                }
+            }
+        },
+        "Position": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "$ref": "#/definitions/PositionValue"
+                },
+                "y": {
+                    "$ref": "#/definitions/PositionValue"
+                },
+                "anchor": {
+                    "type": "string",
+                    "enum": [
+                        "top-left",
+                        "top-center",
+                        "top-right",
+                        "center-left",
+                        "center",
+                        "center-right",
+                        "bottom-left",
+                        "bottom-center",
+                        "bottom-right"
+                    ],
+                    "default": "center"
+                }
+            }
+        },
+        "PositionValue": {
+            "anyOf": [
+                {
+                    "type": "number"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?%$"
+                }
+            ]
+        },
+        "Transform": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "number",
+                    "default": 0
+                },
+                "y": {
+                    "type": "number",
+                    "default": 0
+                },
+                "rotation": {
+                    "type": "number",
+                    "default": 0
+                },
+                "scale": {
+                    "type": "number",
+                    "default": 1
+                },
+                "scaleX": {
+                    "type": "number",
+                    "default": 1
+                },
+                "scaleY": {
+                    "type": "number",
+                    "default": 1
+                },
+                "opacity": {
+                    "type": "number",
+                    "default": 1
+                },
+                "anchorX": {
+                    "type": "number",
+                    "default": 0.5
+                },
+                "anchorY": {
+                    "type": "number",
+                    "default": 0.5
+                }
+            }
+        },
+        "Style": {
+            "type": "object",
+            "properties": {
+                "extends": {
+                    "type": "string"
+                },
+                "font": {
+                    "type": "object",
+                    "properties": {
+                        "family": {
+                            "type": "string"
+                        },
+                        "size": {
+                            "type": "number"
+                        },
+                        "weight": {
+                            "type": "integer"
+                        },
+                        "style": {
+                            "type": "string",
+                            "enum": [
+                                "normal",
+                                "italic",
+                                "oblique"
+                            ]
+                        },
+                        "letterSpacing": {
+                            "type": "number"
+                        }
+                    }
+                },
+                "colors": {
+                    "type": "object",
+                    "properties": {
+                        "inactive": {
+                            "$ref": "#/definitions/FillStroke"
+                        },
+                        "active": {
+                            "$ref": "#/definitions/FillStroke"
+                        },
+                        "complete": {
+                            "$ref": "#/definitions/FillStroke"
+                        }
+                    }
+                },
+                "stroke": {
+                    "type": "object",
+                    "properties": {
+                        "width": {
+                            "type": "number"
+                        },
+                        "color": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "shadow": {
+                    "type": "object",
+                    "properties": {
+                        "color": {
+                            "type": "string"
+                        },
+                        "x": {
+                            "type": "number"
+                        },
+                        "y": {
+                            "type": "number"
+                        },
+                        "blur": {
+                            "type": "number"
+                        }
+                    }
+                },
+                "glow": {
+                    "type": "object",
+                    "properties": {
+                        "color": {
+                            "type": "string"
+                        },
+                        "blur": {
+                            "type": "number"
+                        },
+                        "intensity": {
+                            "type": "number"
+                        }
+                    }
+                }
+            }
+        },
+        "FillStroke": {
+            "oneOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "fill": {
+                            "type": "string"
+                        },
+                        "stroke": {
+                            "type": "string"
+                        }
+                    }
+                }
+            ]
+        },
+        "Color": {
+            "type": "string"
+        },
+        "Effect": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "transition",
+                        "karaoke",
+                        "keyframe",
+                        "particle",
+                        "custom"
+                    ]
+                },
+                "trigger": {
+                    "type": "string",
+                    "enum": [
+                        "enter",
+                        "exit",
+                        "active",
+                        "inactive",
+                        "always"
+                    ],
+                    "default": "enter"
+                },
+                "duration": {
+                    "type": "number"
+                },
+                "delay": {
+                    "type": "number"
+                },
+                "easing": {
+                    "$ref": "#/definitions/Easing"
+                },
+                "keyframes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Keyframe"
+                    }
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "mask",
+                        "color",
+                        "wipe",
+                        "reveal"
+                    ]
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": [
+                        "ltr",
+                        "rtl",
+                        "ttb",
+                        "btt"
+                    ]
+                },
+                "preset": {
+                    "type": "string"
+                },
+                "iterations": {
+                    "type": "integer",
+                    "default": 1
+                }
+            }
+        },
+        "Keyframe": {
+            "type": "object",
+            "required": [
+                "time"
+            ],
+            "properties": {
+                "time": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "opacity": {
+                    "type": "number"
+                },
+                "scale": {
+                    "type": "number"
+                },
+                "scaleX": {
+                    "type": "number"
+                },
+                "scaleY": {
+                    "type": "number"
+                },
+                "rotation": {
+                    "type": "number"
+                },
+                "x": {
+                    "type": "number"
+                },
+                "y": {
+                    "type": "number"
+                },
+                "color": {
+                    "type": "string"
+                },
+                "easing": {
+                    "$ref": "#/definitions/Easing"
+                }
+            }
+        },
+        "Easing": {
+            "type": "string",
+            "enum": [
+                "linear",
+                "easeIn",
+                "easeOut",
+                "easeInOut",
+                "easeInQuad",
+                "easeOutQuad",
+                "easeInOutQuad",
+                "easeInCubic",
+                "easeOutCubic",
+                "easeInOutCubic",
+                "easeInQuart",
+                "easeOutQuart",
+                "easeInOutQuart",
+                "easeInQuint",
+                "easeOutQuint",
+                "easeInOutQuint",
+                "easeInSine",
+                "easeOutSine",
+                "easeInOutSine",
+                "easeInExpo",
+                "easeOutExpo",
+                "easeInOutExpo",
+                "easeInCirc",
+                "easeOutCirc",
+                "easeInOutCirc",
+                "easeInElastic",
+                "easeOutElastic",
+                "easeInOutElastic",
+                "easeInBack",
+                "easeOutBack",
+                "easeInOutBack",
+                "easeInBounce",
+                "easeOutBounce",
+                "easeInOutBounce"
+            ]
+        }
+    }
+}

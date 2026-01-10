@@ -1,0 +1,823 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://klyric.dev/schemas/v2.0/klyric.schema.json",
+    "title": "KLyric v2.0 Document",
+    "description": "A declarative, AI-friendly format for lyric video projects with per-character timing, styling, and effects.",
+    "type": "object",
+    "required": [
+        "version",
+        "project",
+        "lines"
+    ],
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "JSON Schema reference"
+        },
+        "version": {
+            "type": "string",
+            "enum": [
+                "2.0"
+            ],
+            "description": "KLyric format version"
+        },
+        "project": {
+            "$ref": "#/definitions/Project"
+        },
+        "theme": {
+            "$ref": "#/definitions/Theme"
+        },
+        "styles": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/Style"
+            },
+            "description": "Named style definitions that can be referenced by lines and characters"
+        },
+        "effects": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/Effect"
+            },
+            "description": "Named effect definitions that can be applied to lines and characters"
+        },
+        "lines": {
+            "type": "array",
+            "items": {
+                "$ref": "#/definitions/Line"
+            },
+            "description": "Array of lyric lines with timing and character data"
+        }
+    },
+    "definitions": {
+        "Project": {
+            "type": "object",
+            "required": [
+                "title",
+                "duration",
+                "resolution"
+            ],
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Song or project title"
+                },
+                "artist": {
+                    "type": "string",
+                    "description": "Artist name"
+                },
+                "album": {
+                    "type": "string",
+                    "description": "Album name"
+                },
+                "duration": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Total duration in seconds"
+                },
+                "resolution": {
+                    "$ref": "#/definitions/Resolution"
+                },
+                "fps": {
+                    "type": "integer",
+                    "enum": [
+                        24,
+                        25,
+                        30,
+                        50,
+                        60
+                    ],
+                    "default": 30,
+                    "description": "Frames per second for export"
+                },
+                "audio": {
+                    "type": "string",
+                    "description": "Path to audio file (relative or absolute)"
+                },
+                "created": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Creation timestamp"
+                },
+                "modified": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Last modified timestamp"
+                }
+            }
+        },
+        "Resolution": {
+            "type": "object",
+            "required": [
+                "width",
+                "height"
+            ],
+            "properties": {
+                "width": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Width in pixels"
+                },
+                "height": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Height in pixels"
+                }
+            }
+        },
+        "Theme": {
+            "type": "object",
+            "properties": {
+                "background": {
+                    "$ref": "#/definitions/Background"
+                },
+                "defaultStyle": {
+                    "type": "string",
+                    "description": "Name of the default style to apply to all lines"
+                }
+            }
+        },
+        "Background": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "solid",
+                        "gradient",
+                        "image",
+                        "video"
+                    ],
+                    "default": "solid"
+                },
+                "color": {
+                    "$ref": "#/definitions/Color",
+                    "description": "Background color for solid type"
+                },
+                "gradient": {
+                    "$ref": "#/definitions/Gradient",
+                    "description": "Gradient definition for gradient type"
+                },
+                "image": {
+                    "type": "string",
+                    "description": "Path to background image"
+                },
+                "video": {
+                    "type": "string",
+                    "description": "Path to background video"
+                },
+                "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "default": 1,
+                    "description": "Background opacity"
+                }
+            }
+        },
+        "Gradient": {
+            "type": "object",
+            "required": [
+                "colors"
+            ],
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "linear",
+                        "radial"
+                    ],
+                    "default": "linear"
+                },
+                "colors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Color"
+                    },
+                    "minItems": 2,
+                    "description": "Array of colors in the gradient"
+                },
+                "angle": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 360,
+                    "default": 180,
+                    "description": "Angle in degrees for linear gradients"
+                },
+                "stops": {
+                    "type": "array",
+                    "items": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                    },
+                    "description": "Optional stop positions (0-1) for each color"
+                }
+            }
+        },
+        "Style": {
+            "type": "object",
+            "properties": {
+                "extends": {
+                    "type": "string",
+                    "description": "Name of parent style to inherit from"
+                },
+                "font": {
+                    "$ref": "#/definitions/Font"
+                },
+                "colors": {
+                    "$ref": "#/definitions/StateColors"
+                },
+                "stroke": {
+                    "$ref": "#/definitions/Stroke"
+                },
+                "shadow": {
+                    "$ref": "#/definitions/Shadow"
+                },
+                "glow": {
+                    "$ref": "#/definitions/Glow"
+                }
+            }
+        },
+        "Font": {
+            "type": "object",
+            "properties": {
+                "family": {
+                    "type": "string",
+                    "default": "Noto Sans SC",
+                    "description": "Font family name or comma-separated fallback list"
+                },
+                "size": {
+                    "type": "number",
+                    "minimum": 1,
+                    "default": 72,
+                    "description": "Font size in pixels"
+                },
+                "weight": {
+                    "oneOf": [
+                        {
+                            "type": "integer",
+                            "minimum": 100,
+                            "maximum": 900
+                        },
+                        {
+                            "type": "string",
+                            "enum": [
+                                "normal",
+                                "bold"
+                            ]
+                        }
+                    ],
+                    "default": 700,
+                    "description": "Font weight (100-900 or 'normal'/'bold')"
+                },
+                "style": {
+                    "type": "string",
+                    "enum": [
+                        "normal",
+                        "italic",
+                        "oblique"
+                    ],
+                    "default": "normal"
+                },
+                "letterSpacing": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Letter spacing in pixels"
+                }
+            }
+        },
+        "StateColors": {
+            "type": "object",
+            "description": "Colors for different character states during karaoke",
+            "properties": {
+                "inactive": {
+                    "$ref": "#/definitions/FillStroke",
+                    "description": "Color before character is highlighted"
+                },
+                "active": {
+                    "$ref": "#/definitions/FillStroke",
+                    "description": "Color during character highlight"
+                },
+                "complete": {
+                    "$ref": "#/definitions/FillStroke",
+                    "description": "Color after character highlight completes"
+                }
+            }
+        },
+        "FillStroke": {
+            "type": "object",
+            "properties": {
+                "fill": {
+                    "$ref": "#/definitions/Color"
+                },
+                "stroke": {
+                    "$ref": "#/definitions/Color"
+                }
+            }
+        },
+        "Color": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "pattern": "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$",
+                    "description": "Hex color (#RRGGBB or #RRGGBBAA)"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^rgba?\\(",
+                    "description": "RGB/RGBA color function"
+                }
+            ]
+        },
+        "Stroke": {
+            "type": "object",
+            "properties": {
+                "width": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 0,
+                    "description": "Stroke width in pixels"
+                },
+                "color": {
+                    "$ref": "#/definitions/Color"
+                }
+            }
+        },
+        "Shadow": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "$ref": "#/definitions/Color"
+                },
+                "x": {
+                    "type": "number",
+                    "default": 2,
+                    "description": "Horizontal offset in pixels"
+                },
+                "y": {
+                    "type": "number",
+                    "default": 2,
+                    "description": "Vertical offset in pixels"
+                },
+                "blur": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 4,
+                    "description": "Blur radius in pixels"
+                }
+            }
+        },
+        "Glow": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "$ref": "#/definitions/Color"
+                },
+                "blur": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 8,
+                    "description": "Glow blur radius"
+                },
+                "intensity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "default": 0.5,
+                    "description": "Glow intensity"
+                }
+            }
+        },
+        "Effect": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "transition",
+                        "karaoke",
+                        "keyframe",
+                        "particle",
+                        "custom"
+                    ],
+                    "description": "Type of effect"
+                },
+                "trigger": {
+                    "type": "string",
+                    "enum": [
+                        "enter",
+                        "exit",
+                        "active",
+                        "inactive",
+                        "always"
+                    ],
+                    "default": "enter",
+                    "description": "When the effect triggers"
+                },
+                "duration": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Effect duration in seconds"
+                },
+                "delay": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Delay before effect starts in seconds"
+                },
+                "easing": {
+                    "$ref": "#/definitions/Easing"
+                },
+                "properties": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/AnimatedValue"
+                    },
+                    "description": "Properties to animate for transition effects"
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "mask",
+                        "color",
+                        "wipe",
+                        "reveal"
+                    ],
+                    "description": "Mode for karaoke effects"
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": [
+                        "ltr",
+                        "rtl",
+                        "ttb",
+                        "btt"
+                    ],
+                    "description": "Direction for directional effects"
+                },
+                "keyframes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Keyframe"
+                    },
+                    "description": "Keyframe array for keyframe effects"
+                },
+                "iterations": {
+                    "oneOf": [
+                        {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        {
+                            "type": "string",
+                            "enum": [
+                                "infinite"
+                            ]
+                        }
+                    ],
+                    "default": 1,
+                    "description": "Number of times to repeat the effect"
+                }
+            }
+        },
+        "AnimatedValue": {
+            "type": "object",
+            "required": [
+                "from",
+                "to"
+            ],
+            "properties": {
+                "from": {
+                    "type": "number"
+                },
+                "to": {
+                    "type": "number"
+                }
+            }
+        },
+        "Keyframe": {
+            "type": "object",
+            "required": [
+                "time"
+            ],
+            "properties": {
+                "time": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Keyframe position (0-1)"
+                },
+                "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "scale": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "scaleX": {
+                    "type": "number"
+                },
+                "scaleY": {
+                    "type": "number"
+                },
+                "rotation": {
+                    "type": "number",
+                    "description": "Rotation in degrees"
+                },
+                "x": {
+                    "type": "number",
+                    "description": "X offset in pixels"
+                },
+                "y": {
+                    "type": "number",
+                    "description": "Y offset in pixels"
+                },
+                "color": {
+                    "$ref": "#/definitions/Color"
+                },
+                "easing": {
+                    "$ref": "#/definitions/Easing"
+                }
+            }
+        },
+        "Easing": {
+            "type": "string",
+            "enum": [
+                "linear",
+                "easeIn",
+                "easeOut",
+                "easeInOut",
+                "easeInQuad",
+                "easeOutQuad",
+                "easeInOutQuad",
+                "easeInCubic",
+                "easeOutCubic",
+                "easeInOutCubic",
+                "easeInQuart",
+                "easeOutQuart",
+                "easeInOutQuart",
+                "easeInQuint",
+                "easeOutQuint",
+                "easeInOutQuint",
+                "easeInSine",
+                "easeOutSine",
+                "easeInOutSine",
+                "easeInExpo",
+                "easeOutExpo",
+                "easeInOutExpo",
+                "easeInCirc",
+                "easeOutCirc",
+                "easeInOutCirc",
+                "easeInElastic",
+                "easeOutElastic",
+                "easeInOutElastic",
+                "easeInBack",
+                "easeOutBack",
+                "easeInOutBack",
+                "easeInBounce",
+                "easeOutBounce",
+                "easeInOutBounce"
+            ],
+            "default": "linear"
+        },
+        "Position": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "$ref": "#/definitions/PositionValue",
+                    "description": "X position (pixels or percentage)"
+                },
+                "y": {
+                    "$ref": "#/definitions/PositionValue",
+                    "description": "Y position (pixels or percentage)"
+                },
+                "anchor": {
+                    "type": "string",
+                    "enum": [
+                        "top-left",
+                        "top-center",
+                        "top-right",
+                        "center-left",
+                        "center",
+                        "center-right",
+                        "bottom-left",
+                        "bottom-center",
+                        "bottom-right"
+                    ],
+                    "default": "center",
+                    "description": "Anchor point for positioning"
+                }
+            }
+        },
+        "PositionValue": {
+            "oneOf": [
+                {
+                    "type": "number",
+                    "description": "Pixel value"
+                },
+                {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?%$",
+                    "description": "Percentage value"
+                }
+            ]
+        },
+        "Transform": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "X offset in pixels"
+                },
+                "y": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Y offset in pixels"
+                },
+                "rotation": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Rotation in degrees"
+                },
+                "scale": {
+                    "type": "number",
+                    "default": 1,
+                    "description": "Uniform scale factor"
+                },
+                "scaleX": {
+                    "type": "number",
+                    "default": 1,
+                    "description": "Horizontal scale factor"
+                },
+                "scaleY": {
+                    "type": "number",
+                    "default": 1,
+                    "description": "Vertical scale factor"
+                },
+                "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "default": 1,
+                    "description": "Opacity (0-1)"
+                },
+                "anchorX": {
+                    "type": "number",
+                    "default": 0.5,
+                    "description": "Transform anchor X (0-1)"
+                },
+                "anchorY": {
+                    "type": "number",
+                    "default": 0.5,
+                    "description": "Transform anchor Y (0-1)"
+                }
+            }
+        },
+        "Line": {
+            "type": "object",
+            "required": [
+                "start",
+                "end",
+                "chars"
+            ],
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Unique identifier for the line"
+                },
+                "start": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Line start time in seconds"
+                },
+                "end": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Line end time in seconds"
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Full text of the line (optional, can be derived from chars)"
+                },
+                "style": {
+                    "type": "string",
+                    "description": "Name of style to apply"
+                },
+                "effects": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Array of effect names to apply"
+                },
+                "position": {
+                    "$ref": "#/definitions/Position"
+                },
+                "transform": {
+                    "$ref": "#/definitions/Transform"
+                },
+                "layout": {
+                    "$ref": "#/definitions/Layout"
+                },
+                "chars": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Char"
+                    },
+                    "description": "Array of characters with individual timing"
+                }
+            }
+        },
+        "Layout": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "horizontal",
+                        "vertical",
+                        "path"
+                    ],
+                    "default": "horizontal"
+                },
+                "align": {
+                    "type": "string",
+                    "enum": [
+                        "left",
+                        "center",
+                        "right"
+                    ],
+                    "default": "center"
+                },
+                "justify": {
+                    "type": "string",
+                    "enum": [
+                        "top",
+                        "middle",
+                        "bottom"
+                    ],
+                    "default": "middle"
+                },
+                "gap": {
+                    "type": "number",
+                    "default": 0,
+                    "description": "Gap between characters in pixels"
+                },
+                "wrap": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether to wrap text"
+                },
+                "maxWidth": {
+                    "type": "number",
+                    "description": "Maximum width before wrapping"
+                }
+            }
+        },
+        "Char": {
+            "type": "object",
+            "required": [
+                "char",
+                "start",
+                "end"
+            ],
+            "properties": {
+                "char": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The character(s) to display"
+                },
+                "start": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Character highlight start time in seconds"
+                },
+                "end": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Character highlight end time in seconds"
+                },
+                "style": {
+                    "type": "string",
+                    "description": "Override style for this character"
+                },
+                "effects": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Additional effects for this character"
+                },
+                "transform": {
+                    "$ref": "#/definitions/Transform"
+                }
+            }
+        }
+    }
+}

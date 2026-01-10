@@ -1,0 +1,70 @@
+[package]
+name = "lyric-video-maker"
+version = "0.1.0"
+description = "A high-performance lyric video rendering engine"
+authors = ["Lyric Video Maker Team"]
+edition = "2021"
+rust-version = "1.70"
+default-run = "lyric-video-maker"
+
+[lib]
+name = "lyric_video_maker_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+ffmpeg-sidecar = "2"
+
+[dependencies]
+# Tauri core
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Graphics / 2D rendering
+tiny-skia = "0.11"
+
+# Font/text rendering
+ab_glyph = "0.2"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Parallel processing
+rayon = "1.8"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Image processing
+image = "0.25"
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+
+# System directories
+dirs = "5"
+
+# For video encoding with bundled FFmpeg
+ffmpeg-sidecar = "2"
+
+# Shared renderer crate
+klyric-renderer = { path = "../crates/klyric-renderer" }
+base64 = "0.22.1"
+ttf-parser = "0.25.1"
+
+[features]
+# This feature is used for production builds where `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+# Enable automatic FFmpeg download during build
+download-ffmpeg = []
