@@ -166,7 +166,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
         }
 
         return null;
-    }, [klyricDoc, lyrics, width, height, selectedFont]);
+    }, [klyricDoc, lyrics, width, height, selectedFont, globalStyle?.font?.family, globalStyle?.font?.size, globalStyle?.shadow, globalStyle?.stroke]);
 
     // Load a font from public folder or URL
     async function loadFont(renderer, name, url) {
@@ -278,7 +278,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
                             setFontLoaded(true);
                             break;
                         }
-                    } catch (e) {
+                    } catch {
                         // Continue to next source
                     }
                 }
@@ -301,7 +301,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
             if (rendererRef.current) {
                 try {
                     rendererRef.current.free();
-                } catch (e) { /* ignore */ }
+                } catch { /* ignore */ }
                 rendererRef.current = null;
             }
         };
