@@ -32,11 +32,13 @@ export function sanitizeKLyricDoc(doc, defaults = {}) {
         cleanDoc.lines = [];
     }
 
-    // 3. Sanitize Styles (Optional)
-    if (cleanDoc.styles) {
+    // 3. Sanitize Styles
+    if (cleanDoc.styles && typeof cleanDoc.styles === 'object') {
         Object.keys(cleanDoc.styles).forEach(key => {
-            // TODO: deep sanitize styles if needed
+            cleanDoc.styles[key] = sanitizeStyle(cleanDoc.styles[key]);
         });
+    } else {
+        cleanDoc.styles = {};
     }
 
     return cleanDoc;
@@ -166,6 +168,151 @@ function sanitizePosition(p) {
         anchor: ensureAnchor(p.anchor)
     };
 }
+
+/**
+ * Sanitize Style Object
+ * Matches Rust `Style` struct
+ */
+function sanitizeStyle(style) {
+    if (!style || typeof style !== 'object') return {};
+
+    const cleanStyle = {};
+
+    if (style.extends !== undefined) {
+        cleanStyle.extends = String(style.extends);
+    }
+
+    if (style.font) {
+        cleanStyle.font = sanitizeFont(style.font);
+    }
+
+    if (style.colors) {
+        cleanStyle.colors = sanitizeStateColors(style.colors);
+    }
+
+    if (style.stroke) {
+        cleanStyle.stroke = sanitizeStroke(style.stroke);
+    }
+
+    if (style.shadow) {
+        cleanStyle.shadow = sanitizeShadow(style.shadow);
+    }
+
+    if (style.glow) {
+        cleanStyle.glow = sanitizeGlow(style.glow);
+    }
+
+    return cleanStyle;
+}
+
+/**
+ * Sanitize Font settings
+ */
+function sanitizeFont(font) {
+    if (!font || typeof font !== 'object') return undefined;
+
+    return {
+        family: String(font.family || 'Noto Sans SC'),
+        size: ensureNumber(font.size, 72.0),
+        weight: ensureInt(font.weight, 700),
+        style: ensureFontStyle(font.style),
+        letterSpacing: ensureNumber(font.letterSpacing, 0.0)
+    };
+}
+
+/**
+ * Validate FontStyle enum
+ */
+function ensureFontStyle(val) {
+    const validStyles = ['Normal', 'Italic', 'Oblique'];
+    // Handle lowercase input just in case, capitalizing first letter
+    if (typeof val === 'string') {
+        const capitalized = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+        if (validStyles.includes(capitalized)) return capitalized;
+    }
+    return 'Normal';
+}
+
+/**
+ * Sanitize StateColors
+ */
+function sanitizeStateColors(colors) {
+    if (!colors || typeof colors !== 'object') return undefined;
+
+    const cleanColors = {};
+    if (colors.inactive) cleanColors.inactive = sanitizeFillStroke(colors.inactive);
+    if (colors.active) cleanColors.active = sanitizeFillStroke(colors.active);
+    if (colors.complete) cleanColors.complete = sanitizeFillStroke(colors.complete);
+
+    return cleanColors;
+}
+
+/**
+ * Sanitize FillStroke (String or Object)
+ */
+function sanitizeFillStroke(val) {
+    if (!val) return undefined;
+
+    if (typeof val === 'string') return val;
+
+    if (typeof val === 'object') {
+        const result = {};
+        if (val.fill) result.fill = String(val.fill);
+        if (val.stroke) result.stroke = String(val.stroke);
+        return result;
+    }
+
+    return undefined;
+}
+
+/**
+ * Sanitize Stroke settings
+ */
+function sanitizeStroke(stroke) {
+    if (!stroke || typeof stroke !== 'object') return undefined;
+
+    const cleanStroke = {
+        width: ensureNumber(stroke.width, 0)
+    };
+
+    if (stroke.color) cleanStroke.color = String(stroke.color);
+
+    return cleanStroke;
+}
+
+/**
+ * Sanitize Shadow settings
+ */
+function sanitizeShadow(shadow) {
+    if (!shadow || typeof shadow !== 'object') return undefined;
+
+    const cleanShadow = {
+        x: ensureNumber(shadow.x, 2.0),
+        y: ensureNumber(shadow.y, 2.0),
+        blur: ensureNumber(shadow.blur, 4.0)
+    };
+
+    if (shadow.color) cleanShadow.color = String(shadow.color);
+
+    return cleanShadow;
+}
+
+/**
+ * Sanitize Glow settings
+ */
+function sanitizeGlow(glow) {
+    if (!glow || typeof glow !== 'object') return undefined;
+
+    const cleanGlow = {
+        blur: ensureNumber(glow.blur, 8.0),
+        intensity: ensureNumber(glow.intensity, 0.5)
+    };
+
+    if (glow.color) cleanGlow.color = String(glow.color);
+
+    return cleanGlow;
+}
+
 
 // --- Helpers ---
 
