@@ -1,5 +1,4 @@
-import React, { useMemo } from 'react';
-import { useAppStore } from '@/store/useAppStore';
+import React from 'react';
 import FontSelector from './FontSelector';
 import {
     Tabs,
@@ -47,21 +46,31 @@ const ColorInput = ({ label, value, onChange }) => (
 
 // Helper for Range/Slider with Number Input
 const RangeInput = ({ label, value, onChange, min = 0, max = 100, step = 1, unit = '', className, disabled }) => (
-    <div className={cn("space-y-4", className)}>
-        <div className="flex justify-between items-center">
-            <Label className={cn(disabled && "text-muted-foreground")}>{label}</Label>
-            <span className="text-xs text-muted-foreground font-mono">
-                {typeof value === 'number' ? value.toFixed(step < 1 ? 2 : 0) : value}{unit}
-            </span>
-        </div>
+    <div className={cn("space-y-3", className)}>
+        <Label className={cn(disabled && "text-muted-foreground")}>{label}</Label>
         <Slider
-            value={[value]}
+            value={[typeof value === 'number' ? value : 0]}
             onValueChange={(vals) => onChange(vals[0])}
             min={min}
             max={max}
             step={step}
             disabled={disabled}
+            className="py-1"
         />
+        <div className="flex items-center gap-2">
+            <Input
+                type="number"
+                value={typeof value === 'number' && step < 1 ? parseFloat(value.toFixed(2)) : value}
+                onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    onChange(isNaN(val) ? 0 : val);
+                }}
+                step={step}
+                disabled={disabled}
+                className="font-mono"
+            />
+            {unit && <span className="text-sm text-muted-foreground w-8 shrink-0">{unit}</span>}
+        </div>
     </div>
 );
 
@@ -117,22 +126,24 @@ const StyleEditor = ({ mode = 'line', values, onChange, availableFonts }) => {
     const renderTransform = () => (
         <div className="space-y-8">
             <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <Label>Position X</Label>
-                    <Input
-                        type="number"
-                        value={values.offsetX || 0}
-                        onChange={(e) => onChange('offsetX', parseFloat(e.target.value) || 0)}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>Position Y</Label>
-                    <Input
-                        type="number"
-                        value={values.offsetY || 0}
-                        onChange={(e) => onChange('offsetY', parseFloat(e.target.value) || 0)}
-                    />
-                </div>
+                <RangeInput
+                    label="Position X"
+                    value={values.offsetX || 0}
+                    onChange={(val) => onChange('offsetX', val)}
+                    min={-1000}
+                    max={1000}
+                    step={1}
+                    unit="px"
+                />
+                <RangeInput
+                    label="Position Y"
+                    value={values.offsetY || 0}
+                    onChange={(val) => onChange('offsetY', val)}
+                    min={-1000}
+                    max={1000}
+                    step={1}
+                    unit="px"
+                />
             </div>
 
             <RangeInput
