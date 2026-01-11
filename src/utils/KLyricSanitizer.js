@@ -224,13 +224,13 @@ function sanitizeFont(font) {
  * Validate FontStyle enum
  */
 function ensureFontStyle(val) {
-    const validStyles = ['Normal', 'Italic', 'Oblique'];
-    // Handle lowercase input just in case, capitalizing first letter
+    const validStyles = ['normal', 'italic', 'oblique'];
+    // Handle input, converting to lowercase
     if (typeof val === 'string') {
-        const capitalized = val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
-        if (validStyles.includes(capitalized)) return capitalized;
+        const lower = val.toLowerCase();
+        if (validStyles.includes(lower)) return lower;
     }
-    return 'Normal';
+    return 'normal';
 }
 
 /**
