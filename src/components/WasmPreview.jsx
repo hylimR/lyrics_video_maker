@@ -33,6 +33,56 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
             const fontFamily = globalStyle?.font?.family || selectedFont?.name || 'Noto Sans SC';
             const fontSize = globalStyle?.font?.size || 72;
 
+            // Prepare Effects
+            const effects = {};
+            const activeEffects = [];
+
+            // 1. Enter Animation
+            const animName = globalStyle?.animation || 'default';
+            const animDuration = globalStyle?.animationDuration || 0.5;
+
+            if (animName === 'default') {
+                effects['fadeIn'] = {
+                    type: "transition",
+                    trigger: "enter",
+                    duration: animDuration,
+                    easing: "easeOutCubic",
+                    properties: {
+                        opacity: { from: 0.0, to: 1.0 },
+                        y: { from: 50.0, to: 0.0 }
+                    }
+                };
+                activeEffects.push('fadeIn');
+            } else if (animName !== 'none') {
+                // For named presets like 'crossDissolve', 'slideUp', etc.
+                // We define a custom effect wrapper to apply duration
+                effects['customEnter'] = {
+                    type: "transition", // Type is nominal here if preset is used
+                    preset: animName,
+                    trigger: "enter",
+                    duration: animDuration
+                };
+                activeEffects.push('customEnter');
+            }
+
+            // 2. Continuous Effect (Not yet fully wired for duration override in UI, but ready)
+            const effectName = globalStyle?.effect || 'none';
+            if (effectName !== 'none') {
+                if (['wobbly', 'pulse', 'rainbow'].includes(effectName)) {
+                     // TODO: These are implemented as 'EffectType::Custom' or shader logic usually?
+                     // Currently renderer expects them as names.
+                     // For now, push the name directly or define a basic wrapper if supported.
+                     // The new renderer logic expects names in `doc.effects` OR preset names.
+                     // We will push the name directly to line.effects for legacy ones,
+                     // but if we want custom params, we'd need a wrapper.
+                     activeEffects.push(effectName);
+                } else {
+                    // It's likely a transition/preset we want to apply continuously?
+                    // Or a particle effect.
+                    activeEffects.push(effectName);
+                }
+            }
+
             return {
                 version: '2.0',
                 project: {
@@ -66,18 +116,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
                         }
                     }
                 },
-                effects: {
-                    fadeIn: {
-                        type: "transition",
-                        trigger: "enter",
-                        duration: 0.5,
-                        easing: "easeOutCubic",
-                        properties: {
-                            opacity: { from: 0.0, to: 1.0 },
-                            y: { from: 50.0, to: 0.0 }
-                        }
-                    }
-                },
+                effects: effects,
                 lines: lyrics.map((line, lineIdx) => {
                     const chars = [];
                     let charIndex = 0;
@@ -153,7 +192,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
                         font: line.font || undefined,
                         stroke: line.stroke || undefined,
                         shadow: line.shadow || undefined,
-                        effects: ['fadeIn'],
+                        effects: [...activeEffects],
                         position: {
                             x: (width / 2) + (line.x || 0),
                             y: (height / 2) + (line.y || 0),
@@ -167,7 +206,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
         }
 
         return null;
-    }, [klyricDoc, lyrics, width, height, selectedFont, globalStyle?.font?.family, globalStyle?.font?.size, globalStyle?.shadow, globalStyle?.stroke]);
+    }, [klyricDoc, lyrics, width, height, selectedFont, globalStyle?.font?.family, globalStyle?.font?.size, globalStyle?.shadow, globalStyle?.stroke, globalStyle?.animation, globalStyle?.animationDuration, globalStyle?.effect]);
 
     // Load a font from public folder or URL
     async function loadFont(renderer, name, url) {

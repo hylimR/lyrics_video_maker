@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::particle::ParticleEmitter;
 use super::types::{CharBounds, EffectPreset};
 use super::traits::ParticlePreset;
-use super::impls::*;
+use super::particles::*;
 
 /// Factory for creating preset particle effects
 /// 
@@ -19,14 +19,14 @@ impl PresetFactory {
         };
         
         // Register default presets
-        factory.register("rain", Box::new(RainPreset));
-        factory.register("sparkle", Box::new(SparklePreset));
-        factory.register("hearts", Box::new(HeartsPreset));
-        factory.register("confetti", Box::new(ConfettiPreset));
-        factory.register("disintegrate", Box::new(DisintegratePreset));
-        factory.register("fire", Box::new(FirePreset));
-        factory.register("glow", Box::new(GlowPulsePreset));
-        factory.register("glowpulse", Box::new(GlowPulsePreset));
+        factory.register("rain", Box::new(rain::RainPreset));
+        factory.register("sparkle", Box::new(sparkle::SparklePreset));
+        factory.register("hearts", Box::new(hearts::HeartsPreset));
+        factory.register("confetti", Box::new(confetti::ConfettiPreset));
+        factory.register("disintegrate", Box::new(disintegrate::DisintegratePreset));
+        factory.register("fire", Box::new(fire::FirePreset));
+        factory.register("glow", Box::new(glow::GlowPulsePreset));
+        factory.register("glowpulse", Box::new(glow::GlowPulsePreset));
         
         factory
     }
@@ -57,7 +57,7 @@ impl PresetFactory {
             .unwrap_or_else(|| {
                 // Fallback if registry is somehow broken for built-ins
                 // This shouldn't happen if initialized correctly
-                RainPreset.create_emitter(bounds, seed)
+                rain::RainPreset.create_emitter(bounds, seed)
             })
     }
     

@@ -101,8 +101,70 @@ impl EffectEngine {
                     }
                 },
                 EffectType::Keyframe => {
-                    // Logic for keyframe interpolation would go here
-                    // Need to find adjacent keyframes based on eased_progress
+                    if effect.keyframes.is_empty() {
+                        continue;
+                    }
+
+                    // 1. Sort keyframes by time (assume sorted or sort here if needed, but usually pre-sorted)
+                    // We assume sorted for performance.
+
+                    // 2. Find current interval
+                    let mut start_kf = &effect.keyframes[0];
+                    let mut end_kf = &effect.keyframes[0];
+                    let mut found = false;
+
+                    for kf in &effect.keyframes {
+                        if kf.time >= eased_progress {
+                            end_kf = kf;
+                            found = true;
+                            break;
+                        }
+                        start_kf = kf;
+                    }
+
+                    if !found {
+                        // Past last keyframe
+                        start_kf = effect.keyframes.last().unwrap();
+                        end_kf = start_kf;
+                    }
+
+                    // 3. Interpolate between start_kf and end_kf
+                    let segment_duration = end_kf.time - start_kf.time;
+                    let t = if segment_duration <= 0.0 {
+                        if eased_progress >= end_kf.time { 1.0 } else { 0.0 }
+                    } else {
+                        (eased_progress - start_kf.time) / segment_duration
+                    };
+
+                    // Optional per-keyframe easing
+                    let segment_eased = if let Some(e) = &start_kf.easing {
+                         Self::ease(t, e)
+                    } else {
+                        t
+                    };
+
+                    // Apply properties
+                    if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
+                        apply_property(&mut final_transform, "opacity", Self::lerp(s as f64, e as f64, segment_eased));
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale, end_kf.scale) {
+                         apply_property(&mut final_transform, "scale", Self::lerp(s as f64, e as f64, segment_eased));
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
+                        final_transform.scale_x = Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
+                        final_transform.scale_y = Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
+                         apply_property(&mut final_transform, "rotation", Self::lerp(s as f64, e as f64, segment_eased));
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.x, end_kf.x) {
+                         apply_property(&mut final_transform, "x", Self::lerp(s as f64, e as f64, segment_eased));
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
+                         apply_property(&mut final_transform, "y", Self::lerp(s as f64, e as f64, segment_eased));
+                    }
                 },
                 _ => {}
             }

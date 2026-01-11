@@ -91,6 +91,7 @@ const StyleEditor = ({ mode = 'line', values, onChange, availableFonts }) => {
                             <SelectItem value="right">Right</SelectItem>
                         </SelectContent>
                     </Select>
+
                 </div>
 
                 <div className="space-y-2">
@@ -250,12 +251,31 @@ const StyleEditor = ({ mode = 'line', values, onChange, availableFonts }) => {
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="default">Fade In</SelectItem>
+                            <SelectItem value="crossDissolve">Cross Dissolve</SelectItem>
+                            <SelectItem value="blurDissolve">Blur Dissolve</SelectItem>
+                            <SelectItem value="dipToColor">Dip to Color</SelectItem>
+                            <SelectItem value="zoomIn">Zoom In</SelectItem>
+                            <SelectItem value="zoomOut">Zoom Out</SelectItem>
                             <SelectItem value="slideUp">Slide Up</SelectItem>
                             <SelectItem value="slideDown">Slide Down</SelectItem>
-                            <SelectItem value="scaleUp">Scale Up</SelectItem>
+                            <SelectItem value="slideLeft">Slide Left</SelectItem>
+                            <SelectItem value="slideRight">Slide Right</SelectItem>
+                            <SelectItem value="shake">Camera Shake</SelectItem>
+                            <SelectItem value="glitch">Digital Glitch</SelectItem>
                             <SelectItem value="typewriter">Typewriter</SelectItem>
+                            <SelectItem value="scaleUp">Scale Up (Legacy)</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    {(values.animation && values.animation !== 'none') && (
+                        <RangeInput
+                            label="Animation Duration"
+                            value={values.animationDuration || 0.5}
+                            onChange={(val) => onChange('animationDuration', val)}
+                            min={0.1} max={5.0} step={0.1} unit="s"
+                            className="pt-2"
+                        />
+                    )}
                 </div>
 
                 <div className="space-y-2">

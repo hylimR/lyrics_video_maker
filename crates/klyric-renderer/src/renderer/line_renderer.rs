@@ -2,7 +2,7 @@ use anyhow::Result;
 use tiny_skia::{Pixmap, Color, PixmapPaint, Transform as SkiaTransform};
 use std::collections::HashSet;
 
-use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Stroke, Shadow};
+use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Stroke, Shadow, Easing};
 use crate::style::StyleResolver;
 use crate::layout::LayoutEngine;
 use crate::text::TextRenderer;
@@ -155,7 +155,29 @@ impl<'a> LineRenderer<'a> {
                      let mut active_effects = Vec::new();
                      for effect_name in &line.effects {
                         if let Some(effect) = self.doc.effects.get(effect_name) {
-                            active_effects.push((effect_name, effect));
+                            // Check if it is a preset wrapper
+                            if let Some(preset_name) = &effect.preset {
+                                if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
+                                     // Override duration if specified in wrapper
+                                     if let Some(d) = effect.duration {
+                                         generated.duration = Some(d);
+                                     }
+                                     // Override easing if specified (only if not default Linear)
+                                     if effect.easing != Easing::Linear {
+                                         generated.easing = effect.easing.clone();
+                                     }
+
+                                     active_effects.push((effect_name, generated));
+                                } else {
+                                     // Fallback or particle preset
+                                     active_effects.push((effect_name, effect.clone()));
+                                }
+                            } else {
+                                active_effects.push((effect_name, effect.clone()));
+                            }
+                        } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
+                            // Support preset transition names directly
+                            active_effects.push((effect_name, preset));
                         }
                      }
 
@@ -174,7 +196,7 @@ impl<'a> LineRenderer<'a> {
                          match effect.effect_type {
                              EffectType::Particle => particle_effects.push((name, effect)),
                              EffectType::Disintegrate => disintegrate_effects.push((name, effect)),
-                             _ => transform_effects.push(effect.clone()),
+                             _ => transform_effects.push(effect),
                          }
                      }
                      
@@ -299,9 +321,9 @@ impl<'a> LineRenderer<'a> {
 
                          // --- DISINTEGRATION EFFECT ---
                          for (name, effect) in disintegrate_effects {
-                             if !EffectEngine::should_trigger(effect, &ctx) { continue; }
+                         if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
 
-                             let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                         let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
                              if progress < 0.0 || progress > 1.0 { continue; }
 
                              let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
@@ -330,9 +352,9 @@ impl<'a> LineRenderer<'a> {
                      
                      // --- PARTICLE SPAWNING ---
                      for (name, effect) in particle_effects {
-                         if !EffectEngine::should_trigger(effect, &ctx) { continue; }
+                         if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
                          
-                         let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                         let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
                          if progress < 0.0 || progress > 1.0 { continue; }
                          
                          let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);

@@ -153,7 +153,7 @@ pub struct Keyframe {
     pub easing: Option<Easing>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Easing {
     #[default]
