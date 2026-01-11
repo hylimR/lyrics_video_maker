@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useAppStore } from '@/store/useAppStore';
+import { getCachedFont, cacheFont } from '@/utils/fontCache';
 import init, { KLyricWasmRenderer } from '../wasm/klyric_renderer';
 
 /**
@@ -199,7 +200,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
         const familyName = globalStyle?.font?.family || selectedFont?.name;
         if (!familyName) return;
 
-        // Check cache
+        // Check if already loaded in this component instance
         if (loadedFontsRef.current.has(familyName)) return;
 
         // Find font info to get path
@@ -222,10 +223,23 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
              addLoadingFont(fontInfo.name);
              
              try {
-                const { invoke } = await import('@tauri-apps/api/core');
-                console.log(`🔤 Loading system font: ${fontInfo.name} from ${fontInfo.path}`);
-                const bytes = await invoke('read_font_file', { path: fontInfo.path });
-                const uint8Array = new Uint8Array(bytes);
+                // Check cache first (using path as key for uniqueness)
+                let uint8Array = getCachedFont(fontInfo.path);
+                let fromCache = true;
+
+                if (!uint8Array) {
+                    fromCache = false;
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    console.log(`🔤 Loading system font: ${fontInfo.name} from ${fontInfo.path}`);
+                    const bytes = await invoke('read_font_file', { path: fontInfo.path });
+                    uint8Array = new Uint8Array(bytes);
+
+                    // Cache the font data (LRU)
+                    cacheFont(fontInfo.path, uint8Array);
+                } else {
+                    console.log(`⚡ Using cached font: ${fontInfo.name}`);
+                }
+
                 rendererRef.current.load_font(fontInfo.name, uint8Array);
                 // Also register under family name if different, to be safe
                 if (fontInfo.family && fontInfo.family !== fontInfo.name) {
@@ -235,7 +249,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
                 loadedFontsRef.current.add(fontInfo.name);
                 if (fontInfo.family) loadedFontsRef.current.add(fontInfo.family);
                 
-                console.log(`✅ Loaded system font: ${fontInfo.name}`);
+                console.log(`✅ Loaded system font: ${fontInfo.name} ${fromCache ? '(cached)' : ''}`);
              } catch (e) {
                  console.error(`❌ Failed to load system font ${fontInfo.name}:`, e);
              } finally {
