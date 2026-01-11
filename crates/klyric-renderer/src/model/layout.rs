@@ -82,6 +82,14 @@ pub struct Transform {
     /// Transform anchor Y (0-1, 0.5 = center)
     #[serde(default = "default_anchor")]
     pub anchor_y: f32,
+
+    /// Blur sigma
+    #[serde(default)]
+    pub blur: f32,
+
+    /// Glitch offset (pixels to shift channels)
+    #[serde(default)]
+    pub glitch_offset: f32,
 }
 
 impl Default for Transform {
@@ -96,6 +104,8 @@ impl Default for Transform {
             opacity: 1.0,
             anchor_x: 0.5,
             anchor_y: 0.5,
+            blur: 0.0,
+            glitch_offset: 0.0,
         }
     }
 }

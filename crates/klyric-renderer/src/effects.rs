@@ -165,6 +165,12 @@ impl EffectEngine {
                     if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
                          apply_property(&mut final_transform, "y", Self::lerp(s as f64, e as f64, segment_eased));
                     }
+                    if let (Some(s), Some(e)) = (start_kf.blur, end_kf.blur) {
+                         apply_property(&mut final_transform, "blur", Self::lerp(s as f64, e as f64, segment_eased));
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.glitch_offset, end_kf.glitch_offset) {
+                         apply_property(&mut final_transform, "glitch_offset", Self::lerp(s as f64, e as f64, segment_eased));
+                    }
                 },
                 _ => {}
             }
@@ -215,6 +221,8 @@ fn apply_property(transform: &mut Transform, prop: &str, value: f64) {
         "x" => transform.x = value as f32,
         "y" => transform.y = value as f32,
         "rotation" => transform.rotation = value as f32,
+        "blur" => transform.blur = value as f32,
+        "glitch_offset" | "glitch" => transform.glitch_offset = value as f32,
         _ => {}
     }
 }

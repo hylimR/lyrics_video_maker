@@ -1,5 +1,5 @@
 use anyhow::Result;
-use skia_safe::{Canvas, Color, Paint, Rect, Matrix, Path, Point, Image, Surface, BlendMode, PaintStyle, MaskFilter, BlurStyle};
+use skia_safe::{Canvas, Color, Paint, Rect, Matrix, Path, Point, Image, Surface, BlendMode, PaintStyle, MaskFilter, BlurStyle, ImageFilter};
 use std::collections::HashSet;
 
 use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing};
@@ -112,6 +112,8 @@ impl<'a> LineRenderer<'a> {
                          opacity: line_transform.opacity * char_transform.opacity,
                          anchor_x: char_transform.anchor_x,
                          anchor_y: char_transform.anchor_y,
+                         blur: line_transform.blur + char_transform.blur,
+                         glitch_offset: line_transform.glitch_offset + char_transform.glitch_offset,
                      };
                      
                      // ... Effect Resolution Logic (Same as before) ...
@@ -177,28 +179,21 @@ impl<'a> LineRenderer<'a> {
                      let final_opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
                      paint.set_alpha_f(final_opacity);
 
+                     // Apply Blur
+                     if final_transform.blur > 0.0 {
+                         paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur, false));
+                     }
+
                      // --- DRAWING ---
                      // Calculate position context
                      let draw_x = char_absolute_x;
-                     let draw_y = char_absolute_y; // Baseline usually? or Top-Left?
-                     
-                     // LayoutEngine returns x/y. text.rs measure_char returns approximate bounds.
-                     // IMPORTANT: path from skia font.get_path is typically relative to origin (0,0) at baseline left.
-                     // But sometimes y is flipped. Skia Y grows down.
-                     // If path has negative Y, it draws UP from baseline.
-                     // We should check layout.rs assumptions. `layout_line` puts `y=0.0`.
-                     // `compute_line_position` puts `y` at center of screen.
-                     // So we probably assume `draw_y` is baseline.
+                     let draw_y = char_absolute_y;
                      
                      self.canvas.save();
                      
                      // Apply Transforms
-                     // Order: Translate to Pos -> Translate to Pivot (Center) -> Rotate/Scale -> Translate back
                      self.canvas.translate((draw_x + final_transform.x, draw_y + final_transform.y));
                      
-                     // Text center offset (rough approximation since we don't know exact ink bounds easily without path bounds methods, which we have)
-                     // Center relative to baseline origin
-                     // If path bounds is e.g. (0, -10, 10, 0), center is (5, -5).
                      let path_center_x = bounds.center_x();
                      let path_center_y = bounds.center_y();
                      
@@ -217,11 +212,14 @@ impl<'a> LineRenderer<'a> {
                              if let Some(shadow_color) = parse_color(color_hex) {
                                  let mut shadow_paint = Paint::default();
                                  shadow_paint.set_color(shadow_color);
-                                 shadow_paint.set_alpha_f(final_opacity); // Inherit opacity? usually shadows do.
+                                 shadow_paint.set_alpha_f(final_opacity);
                                  shadow_paint.set_anti_alias(true);
                                  
-                                 // Simple blur if we had blur radius in struct, but KLyric v1 shadow is simple offset?
-                                 // If we want blur: shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, blur_sigma, false));
+                                 // Apply blur to shadow if needed (or inherit from transform?)
+                                 // For now, if there's global blur, apply it to shadow too
+                                 if final_transform.blur > 0.0 {
+                                     shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur, false));
+                                 }
                                  
                                  self.canvas.save();
                                  self.canvas.translate((shadow.x, shadow.y));
@@ -247,15 +245,64 @@ impl<'a> LineRenderer<'a> {
                                      stroke_paint.set_alpha_f(final_opacity);
                                      stroke_paint.set_anti_alias(true);
                                      
+                                     if final_transform.blur > 0.0 {
+                                         stroke_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur, false));
+                                     }
+
                                      self.canvas.draw_path(&path, &stroke_paint);
                                  }
                              }
                          }
                      }
 
-                     // --- 3. MAIN TEXT ---
+                     // --- 3. MAIN TEXT (With Glitch Logic) ---
                      if paint.alpha_f() > 0.001 {
-                         self.canvas.draw_path(&path, &paint);
+                         if final_transform.glitch_offset.abs() > 0.01 {
+                             // Glitch Effect: Draw channels separately
+                             let offset = final_transform.glitch_offset;
+
+                             // Red Channel
+                             let mut r_paint = paint.clone();
+                             r_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 255, 0, 0));
+                             r_paint.set_blend_mode(BlendMode::Plus); // Additive blending for RGB separation
+
+                             // Green Channel
+                             let mut g_paint = paint.clone();
+                             g_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 0, 255, 0));
+                             g_paint.set_blend_mode(BlendMode::Plus);
+
+                             // Blue Channel
+                             let mut b_paint = paint.clone();
+                             b_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 0, 0, 255));
+                             b_paint.set_blend_mode(BlendMode::Plus);
+
+                             self.canvas.save();
+                             self.canvas.translate((-offset, -offset));
+                             self.canvas.draw_path(&path, &r_paint);
+                             self.canvas.restore();
+
+                             self.canvas.save();
+                             self.canvas.translate((offset, -offset)); // Different offset for G? Or just offset?
+                             // Standard Chromatic Aberration: R: -off, B: +off, G: 0
+                             self.canvas.draw_path(&path, &g_paint); // Maybe G is at 0?
+                             // Actually let's do: R at -offset, B at +offset, G at 0.
+                             // But let's try to match glitch logic: jittery offsets.
+                             self.canvas.restore();
+
+                             self.canvas.save();
+                             self.canvas.translate((offset, offset));
+                             self.canvas.draw_path(&path, &b_paint);
+                             self.canvas.restore();
+
+                             // Re-draw original white core? No, RGB additive makes white.
+                             // But we need to handle non-white colors properly.
+                             // If text is NOT white, splitting RGB is complex.
+                             // For now assuming white text for glitch effect or simple displacement.
+
+                         } else {
+                             // Normal Draw
+                             self.canvas.draw_path(&path, &paint);
+                         }
                      }
                      
                      self.canvas.restore(); // Restore transform for next glyph/effects
