@@ -1,8 +1,8 @@
 use anyhow::Result;
-use tiny_skia::{Pixmap, Color, PixmapPaint, Transform as SkiaTransform};
+use tiny_skia::{Pixmap, Color, PixmapPaint, Transform as SkiaTransform, Stroke as SkiaStroke, Paint};
 use std::collections::HashSet;
 
-use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Stroke, Shadow, Easing};
+use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing};
 use crate::style::StyleResolver;
 use crate::layout::LayoutEngine;
 use crate::text::TextRenderer;
@@ -84,7 +84,7 @@ impl<'a> LineRenderer<'a> {
              }
 
              if w > 0 && h > 0 {
-                 if let Some(mut glyph_pixmap) = Pixmap::new(w, h) {
+                 if let Some(_) = Pixmap::new(w, h) {
                      // Resolve color
                      let is_active = char_data.map(|c| self.time >= c.start && self.time <= c.end).unwrap_or(false);
                      let is_past = char_data.map(|c| self.time > c.end).unwrap_or(false);
@@ -254,7 +254,7 @@ impl<'a> LineRenderer<'a> {
                          }
                      }
 
-                     // --- 2. STROKE (Simulated) ---
+                     // --- 2. STROKE (Real Path) ---
                      let stroke_opts = if let Some(c) = char_data.and_then(|c| c.stroke.as_ref()) { Some(c) } 
                                        else if let Some(l) = &line.stroke { Some(l) } 
                                        else { style.stroke.as_ref() };
@@ -263,27 +263,62 @@ impl<'a> LineRenderer<'a> {
                          if stroke.width > 0.0 {
                              if let Some(color_hex) = &stroke.color {
                                  if let Some(stroke_color) = parse_color(color_hex) {
-                                     if let Some(stroke_pm) = create_colored_pixmap(stroke_color) {
-                                         // Draw 8-way offset
-                                         let w = stroke.width;
-                                         // Diagonals ~0.7
-                                         let offsets = [
-                                             (w, 0.0), (-w, 0.0), (0.0, w), (0.0, -w),
-                                             (w*0.7, w*0.7), (-w*0.7, -w*0.7), (w*0.7, -w*0.7), (-w*0.7, w*0.7)
-                                         ];
-                                         
-                                         for (ox, oy) in offsets {
-                                             let sx = draw_x as f32 + final_transform.x + ox;
-                                             let sy = draw_y as f32 + final_transform.y + oy;
+                                     // Get glyph path for stroke
+                                     let font = self.text_renderer.get_font(family)
+                                         .or_else(|| self.text_renderer.get_default_font());
+
+                                     if let Some(font) = font {
+                                         if let Some(path) = self.text_renderer.get_glyph_path(&font, glyph.char, size) {
+                                             // Calculate Stroke Paint
+                                             let mut stroke_paint = Paint::default();
+                                             // Scale alpha by paint opacity
+                                             let alpha = stroke_color.alpha() * paint.opacity;
+                                             let mut final_color = stroke_color;
+                                             final_color.set_alpha(alpha);
+
+                                             stroke_paint.set_color(final_color);
+                                             stroke_paint.anti_alias = true;
+
+                                             let mut skia_stroke = SkiaStroke::default();
+                                             skia_stroke.width = stroke.width;
+
+                                             // Transform for path
+                                             // The path is relative to the baseline origin (0,0) of the glyph.
+                                             // We need to position it at (char_absolute_x, char_absolute_y).
+                                             // And apply line effects.
+
+                                             // char_absolute_x/y seems to be the pen position (baseline).
+                                             let screen_x = char_absolute_x + final_transform.x;
+                                             let screen_y = char_absolute_y + final_transform.y;
+
+                                             // TextRenderer::get_glyph_path returns path with Y flipped (growing down), origin at (0,0).
+                                             // Usually (0,0) is baseline.
                                              
-                                             let mut st = SkiaTransform::identity();
-                                             st = st.pre_translate(sx, sy);
-                                             st = st.pre_translate(cx, cy);
-                                             st = st.pre_rotate(final_transform.rotation);
-                                             st = st.pre_scale(final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y);
-                                             st = st.pre_translate(-cx, -cy);
+                                             // Import Font trait if not present, but better just use available methods.
+                                             // font is FontRef.
+                                             use ab_glyph::{Font, ScaleFont};
+                                             let scaled_font = font.as_scaled(ab_glyph::PxScale::from(size));
+                                             // Ensure we use the correct font methods
+                                             let outlined = scaled_font.font.outline_glyph(scaled_font.scaled_glyph(glyph.char));
                                              
-                                             self.pixmap.draw_pixmap(0, 0, stroke_pm.as_ref(), &paint, st, None);
+                                             if let Some(outlined) = outlined {
+                                                  let bounds = outlined.px_bounds();
+
+                                                  // Now we are in "Bitmap Top-Left" space.
+                                                  // Shift path to be relative to this space.
+                                                  let mut st = SkiaTransform::identity();
+                                                  st = st.pre_translate(screen_x, screen_y);
+                                                  st = st.pre_translate(cx, cy);
+                                                  st = st.pre_rotate(final_transform.rotation);
+                                                  st = st.pre_scale(
+                                                     final_transform.scale * final_transform.scale_x,
+                                                     final_transform.scale * final_transform.scale_y
+                                                  );
+                                                  st = st.pre_translate(-cx, -cy);
+                                                  st = st.pre_translate(-bounds.min.x, -bounds.min.y);
+
+                                                  self.pixmap.stroke_path(&path, &stroke_paint, &skia_stroke, st, None);
+                                             }
                                          }
                                      }
                                  }
