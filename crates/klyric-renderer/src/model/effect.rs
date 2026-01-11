@@ -68,6 +68,7 @@ pub enum EffectType {
     Karaoke,
     Keyframe,
     Particle,
+    Disintegrate,
     Custom,
 }
 

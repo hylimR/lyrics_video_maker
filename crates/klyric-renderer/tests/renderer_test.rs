@@ -28,7 +28,7 @@ fn create_test_doc() -> KLyricDocumentV2 {
         ],
         "styles": {
             "base": {
-                "font": { "family": "Arial", "size": 60.0 },
+                "font": { "family": "DejaVu Sans", "size": 60.0 },
                 "colors": {
                     "active": { "fill": "#FFFFFF" },
                     "inactive": { "fill": "#888888" },
@@ -48,13 +48,21 @@ fn setup_renderer(width: u32, height: u32) -> Renderer {
     // Note: This relies on "Arial" being present in system fonts.
     #[cfg(not(target_arch = "wasm32"))]
     {
+        // Try Arial or fallback
         if let Some(path) = TextRenderer::find_font_file("Arial") {
             println!("Loading font from {:?}", path);
             renderer.text_renderer_mut().load_font("Arial", path.to_str().unwrap()).unwrap();
+        } else if let Some(path) = TextRenderer::find_font_file("DejaVu Sans") {
+             println!("Loading font from {:?}", path);
+             renderer.text_renderer_mut().load_font("DejaVu Sans", path.to_str().unwrap()).unwrap();
         } else {
-            // Fallback for CI/Linux if Arial missing?
-            // Try standard locations or warn
-            println!("WARNING: Arial font not found. Tests might render blank text.");
+             // Hardcode fallback for test env
+             let p = Path::new("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+             if p.exists() {
+                 renderer.text_renderer_mut().load_font("DejaVu Sans", p.to_str().unwrap()).unwrap();
+             } else {
+                 println!("WARNING: Font not found. Tests might render blank text.");
+             }
         }
     }
     

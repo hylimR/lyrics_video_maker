@@ -168,12 +168,13 @@ impl<'a> LineRenderer<'a> {
                      
                      let mut transform_effects = Vec::new();
                      let mut particle_effects = Vec::new();
-                     
+                     let mut disintegrate_effects = Vec::new();
+
                      for (name, effect) in active_effects {
-                         if effect.effect_type == EffectType::Particle {
-                             particle_effects.push((name, effect));
-                         } else {
-                             transform_effects.push(effect.clone());
+                         match effect.effect_type {
+                             EffectType::Particle => particle_effects.push((name, effect)),
+                             EffectType::Disintegrate => disintegrate_effects.push((name, effect)),
+                             _ => transform_effects.push(effect.clone()),
                          }
                      }
                      
@@ -184,9 +185,27 @@ impl<'a> LineRenderer<'a> {
                          ctx.clone()
                      );
 
+                     // Disintegrate Effect Progress
+                     let mut disintegration_progress = 0.0;
+                     if let Some((_name, effect)) = disintegrate_effects.first() {
+                         if EffectEngine::should_trigger(effect, &ctx) {
+                             disintegration_progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                             // Clamp progress
+                             disintegration_progress = disintegration_progress.max(0.0).min(1.0);
+
+                             // Spawn particles if needed (only at the very beginning)
+                             // Since render_line is called every frame, we rely on ensure_disintegration_emitter
+                             // to only create them once per key.
+                             // However, we need the pixmap to be ready. It is ready here (text_pm).
+
+                             // We do the spawning AFTER pixmap creation below, but we need to track if we should fade out the text here.
+                         }
+                     }
+
                      // Common Paint
                      let mut paint = PixmapPaint::default();
-                     paint.opacity = final_transform.opacity;
+                     // Fade out text as disintegration progresses
+                     paint.opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
 
                      // --- 1. SHADOW ---
                      let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) { Some(c) } 
@@ -253,27 +272,60 @@ impl<'a> LineRenderer<'a> {
                      // --- 3. MAIN TEXT ---
                      // Fill glyph
                      if let Some(text_pm) = create_colored_pixmap(text_color) {
-                         let screen_x = draw_x as f32 + final_transform.x;
-                         let screen_y = draw_y as f32 + final_transform.y;
-                         
-                         let mut skia_transform = SkiaTransform::identity();
-                         skia_transform = skia_transform.pre_translate(screen_x, screen_y);
-                         skia_transform = skia_transform.pre_translate(cx, cy);
-                         skia_transform = skia_transform.pre_rotate(final_transform.rotation);
-                         skia_transform = skia_transform.pre_scale(
-                             final_transform.scale * final_transform.scale_x,
-                             final_transform.scale * final_transform.scale_y
-                         );
-                         skia_transform = skia_transform.pre_translate(-cx, -cy);
-                         
-                         self.pixmap.draw_pixmap(
-                             0,
-                             0,
-                             text_pm.as_ref(),
-                             &paint,
-                             skia_transform,
-                             None
-                         );
+                         // Only draw text if not fully disintegrated
+                         if paint.opacity > 0.01 {
+                             let screen_x = draw_x as f32 + final_transform.x;
+                             let screen_y = draw_y as f32 + final_transform.y;
+
+                             let mut skia_transform = SkiaTransform::identity();
+                             skia_transform = skia_transform.pre_translate(screen_x, screen_y);
+                             skia_transform = skia_transform.pre_translate(cx, cy);
+                             skia_transform = skia_transform.pre_rotate(final_transform.rotation);
+                             skia_transform = skia_transform.pre_scale(
+                                 final_transform.scale * final_transform.scale_x,
+                                 final_transform.scale * final_transform.scale_y
+                             );
+                             skia_transform = skia_transform.pre_translate(-cx, -cy);
+
+                             self.pixmap.draw_pixmap(
+                                 0,
+                                 0,
+                                 text_pm.as_ref(),
+                                 &paint,
+                                 skia_transform,
+                                 None
+                             );
+                         }
+
+                         // --- DISINTEGRATION EFFECT ---
+                         for (name, effect) in disintegrate_effects {
+                             if !EffectEngine::should_trigger(effect, &ctx) { continue; }
+
+                             let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                             if progress < 0.0 || progress > 1.0 { continue; }
+
+                             let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
+                             self.active_keys.insert(key.clone());
+
+                             // Calculate screen bounds for the emitter
+                             let bounds = CharBounds {
+                                 x: char_absolute_x + final_transform.x,
+                                 y: char_absolute_y + final_transform.y - h as f32 / 2.0,
+                                 width: w as f32 * final_transform.scale * final_transform.scale_x,
+                                 height: h as f32 * final_transform.scale * final_transform.scale_y,
+                             };
+
+                             let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+
+                             // Trigger creation using the current text pixmap
+                             self.particle_system.ensure_disintegration_emitter(
+                                 key,
+                                 &text_pm,
+                                 bounds,
+                                 seed,
+                                 effect.particle_config.clone()
+                             );
+                         }
                      }
                      
                      // --- PARTICLE SPAWNING ---
