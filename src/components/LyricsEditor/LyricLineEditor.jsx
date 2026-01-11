@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { formatTime, parseTimeInput } from '@/utils/timeUtils';
 import FontSelector from '@/components/FontSelector';
 
@@ -6,7 +6,7 @@ const LyricLineEditor = ({
     lyric,
     index,
     isActive,
-    currentTime,
+    currentTimeRef,
     onUpdate,
     onDelete,
     onSetStartTime,
@@ -94,7 +94,7 @@ const LyricLineEditor = ({
                                 <button
                                     className="set-time-btn"
                                     onClick={() => {
-                                        setEditStart(formatTime(currentTime));
+                                        setEditStart(formatTime(currentTimeRef.current));
                                     }}
                                     title="Set to current time"
                                 >
@@ -114,7 +114,7 @@ const LyricLineEditor = ({
                                 <button
                                     className="set-time-btn"
                                     onClick={() => {
-                                        setEditEnd(formatTime(currentTime));
+                                        setEditEnd(formatTime(currentTimeRef.current));
                                     }}
                                     title="Set to current time"
                                 >
@@ -180,14 +180,14 @@ const LyricLineEditor = ({
                     </button>
                     <button
                         className="action-btn set-start"
-                        onClick={() => onSetStartTime(index, currentTime)}
+                        onClick={() => onSetStartTime(index, currentTimeRef.current)}
                         title="Set start to current time"
                     >
                         ⏱️S
                     </button>
                     <button
                         className="action-btn set-end"
-                        onClick={() => onSetEndTime(index, currentTime)}
+                        onClick={() => onSetEndTime(index, currentTimeRef.current)}
                         title="Set end to current time"
                     >
                         ⏱️E
@@ -205,4 +205,4 @@ const LyricLineEditor = ({
     );
 };
 
-export default LyricLineEditor;
+export default memo(LyricLineEditor);

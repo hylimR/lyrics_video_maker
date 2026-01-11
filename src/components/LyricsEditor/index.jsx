@@ -25,6 +25,13 @@ const LyricsEditor = ({
     const [hasChanges, setHasChanges] = useState(false);
     const listRef = useRef(null);
 
+    // Use a ref for currentTime to avoid passing it as a prop to children
+    // causing unnecessary re-renders of all lines every frame.
+    const currentTimeRef = useRef(currentTime);
+    useEffect(() => {
+        currentTimeRef.current = currentTime;
+    }, [currentTime]);
+
     // Find active line index
     const activeIndex = localLyrics.findIndex(l =>
         currentTime >= l.startTime && currentTime < l.endTime
@@ -174,7 +181,7 @@ const LyricsEditor = ({
                         lyric={lyric}
                         index={index}
                         isActive={index === activeIndex}
-                        currentTime={currentTime}
+                        currentTimeRef={currentTimeRef}
                         onUpdate={handleUpdate}
                         onDelete={handleDelete}
                         onSetStartTime={handleSetStartTime}
