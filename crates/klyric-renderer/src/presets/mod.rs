@@ -1,7 +1,8 @@
 pub mod types;
-pub mod impls;
+pub mod particles;
 pub mod factory;
 pub mod traits;
+pub mod transitions;
 
 pub use types::{EffectPreset, CharBounds};
 pub use factory::PresetFactory;

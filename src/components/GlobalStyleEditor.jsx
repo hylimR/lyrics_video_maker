@@ -21,6 +21,7 @@ const GlobalStyleEditor = ({ availableFonts }) => {
         // Effects
         effect: globalStyle?.effect || preferences?.defaultEffect || 'none',
         animation: globalStyle?.animation || 'default',
+        animationDuration: globalStyle?.animationDuration, // Optional, can be undefined
 
         // Stroke
         strokeWidth: globalStyle?.stroke?.width || 0,
@@ -56,6 +57,11 @@ const GlobalStyleEditor = ({ availableFonts }) => {
         // Effect & Animation
         newStyle.effect = newValues.effect || 'none';
         newStyle.animation = newValues.animation || 'default';
+        if (newValues.animationDuration) {
+            newStyle.animationDuration = newValues.animationDuration;
+        } else {
+            delete newStyle.animationDuration;
+        }
 
         // Stroke
         if (newValues.strokeWidth > 0) {
