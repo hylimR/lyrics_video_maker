@@ -20,29 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Layout, Type, PaintBucket, Move, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// Helper for Color Input with Label
-const ColorInput = ({ label, value, onChange }) => (
-    <div className="space-y-3">
-        <Label>{label}</Label>
-        <div className="flex gap-2">
-            <div className="relative w-10 h-10 rounded-md overflow-hidden border border-input shadow-sm">
-                <input
-                    type="color"
-                    value={value || '#000000'}
-                    onChange={(e) => onChange(e.target.value)}
-                    className="absolute -top-2 -left-2 w-16 h-16 cursor-pointer"
-                />
-            </div>
-            <Input
-                value={value || ''}
-                onChange={(e) => onChange(e.target.value)}
-                className="flex-1 font-mono uppercase"
-                maxLength={7}
-            />
-        </div>
-    </div>
-);
+import ColorPicker from "@/components/ui/color-picker";
 
 // Helper for Range/Slider with Number Input
 const RangeInput = ({ label, value, onChange, min = 0, max = 100, step = 1, unit = '', className, disabled }) => (
@@ -190,12 +168,12 @@ const StyleEditor = ({ mode = 'line', values, onChange, availableFonts }) => {
             />
 
             <div className="grid grid-cols-2 gap-4">
-                <ColorInput
+                <ColorPicker
                     label="Fill Color"
                     value={values.fillColor}
                     onChange={(val) => onChange('fillColor', val)}
                 />
-                <ColorInput
+                <ColorPicker
                     label="Stroke Color"
                     value={values.strokeColor}
                     onChange={(val) => onChange('strokeColor', val)}
@@ -211,7 +189,7 @@ const StyleEditor = ({ mode = 'line', values, onChange, availableFonts }) => {
 
             <div className="pt-4 border-t border-border/50 space-y-4">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Shadow</Label>
-                <ColorInput
+                <ColorPicker
                     label="Shadow Color"
                     value={values.shadowColor}
                     onChange={(val) => onChange('shadowColor', val)}
