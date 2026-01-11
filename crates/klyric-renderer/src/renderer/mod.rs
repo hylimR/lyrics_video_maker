@@ -3,7 +3,7 @@ pub mod particle_system;
 pub mod line_renderer;
 
 use anyhow::Result;
-use tiny_skia::{Pixmap, Color};
+use skia_safe::{Surface, Canvas, Color, Paint, ImageInfo, ColorType, AlphaType, surfaces};
 use std::collections::HashSet;
 
 use crate::model::KLyricDocumentV2;
@@ -38,16 +38,19 @@ impl Renderer {
         &mut self.text_renderer
     }
 
-    pub fn render_frame(&mut self, doc: &KLyricDocumentV2, time: f64) -> Result<Pixmap> {
-        let mut pixmap = Pixmap::new(self.width, self.height)
-            .ok_or_else(|| anyhow::anyhow!("Failed to create pixmap"))?;
+    /// Render a frame and return raw RGBA pixels
+    pub fn render_frame(&mut self, doc: &KLyricDocumentV2, time: f64) -> Result<Vec<u8>> {
+        let mut surface = surfaces::raster_n32_premul((self.width as i32, self.height as i32))
+            .ok_or_else(|| anyhow::anyhow!("Failed to create skia surface"))?;
+            
+        let canvas = surface.canvas();
             
         // Calculate delta time
         let dt = if self.last_time > 0.0 { (time - self.last_time).max(0.0) } else { 0.0 };
         self.last_time = time;
             
         // 1. Draw Background
-        self.draw_background(&mut pixmap, doc);
+        self.draw_background(canvas, doc);
         
         // Track which emitters are active this frame
         let mut active_emitter_keys = HashSet::new();
@@ -57,7 +60,7 @@ impl Renderer {
              // We need the line index to create unique keys
              if let Some(line_idx) = doc.lines.iter().position(|l| l as *const _ == line as *const _) {
                  let mut line_renderer = LineRenderer {
-                     pixmap: &mut pixmap,
+                     canvas,
                      doc,
                      time,
                      text_renderer: &mut self.text_renderer,
@@ -73,9 +76,23 @@ impl Renderer {
         
         // 3. Update and render particles
         self.particle_system.update(dt as f32, &active_emitter_keys);
-        self.particle_system.render(&mut pixmap);
+        self.particle_system.render(canvas);
         
-        Ok(pixmap)
+        // Return pixels (RGBA or BGRA? Surface N32 usually implies native. We might need specific ColorType::RGBA8888)
+        // Ensure we get RGBA for ffmpeg
+        let mut pixels = vec![0u8; (self.width * self.height * 4) as usize];
+        let info = ImageInfo::new(
+            (self.width as i32, self.height as i32),
+            ColorType::RGBA8888,
+            AlphaType::Premul,
+            None
+        );
+        
+        if surface.read_pixels(&info, &mut pixels, (self.width * 4) as usize, (0, 0)) {
+            Ok(pixels)
+        } else {
+            Err(anyhow::anyhow!("Failed to read pixels from surface"))
+        }
     }
 
     /// Add a manual particle effect (e.g. for testing)
@@ -94,18 +111,19 @@ impl Renderer {
         self.particle_system.clear();
     }
     
-    fn draw_background(&self, pixmap: &mut Pixmap, doc: &KLyricDocumentV2) {
+    fn draw_background(&self, canvas: &Canvas, doc: &KLyricDocumentV2) {
         if let Some(theme) = &doc.theme {
             if let Some(bg) = &theme.background {
                 if let Some(hex) = &bg.color {
                      if let Some(color) = parse_color(hex) {
-                         pixmap.fill(color);
+                         let sc = Color::from_argb(255, color.r(), color.g(), color.b());
+                         canvas.clear(sc);
+                         return;
                      }
                 }
             }
-        } else {
-            // Default black
-            pixmap.fill(Color::BLACK);
         }
+        // Default black
+        canvas.clear(Color::BLACK);
     }
 }

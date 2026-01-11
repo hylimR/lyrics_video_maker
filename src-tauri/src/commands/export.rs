@@ -62,9 +62,8 @@ pub async fn export_frame(
 
     // Create v2 renderer and render the frame
     let mut renderer = Renderer::new(width, height);
-    let pixmap = renderer.render_frame(&document, timestamp)
+    let frame_data = renderer.render_frame(&document, timestamp)
         .map_err(|e| ExportError::RenderError(e.to_string()))?;
-    let frame_data = pixmap.take();
 
     // Save as PNG
     let path = PathBuf::from(&output_path);

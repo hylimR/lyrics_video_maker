@@ -35,7 +35,7 @@ impl KLyricWasmRenderer {
         if let Some(doc) = &self.current_doc {
              let pixmap = self.renderer.render_frame(doc, time)
                  .map_err(|e| JsValue::from_str(&e.to_string()))?;
-             Ok(pixmap.take())
+             Ok(pixmap)
         } else {
              Ok(Vec::new())
         }

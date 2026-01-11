@@ -48,20 +48,37 @@ pub mod parser;
 pub mod style;
 pub mod effects;
 pub mod layout;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod renderer;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod text;
 pub mod particle;
 pub mod presets;
 
 #[cfg(target_arch = "wasm32")]
+pub mod wasm_renderer;
+
+#[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
+#[cfg(target_arch = "wasm32")]
+pub use wasm_renderer as renderer;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_renderer as text;
+
 // Re-exports for convenience
-pub use tiny_skia;
 pub use model::*;
 pub use parser::parse_document;
+#[cfg(not(target_arch = "wasm32"))]
 pub use renderer::Renderer;
+#[cfg(not(target_arch = "wasm32"))]
+pub use text::TextRenderer;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_renderer::Renderer;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_renderer::TextRenderer;
+
 pub use particle::{Particle, ParticleEmitter, ParticleConfig};
 pub use presets::{EffectPreset, PresetFactory};
-pub use text::TextRenderer;
 

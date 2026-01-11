@@ -1,4 +1,4 @@
-use tiny_skia::Color;
+use skia_safe::Color;
 
 pub fn parse_color(hex: &str) -> Option<Color> {
     // Basic hex support #RRGGBBAA or #RRGGBB
@@ -18,8 +18,8 @@ pub fn parse_color(hex: &str) -> Option<Color> {
         return None;
     };
     
-    // tiny_skia::Color::from_rgba8 returns Color directly
-    Some(Color::from_rgba8(r, g, b, a))
+    // skia_safe::Color::from_argb(a, r, g, b)
+    Some(Color::from_argb(a, r, g, b))
 }
 
 pub fn parse_percentage(s: &str) -> f32 {

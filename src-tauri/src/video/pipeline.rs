@@ -266,12 +266,12 @@ where
 
         let current_time = frame_num as f64 / fps;
 
-        let pixmap = renderer.render_frame(&document, current_time)
+        let frame_data = renderer.render_frame(&document, current_time)
             .map_err(|e| PipelineError::EncodingError(e.to_string()))?;
         
         // --- NEW: Preview Emission ---
         if options.enable_preview {
-            println!("Preview enabled");
+            // println!("Preview enabled");
             if let Some(ref cb) = preview_callback {
             let now = std::time::Instant::now();
             if now.duration_since(last_preview_time) >= preview_interval {
@@ -280,9 +280,10 @@ where
 
                 // Clone data for processing (avoid holding up render thread too much? actually this is blocking)
                 // We do it synchronously here.
-                let width = pixmap.width();
-                let height = pixmap.height();
-                let data = pixmap.data(); // This is premultiplied RGBA directly from tiny-skia
+                let width = options.width;
+                let height = options.height;
+                // skia render_frame returns bytes directly
+                let data = &frame_data;
 
                 // We need to convert premultiplied RGBA to RGBA for image crate?
                 // Tiny-skia uses Premultiplied RGBA8888.
@@ -292,10 +293,6 @@ where
                 // Let's use `image` crate.
                 
                 // Construct ImageBuffer from raw data.
-                // Note: tiny-skia data is cast to &[u8]. The layout is usually RGBA or BGRA depending on platform?
-                // tiny-skia says "Pixels are stored in the execution environment's native endianness."
-                // Usually RGBA8888 on Little Endian.
-                
                 if let Some(img) = image::RgbaImage::from_raw(width, height, data.to_vec()) {
                     // Resize to width 480 (maintain aspect)
                     let target_width = 480;
@@ -312,7 +309,7 @@ where
                     let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, 70);
 
                      if let Ok(_) = encoder.encode(rgb_image.as_raw(), rgb_image.width(), rgb_image.height(), image::ColorType::Rgb8.into()) {
-                         println!("Pipeline: Encoding success, calling callback");
+                         // println!("Pipeline: Encoding success, calling callback");
                          cb(buffer);
                      } else if let Err(e) = encoder.encode(rgb_image.as_raw(), rgb_image.width(), rgb_image.height(), image::ColorType::Rgb8.into()) {
                          println!("Pipeline: Encoding failed: {}", e);
@@ -322,7 +319,7 @@ where
         }
         }
         
-        encoder.submit_frame(&pixmap.take())?; // Consume pixmap here
+        encoder.submit_frame(&frame_data)?; // Consume pixmap here
 
         // Progress update
         let now = std::time::Instant::now();

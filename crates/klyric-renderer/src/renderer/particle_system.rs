@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use tiny_skia::{Pixmap, Color, Paint, FillRule, PathBuilder, Rect, Transform as SkiaTransform};
+use skia_safe::{Canvas, Color, Paint, Rect, Matrix, Path, Point, Image, BlendMode as SkBlendMode};
 use crate::particle::{Particle, ParticleEmitter, ParticleShape, BlendMode, color_to_rgba, ParticleConfig, SpawnPattern, RangeValue, ParticlePhysics};
 use crate::presets::{CharBounds, EffectPreset, PresetFactory};
 
@@ -38,10 +38,10 @@ impl ParticleRenderSystem {
         });
     }
 
-    pub fn render(&self, pixmap: &mut Pixmap) {
+    pub fn render(&self, canvas: &Canvas) {
         for emitter in self.particle_emitters.values() {
             for particle in &emitter.particles {
-                self.draw_particle(pixmap, particle, &emitter.config.blend_mode);
+                self.draw_particle(canvas, particle, &emitter.config.blend_mode);
             }
         }
     }
@@ -119,11 +119,11 @@ impl ParticleRenderSystem {
          }
     }
 
-    /// Create and register a one-shot disintegration emitter from a pixmap
+    /// Create and register a one-shot disintegration emitter from an image
     pub fn ensure_disintegration_emitter(
         &mut self,
         key: String,
-        pixmap: &Pixmap,
+        image: &Image,
         bounds: CharBounds,
         seed: u64,
         config: Option<ParticleConfig>,
@@ -170,7 +170,7 @@ impl ParticleRenderSystem {
 
         // Sampling step - don't spawn a particle for every single pixel, that's too heavy
         // Dynamically adjust step based on size to keep particle count reasonable
-        let pixel_count = pixmap.width() * pixmap.height();
+        let pixel_count = image.width() * image.height();
         let step = if pixel_count > 5000 {
             3
         } else if pixel_count > 1000 {
@@ -179,65 +179,84 @@ impl ParticleRenderSystem {
             1
         };
 
-        let pm_w = pixmap.width() as f32;
-        let pm_h = pixmap.height() as f32;
+        let pm_w = image.width() as f32;
+        let pm_h = image.height() as f32;
 
         // Map pixmap coordinates to screen bounds
         // bounds.x/y is top-left on screen
 
-        let data = pixmap.data();
-        let stride = pixmap.width() as usize * 4;
+        if let Some(pixmap) = image.peek_pixels() {
+            let width = pixmap.width();
+            let height = pixmap.height();
+            // Assuming N32 format (4 bytes per pixel)
+            // skia uses row_bytes()
+            let row_bytes = pixmap.row_bytes();
+            
+            if let Some(data) = pixmap.bytes() {
+                // Check color type...
+            
+                for y in (0..height).step_by(step) {
+                    for x in (0..width).step_by(step) {
+                        let offset = y as usize * row_bytes + x as usize * 4;
+                        if offset + 3 >= data.len() { break; }
+                    
+                    // Skia usually stores premultiplied coords. 
+                    // Let's grab u32 to be safe if we want full color, 
+                    // but we need to know byte order for R, G, B.
+                    // For "Disintegration" often white particles are fine or we guess.
+                    // Let's assume byte 3 is Alpha (if RGBA or BGRA).
+                    // Actually, if it's BGRA, A is 3. If RGBA, A is 3.
+                    // So data[offset+3] is likely Alpha.
+                    
+                    let a = data[offset + 3];
 
-        for y in (0..pixmap.height()).step_by(step) {
-            for x in (0..pixmap.width()).step_by(step) {
-                let idx = (y as usize) * stride + (x as usize) * 4;
-                if idx + 3 >= data.len() { break; }
+                    if a > 10 { // Threshold alpha
+                        // Approximate color - we might get R/B swapped but usually OK for particles
+                        let r = data[offset];
+                        let g = data[offset + 1];
+                        let b = data[offset + 2];
 
-                let a = data[idx + 3];
-                if a > 10 { // Threshold alpha
-                    let r = data[idx];
-                    let g = data[idx + 1];
-                    let b = data[idx + 2];
+                        // Create particle
+                        let px = bounds.x + (x as f32 / pm_w) * bounds.width;
+                        let py = bounds.y + (y as f32 / pm_h) * bounds.height;
 
-                    // Create particle
-                    let px = bounds.x + (x as f32 / pm_w) * bounds.width;
-                    let py = bounds.y + (y as f32 / pm_h) * bounds.height;
+                        let color: u32 = ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32);
 
-                    let color: u32 = ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32);
+                        // Manual spawn logic from emitter
+                        // Calculate velocity from direction + spread
+                        let base_dir = base_config.direction.sample(&mut rng);
+                        let spread_offset = rng.range(-base_config.spread / 2.0, base_config.spread / 2.0);
+                        let dir_rad = (base_dir + spread_offset).to_radians();
 
-                    // Manual spawn logic from emitter
-                    // Calculate velocity from direction + spread
-                    let base_dir = base_config.direction.sample(&mut rng);
-                    let spread_offset = rng.range(-base_config.spread / 2.0, base_config.spread / 2.0);
-                    let dir_rad = (base_dir + spread_offset).to_radians();
+                        let speed = base_config.speed.sample(&mut rng);
+                        let vx = dir_rad.cos() * speed;
+                        let vy = dir_rad.sin() * speed;
 
-                    let speed = base_config.speed.sample(&mut rng);
-                    let vx = dir_rad.cos() * speed;
-                    let vy = dir_rad.sin() * speed;
+                        // Add some random jitter to position so grid isn't obvious
+                        let jx = rng.range(-1.0, 1.0);
+                        let jy = rng.range(-1.0, 1.0);
 
-                    // Add some random jitter to position so grid isn't obvious
-                    let jx = rng.range(-1.0, 1.0);
-                    let jy = rng.range(-1.0, 1.0);
+                        let particle = Particle {
+                            x: px + jx,
+                            y: py + jy,
+                            vx,
+                            vy,
+                            life: 0.0,
+                            max_life: base_config.lifetime.sample(&mut rng),
+                            size: base_config.start_size.sample(&mut rng),
+                            start_size: base_config.start_size.sample(&mut rng),
+                            end_size: base_config.end_size.sample(&mut rng),
+                            rotation: rng.range(0.0, 360.0),
+                            rotation_speed: base_config.rotation_speed.sample(&mut rng),
+                            color,
+                            opacity: 1.0,
+                            shape: base_config.shape.clone(),
+                        };
 
-                    let particle = Particle {
-                        x: px + jx,
-                        y: py + jy,
-                        vx,
-                        vy,
-                        life: 0.0,
-                        max_life: base_config.lifetime.sample(&mut rng),
-                        size: base_config.start_size.sample(&mut rng),
-                        start_size: base_config.start_size.sample(&mut rng),
-                        end_size: base_config.end_size.sample(&mut rng),
-                        rotation: rng.range(0.0, 360.0),
-                        rotation_speed: base_config.rotation_speed.sample(&mut rng),
-                        color,
-                        opacity: 1.0,
-                        shape: base_config.shape.clone(),
-                    };
-
-                    emitter.particles.push(particle);
+                        emitter.particles.push(particle);
+                    }
                 }
+            }
             }
         }
 
@@ -248,76 +267,57 @@ impl ParticleRenderSystem {
         self.particle_emitters.clear();
     }
 
-    fn draw_particle(&self, pixmap: &mut Pixmap, particle: &Particle, blend_mode: &BlendMode) {
+    fn draw_particle(&self, canvas: &Canvas, particle: &Particle, blend_mode: &BlendMode) {
         let (r, g, b, _a) = color_to_rgba(particle.color);
         let alpha = (particle.opacity * 255.0) as u8;
         
-        let color = Color::from_rgba8(r, g, b, alpha);
+        // Skia colors
+        let color = Color::from_argb(alpha, r, g, b);
         
         let mut paint = Paint::default();
         paint.set_color(color);
-        paint.anti_alias = true;
+        paint.set_anti_alias(true);
         
         // Apply blend mode
         match blend_mode {
             BlendMode::Additive => {
-                paint.blend_mode = tiny_skia::BlendMode::Plus;
+                paint.set_blend_mode(SkBlendMode::Plus);
             }
             BlendMode::Multiply => {
-                paint.blend_mode = tiny_skia::BlendMode::Multiply;
+                 paint.set_blend_mode(SkBlendMode::Multiply);
             }
             BlendMode::Normal => {
-                paint.blend_mode = tiny_skia::BlendMode::SourceOver;
+                 paint.set_blend_mode(SkBlendMode::SrcOver);
             }
         }
         
+        canvas.save();
+        
+        // Translate to particle position
+        canvas.translate((particle.x, particle.y));
+        canvas.rotate(particle.rotation, None);
+        
         match &particle.shape {
             ParticleShape::Circle => {
-                let mut pb = PathBuilder::new();
-                pb.push_circle(particle.x, particle.y, particle.size / 2.0);
-                if let Some(path) = pb.finish() {
-                    let transform = SkiaTransform::from_rotate_at(
-                        particle.rotation,
-                        particle.x,
-                        particle.y
-                    );
-                    pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
-                }
+                let radius = particle.size / 2.0;
+                // Draw circle at (0,0) since we translated
+                canvas.draw_circle(Point::new(0.0, 0.0), radius, &paint);
             }
             ParticleShape::Square => {
                 let half = particle.size / 2.0;
-                let mut pb = PathBuilder::new();
-                if let Some(rect) = Rect::from_xywh(
-                    particle.x - half,
-                    particle.y - half,
-                    particle.size,
-                    particle.size,
-                ) {
-                    pb.push_rect(rect);
-                }
-                if let Some(path) = pb.finish() {
-                    let transform = SkiaTransform::from_rotate_at(
-                        particle.rotation,
-                        particle.x,
-                        particle.y
-                    );
-                    pixmap.fill_path(&path, &paint, FillRule::Winding, transform, None);
-                }
+                let rect = Rect::from_xywh(-half, -half, particle.size, particle.size);
+                canvas.draw_rect(rect, &paint);
             }
             ParticleShape::Char(_ch) => {
-                let mut pb = PathBuilder::new();
-                pb.push_circle(particle.x, particle.y, particle.size / 2.0);
-                if let Some(path) = pb.finish() {
-                    pixmap.fill_path(&path, &paint, FillRule::Winding, SkiaTransform::identity(), None);
-                }
+                let radius = particle.size / 2.0;
+                canvas.draw_circle(Point::new(0.0, 0.0), radius, &paint);
             }
             ParticleShape::Image(_path) => {
-                let mut pb = PathBuilder::new();
-                pb.push_circle(particle.x, particle.y, particle.size / 2.0);
-                if let Some(path) = pb.finish() {
-                    pixmap.fill_path(&path, &paint, FillRule::Winding, SkiaTransform::identity(), None);
-                }
+                let radius = particle.size / 2.0;
+                canvas.draw_circle(Point::new(0.0, 0.0), radius, &paint);
             }
         }
+        
+        canvas.restore();
     }
 }

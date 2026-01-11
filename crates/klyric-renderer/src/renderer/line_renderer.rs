@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tiny_skia::{Pixmap, Color, PixmapPaint, Transform as SkiaTransform, Stroke as SkiaStroke, Paint};
+use skia_safe::{Canvas, Color, Paint, Rect, Matrix, Path, Point, Image, Surface, BlendMode, PaintStyle, MaskFilter, BlurStyle};
 use std::collections::HashSet;
 
 use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing};
@@ -18,7 +18,7 @@ const DEFAULT_ACTIVE_COLOR: &str = "#FFFF00";    // Bright yellow
 const DEFAULT_COMPLETE_COLOR: &str = "#FFFFFF";  // White
 
 pub struct LineRenderer<'a> {
-    pub pixmap: &'a mut Pixmap,
+    pub canvas: &'a Canvas,
     pub doc: &'a KLyricDocumentV2,
     pub time: f64,
     pub text_renderer: &'a mut TextRenderer,
@@ -37,11 +37,6 @@ impl<'a> LineRenderer<'a> {
         // Layout Text
         let glyphs = LayoutEngine::layout_line(line, &style, self.text_renderer);
 
-        // DEBUG: Only log for the first few frames/lines to avoid spam
-        if self.time < 1.0 { // Arbitrary small time check to limit logs
-             println!("🔍 Rust: render_line for '{:?}'. Time: {:.2}. Glyphs: {}", line.text, self.time, glyphs.len());
-        }
-        
         // Compute Line Position
         let (base_x, base_y) = self.compute_line_position(line);
 
@@ -64,27 +59,22 @@ impl<'a> LineRenderer<'a> {
                  (style_family, style_size)
              };
 
-             let (w, h, alpha_pixels) = {
-                 let font = self.text_renderer.get_font(family)
-                     .or_else(|| self.text_renderer.get_default_font());
-                 
-                 if let Some(font) = font {
-                     self.text_renderer.rasterize_char(&font, glyph.char, size)
-                        .unwrap_or((0, 0, Vec::new()))
-                 } else {
-                     if self.time < 0.1 && idx == 0 {
-                        println!("❌ Rust: Font not found for '{}' (fallback also failed)", family);
-                     }
-                     (0, 0, Vec::new())
-                 }
-             };
+             // Get typeface and path
+             let typeface = self.text_renderer.get_typeface(family)
+                 .or_else(|| self.text_renderer.get_default_typeface());
+             
+             if let Some(typeface) = typeface {
+                 // Get path
+                 if let Some(path) = self.text_renderer.get_glyph_path(&typeface, glyph.char, size) {
+                     // Dimensions for effects
+                     // Skia path bounds
+                     let bounds = path.bounds();
+                     let w = bounds.width();
+                     let h = bounds.height();
+                     // Helper midpoint
+                     let cx = w / 2.0;
+                     let cy = h / 2.0;
 
-             if self.time < 0.1 && idx == 0 {
-                 println!("🔍 Rust: Char '{}' size: {}x{}. Pos: ({:.1}, {:.1})", glyph.char, w, h, char_absolute_x, char_absolute_y);
-             }
-
-             if w > 0 && h > 0 {
-                 if let Some(_) = Pixmap::new(w, h) {
                      // Resolve color
                      let is_active = char_data.map(|c| self.time >= c.start && self.time <= c.end).unwrap_or(false);
                      let is_past = char_data.map(|c| self.time > c.end).unwrap_or(false);
@@ -105,35 +95,8 @@ impl<'a> LineRenderer<'a> {
                              .and_then(|fs| fs.fill.as_deref())
                              .unwrap_or(DEFAULT_INACTIVE_COLOR)
                      };
+                     
                      let text_color = parse_color(color_hex).unwrap_or(Color::WHITE);
-
-                     // Helper to create colored pixmap from alpha
-                     let create_colored_pixmap = |color: Color| -> Option<Pixmap> {
-                         let mut pm = Pixmap::new(w, h)?;
-                         let data = pm.data_mut();
-                         let r = (color.red() * 255.0) as u8;
-                         let g = (color.green() * 255.0) as u8;
-                         let b = (color.blue() * 255.0) as u8;
-                         let a_base = color.alpha();
-
-                         for (i, &alpha) in alpha_pixels.iter().enumerate() {
-                             let idx = i * 4;
-                             if alpha > 0 {
-                                 let final_alpha = (alpha as f32 / 255.0) * a_base;
-                                 let fa = final_alpha;
-                                 data[idx] = (r as f32 * fa) as u8;
-                                 data[idx+1] = (g as f32 * fa) as u8;
-                                 data[idx+2] = (b as f32 * fa) as u8;
-                                 data[idx+3] = (final_alpha * 255.0) as u8;
-                             }
-                         }
-                         Some(pm)
-                     };
-
-                     let draw_x = char_absolute_x as i32;
-                     let draw_y = (char_absolute_y - h as f32 / 2.0) as i32;
-                     let cx = w as f32 / 2.0;
-                     let cy = h as f32 / 2.0;
 
                      // Compute Transform (Base + Effects)
                      let line_transform = line.transform.clone().unwrap_or_default();
@@ -151,32 +114,22 @@ impl<'a> LineRenderer<'a> {
                          anchor_y: char_transform.anchor_y,
                      };
                      
-                     // Resolve effects
+                     // ... Effect Resolution Logic (Same as before) ...
                      let mut active_effects = Vec::new();
                      for effect_name in &line.effects {
                         if let Some(effect) = self.doc.effects.get(effect_name) {
-                            // Check if it is a preset wrapper
                             if let Some(preset_name) = &effect.preset {
                                 if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
-                                     // Override duration if specified in wrapper
-                                     if let Some(d) = effect.duration {
-                                         generated.duration = Some(d);
-                                     }
-                                     // Override easing if specified (only if not default Linear)
-                                     if effect.easing != Easing::Linear {
-                                         generated.easing = effect.easing.clone();
-                                     }
-
+                                     if let Some(d) = effect.duration { generated.duration = Some(d); }
+                                     if effect.easing != Easing::Linear { generated.easing = effect.easing.clone(); }
                                      active_effects.push((effect_name, generated));
                                 } else {
-                                     // Fallback or particle preset
                                      active_effects.push((effect_name, effect.clone()));
                                 }
                             } else {
                                 active_effects.push((effect_name, effect.clone()));
                             }
                         } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
-                            // Support preset transition names directly
                             active_effects.push((effect_name, preset));
                         }
                      }
@@ -212,23 +165,48 @@ impl<'a> LineRenderer<'a> {
                      if let Some((_name, effect)) = disintegrate_effects.first() {
                          if EffectEngine::should_trigger(effect, &ctx) {
                              disintegration_progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                             // Clamp progress
                              disintegration_progress = disintegration_progress.max(0.0).min(1.0);
-
-                             // Spawn particles if needed (only at the very beginning)
-                             // Since render_line is called every frame, we rely on ensure_disintegration_emitter
-                             // to only create them once per key.
-                             // However, we need the pixmap to be ready. It is ready here (text_pm).
-
-                             // We do the spawning AFTER pixmap creation below, but we need to track if we should fade out the text here.
                          }
                      }
 
-                     // Common Paint
-                     let mut paint = PixmapPaint::default();
-                     // Fade out text as disintegration progresses
-                     paint.opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
+                     // Setup Paint
+                     let mut paint = Paint::default();
+                     paint.set_color(text_color);
+                     paint.set_anti_alias(true);
+                     
+                     let final_opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
+                     paint.set_alpha_f(final_opacity);
 
+                     // --- DRAWING ---
+                     // Calculate position context
+                     let draw_x = char_absolute_x;
+                     let draw_y = char_absolute_y; // Baseline usually? or Top-Left?
+                     
+                     // LayoutEngine returns x/y. text.rs measure_char returns approximate bounds.
+                     // IMPORTANT: path from skia font.get_path is typically relative to origin (0,0) at baseline left.
+                     // But sometimes y is flipped. Skia Y grows down.
+                     // If path has negative Y, it draws UP from baseline.
+                     // We should check layout.rs assumptions. `layout_line` puts `y=0.0`.
+                     // `compute_line_position` puts `y` at center of screen.
+                     // So we probably assume `draw_y` is baseline.
+                     
+                     self.canvas.save();
+                     
+                     // Apply Transforms
+                     // Order: Translate to Pos -> Translate to Pivot (Center) -> Rotate/Scale -> Translate back
+                     self.canvas.translate((draw_x + final_transform.x, draw_y + final_transform.y));
+                     
+                     // Text center offset (rough approximation since we don't know exact ink bounds easily without path bounds methods, which we have)
+                     // Center relative to baseline origin
+                     // If path bounds is e.g. (0, -10, 10, 0), center is (5, -5).
+                     let path_center_x = bounds.center_x();
+                     let path_center_y = bounds.center_y();
+                     
+                     self.canvas.translate((path_center_x, path_center_y));
+                     self.canvas.rotate(final_transform.rotation, None);
+                     self.canvas.scale((final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y));
+                     self.canvas.translate((-path_center_x, -path_center_y));
+                     
                      // --- 1. SHADOW ---
                      let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) { Some(c) } 
                                        else if let Some(l) = &line.shadow { Some(l) } 
@@ -237,24 +215,23 @@ impl<'a> LineRenderer<'a> {
                      if let Some(shadow) = shadow_opts {
                          if let Some(color_hex) = &shadow.color {
                              if let Some(shadow_color) = parse_color(color_hex) {
-                                 if let Some(shadow_pm) = create_colored_pixmap(shadow_color) {
-                                     let sx = draw_x as f32 + final_transform.x + shadow.x;
-                                     let sy = draw_y as f32 + final_transform.y + shadow.y;
-                                     
-                                     let mut st = SkiaTransform::identity();
-                                     st = st.pre_translate(sx, sy);
-                                     st = st.pre_translate(cx, cy);
-                                     st = st.pre_rotate(final_transform.rotation);
-                                     st = st.pre_scale(final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y);
-                                     st = st.pre_translate(-cx, -cy);
-                                     
-                                     self.pixmap.draw_pixmap(0, 0, shadow_pm.as_ref(), &paint, st, None);
-                                 }
+                                 let mut shadow_paint = Paint::default();
+                                 shadow_paint.set_color(shadow_color);
+                                 shadow_paint.set_alpha_f(final_opacity); // Inherit opacity? usually shadows do.
+                                 shadow_paint.set_anti_alias(true);
+                                 
+                                 // Simple blur if we had blur radius in struct, but KLyric v1 shadow is simple offset?
+                                 // If we want blur: shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, blur_sigma, false));
+                                 
+                                 self.canvas.save();
+                                 self.canvas.translate((shadow.x, shadow.y));
+                                 self.canvas.draw_path(&path, &shadow_paint);
+                                 self.canvas.restore();
                              }
                          }
                      }
 
-                     // --- 2. STROKE (Real Path) ---
+                     // --- 2. STROKE ---
                      let stroke_opts = if let Some(c) = char_data.and_then(|c| c.stroke.as_ref()) { Some(c) } 
                                        else if let Some(l) = &line.stroke { Some(l) } 
                                        else { style.stroke.as_ref() };
@@ -263,122 +240,108 @@ impl<'a> LineRenderer<'a> {
                          if stroke.width > 0.0 {
                              if let Some(color_hex) = &stroke.color {
                                  if let Some(stroke_color) = parse_color(color_hex) {
-                                     // Get glyph path for stroke
-                                     let font = self.text_renderer.get_font(family)
-                                         .or_else(|| self.text_renderer.get_default_font());
-
-                                     if let Some(font) = font {
-                                         if let Some(path) = self.text_renderer.get_glyph_path(&font, glyph.char, size) {
-                                             // Calculate Stroke Paint
-                                             let mut stroke_paint = Paint::default();
-                                             // Scale alpha by paint opacity
-                                             let alpha = stroke_color.alpha() * paint.opacity;
-                                             let mut final_color = stroke_color;
-                                             final_color.set_alpha(alpha);
-
-                                             stroke_paint.set_color(final_color);
-                                             stroke_paint.anti_alias = true;
-
-                                             let mut skia_stroke = SkiaStroke::default();
-                                             skia_stroke.width = stroke.width;
-
-                                             // Transform for path
-                                             // The path is relative to the baseline origin (0,0) of the glyph.
-                                             // We need to position it at (char_absolute_x, char_absolute_y).
-                                             // And apply line effects.
-
-                                             // char_absolute_x/y seems to be the pen position (baseline).
-                                             let screen_x = char_absolute_x + final_transform.x;
-                                             let screen_y = char_absolute_y + final_transform.y;
-
-                                             // TextRenderer::get_glyph_path returns path with Y flipped (growing down), origin at (0,0).
-                                             // Usually (0,0) is baseline.
-                                             
-                                             // Import Font trait if not present, but better just use available methods.
-                                             // font is FontRef.
-                                             use ab_glyph::{Font, ScaleFont};
-                                             let scaled_font = font.as_scaled(ab_glyph::PxScale::from(size));
-                                             // Ensure we use the correct font methods
-                                             let outlined = scaled_font.font.outline_glyph(scaled_font.scaled_glyph(glyph.char));
-                                             
-                                             if let Some(outlined) = outlined {
-                                                  let bounds = outlined.px_bounds();
-
-                                                  // Now we are in "Bitmap Top-Left" space.
-                                                  // Shift path to be relative to this space.
-                                                  let mut st = SkiaTransform::identity();
-                                                  st = st.pre_translate(screen_x, screen_y);
-                                                  st = st.pre_translate(cx, cy);
-                                                  st = st.pre_rotate(final_transform.rotation);
-                                                  st = st.pre_scale(
-                                                     final_transform.scale * final_transform.scale_x,
-                                                     final_transform.scale * final_transform.scale_y
-                                                  );
-                                                  st = st.pre_translate(-cx, -cy);
-                                                  st = st.pre_translate(-bounds.min.x, -bounds.min.y);
-
-                                                  self.pixmap.stroke_path(&path, &stroke_paint, &skia_stroke, st, None);
-                                             }
-                                         }
-                                     }
+                                     let mut stroke_paint = Paint::default();
+                                     stroke_paint.set_style(PaintStyle::Stroke);
+                                     stroke_paint.set_stroke_width(stroke.width);
+                                     stroke_paint.set_color(stroke_color);
+                                     stroke_paint.set_alpha_f(final_opacity);
+                                     stroke_paint.set_anti_alias(true);
+                                     
+                                     self.canvas.draw_path(&path, &stroke_paint);
                                  }
                              }
                          }
                      }
 
                      // --- 3. MAIN TEXT ---
-                     // Fill glyph
-                     if let Some(text_pm) = create_colored_pixmap(text_color) {
-                         // Only draw text if not fully disintegrated
-                         if paint.opacity > 0.01 {
-                             let screen_x = draw_x as f32 + final_transform.x;
-                             let screen_y = draw_y as f32 + final_transform.y;
+                     if paint.alpha_f() > 0.001 {
+                         self.canvas.draw_path(&path, &paint);
+                     }
+                     
+                     self.canvas.restore(); // Restore transform for next glyph/effects
 
-                             let mut skia_transform = SkiaTransform::identity();
-                             skia_transform = skia_transform.pre_translate(screen_x, screen_y);
-                             skia_transform = skia_transform.pre_translate(cx, cy);
-                             skia_transform = skia_transform.pre_rotate(final_transform.rotation);
-                             skia_transform = skia_transform.pre_scale(
-                                 final_transform.scale * final_transform.scale_x,
-                                 final_transform.scale * final_transform.scale_y
-                             );
-                             skia_transform = skia_transform.pre_translate(-cx, -cy);
-
-                             self.pixmap.draw_pixmap(
-                                 0,
-                                 0,
-                                 text_pm.as_ref(),
-                                 &paint,
-                                 skia_transform,
-                                 None
-                             );
-                         }
-
-                         // --- DISINTEGRATION EFFECT ---
-                         for (name, effect) in disintegrate_effects {
+                     // --- DISINTEGRATION EFFECT ---
+                     for (name, effect) in disintegrate_effects {
                          if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
 
                          let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
-                             if progress < 0.0 || progress > 1.0 { continue; }
+                         if progress < 0.0 || progress > 1.0 { continue; }
 
-                             let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
-                             self.active_keys.insert(key.clone());
+                         let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
+                         self.active_keys.insert(key.clone());
+
+                         // We need to capture the glyph as an image for the emitter
+                         // Create small surface
+                         // Bounds might be slightly larger due to stroke/shadow, but let's stick to path bounds for particles
+                         let capture_w = w.ceil() as i32 + 20; // Padding
+                         let capture_h = h.ceil() as i32 + 20;
+                         if capture_w <= 0 || capture_h <= 0 { continue; }
+                         
+                         // Create offscreen surface
+                         // Note: creating surfaces every frame is expensive. 
+                         // But disintegration usually only triggers ONCE per char.
+                         // Optimization: Check if emitter exists already? 
+                         // ParticleSystem does checks, but we shouldn't create surface if not needed.
+                         // But we can't easily check particle system state from here without mutable borrow conflict?
+                         // Actually active_keys insertion handles liveness.
+                         // We should only generate if self.time is close to start?
+                         // EffectEngine handles trigger/progress.
+                         
+                         // "ensure_disintegration_emitter" checks existence.
+                         // But ideally we don't construct the Image if it exists.
+                         // Let's rely on loose check or just pay the cost (it's fine for export).
+                         
+                         if self.particle_system.particle_emitters.contains_key(&key) {
+                             // Just update active
+                             // But we can't access it here easily because self.particle_system is borrowed?
+                             // No, we have &mut self in render_line.
+                             // Actually we have separate borrows in Mod.rs.
+                             // LineRenderer struct holds &mut separate fields.
+                             // So yes we can check.
+                             if let Some(e) = self.particle_system.particle_emitters.get_mut(&key) {
+                                 e.active = true;
+                                 continue; 
+                             }
+                         }
+
+                         if let Some(mut surface) = Surface::new_raster_n32_premul((capture_w, capture_h)) {
+                             let c = surface.canvas();
+                             // Center the path in the capture
+                             let tx = (capture_w as f32 / 2.0) - cx;
+                             let ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
+                             // path bounds .top might be negative.
+                             // bounds.y is usually negative (ascender).
+                             // If bounds y is -50, height 70.
+                             // We want to translate such that top-left of bounds is at (0,0)?
+                             // Or center.
+                             
+                             let bounds_left = bounds.left;
+                             let bounds_top = bounds.top;
+                             
+                             c.translate((-bounds_left + 10.0, -bounds_top + 10.0));
+                             
+                             // Draw path filled white
+                             let mut cap_paint = Paint::default();
+                             cap_paint.set_color(Color::WHITE);
+                             cap_paint.set_anti_alias(true);
+                             c.draw_path(&path, &cap_paint);
+                             
+                             let image = surface.image_snapshot();
 
                              // Calculate screen bounds for the emitter
-                             let bounds = CharBounds {
-                                 x: char_absolute_x + final_transform.x,
-                                 y: char_absolute_y + final_transform.y - h as f32 / 2.0,
-                                 width: w as f32 * final_transform.scale * final_transform.scale_x,
-                                 height: h as f32 * final_transform.scale * final_transform.scale_y,
+                             let bounds_rect = CharBounds {
+                                 x: draw_x + final_transform.x + bounds_left - 10.0, // Adjust back
+                                 y: draw_y + final_transform.y + bounds_top - 10.0,
+                                 width: capture_w as f32 * final_transform.scale,
+                                 height: capture_h as f32 * final_transform.scale,
                              };
 
                              let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
 
-                             // Trigger creation using the current text pixmap
                              self.particle_system.ensure_disintegration_emitter(
                                  key,
-                                 &text_pm,
-                                 bounds,
+                                 &image,
+                                 bounds_rect,
                                  seed,
                                  effect.particle_config.clone()
                              );
@@ -386,6 +349,54 @@ impl<'a> LineRenderer<'a> {
                      }
                      
                      // --- PARTICLE SPAWNING ---
+                     // INJECT DEFAULT SPARKLE EFFECT (User Request)
+                     let default_sparkle = crate::model::Effect {
+                         // Removed 'id' and 'params' as they don't exist in Effect struct
+                         effect_type: crate::model::EffectType::Particle,
+                         trigger: crate::model::EffectTrigger::Always, 
+                         preset: None, // Use custom config instead
+                         particle_config: Some(crate::particle::ParticleConfig {
+                             count: 50, // Capacity hint
+                             spawn_rate: 30.0, // Continuous emission!
+                             lifetime: crate::particle::RangeValue::Range(0.5, 1.2),
+                             speed: crate::particle::RangeValue::Range(30.0, 80.0),
+                             direction: crate::particle::RangeValue::Range(0.0, 360.0),
+                             spread: 0.0,
+                             start_size: crate::particle::RangeValue::Range(3.0, 6.0),
+                             end_size: crate::particle::RangeValue::Single(0.0),
+                             rotation_speed: crate::particle::RangeValue::Range(-180.0, 180.0),
+                             color: "#FFFF88".to_string(),
+                             shape: crate::particle::ParticleShape::Circle,
+                             physics: crate::particle::ParticlePhysics {
+                                 gravity: -20.0, // Slight float up
+                                 drag: 0.5,
+                                 wind_x: 0.0,
+                                 wind_y: 0.0,
+                             },
+                             blend_mode: crate::particle::BlendMode::Additive,
+                         }),
+                         duration: None,
+                         easing: crate::model::Easing::Linear,
+                         delay: 0.0,
+                         properties: std::collections::HashMap::new(),
+                         mode: None,
+                         direction: None,
+                         keyframes: Vec::new(),
+                         iterations: 1,
+                     };
+                     
+                     // Helper context for default effect
+                     let default_ctx = ctx.clone(); 
+                     
+                     // Helper: We need to adapt the name type.
+                     // The existing loop `for (name, effect) in particle_effects` iterates over `&String` keys.
+                     // We can't mix `&String` and `&str` in the same Vec.
+                     // IMPORTANT: We need to see how particle_effects is defined above.
+                     // It comes from `active_effects`.
+                     // Let's defer adding it to the SAME vector. We can just iterate it separately!
+                     // Much safer rust-wise.
+
+                     // 1. Process standard particle effects
                      for (name, effect) in particle_effects {
                          if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
                          
@@ -395,23 +406,58 @@ impl<'a> LineRenderer<'a> {
                          let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
                          self.active_keys.insert(key.clone());
                          
-                         let bounds = CharBounds {
-                             x: char_absolute_x + final_transform.x,  
-                             y: char_absolute_y + final_transform.y - h as f32 / 2.0, 
-                             width: w as f32 * final_transform.scale * final_transform.scale_x,
-                             height: h as f32 * final_transform.scale * final_transform.scale_y,
+                         let bounds_rect = CharBounds {
+                             x: draw_x + final_transform.x + bounds.left, 
+                             y: draw_y + final_transform.y + bounds.top, 
+                             width: w * final_transform.scale, 
+                             height: h * final_transform.scale,
                          };
                          
                          let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
                          
-                         // Pass preset name string directly, let factory handle lookup
                          self.particle_system.ensure_emitter(
                              key, 
                              effect.preset.clone(), 
                              effect.particle_config.clone(), 
-                             bounds, 
+                             bounds_rect, 
                              seed
                          );
+                     }
+
+                     // 2. Process our injected default (separately to avoid type hell)
+                     {
+                         let effect = &default_sparkle;
+                         // Always trigger (or check Trigger if configured)
+                         // We set Trigger::Always so should_trigger is likely true, but calculate_progress needs calling.
+                         // But for Always/Active, progress might just be 0-1 based on line time?
+                         // Actually `EffectEngine::should_trigger` handles Always.
+                         if EffectEngine::should_trigger(effect, &default_ctx) {
+                             // Progress? For particle emitters, progress usually determines chaos/lifetime? 
+                             // Or just "is it active".
+                             // Let's assume active.
+                             
+                             let name = "global_sparkle";
+                             let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
+                             self.active_keys.insert(key.clone());
+                             
+                             let bounds_rect = CharBounds {
+                                 x: draw_x + final_transform.x + bounds.left, 
+                                 y: draw_y + final_transform.y + bounds.top, 
+                                 width: w * final_transform.scale, 
+                                 height: h * final_transform.scale,
+                             };
+                             
+                             // Offset seed slightly so it doesn't match other effects exactly
+                             let seed = (line_idx * 1000 + glyph.char_index * 100 + 9999) as u64;
+                             
+                             self.particle_system.ensure_emitter(
+                                 key, 
+                                 effect.preset.clone(), 
+                                 effect.particle_config.clone(), 
+                                 bounds_rect, 
+                                 seed
+                             );
+                         }
                      }
                  }
              }

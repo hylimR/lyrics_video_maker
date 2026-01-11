@@ -46,12 +46,12 @@ impl LayoutEngine {
             // For each character in the string
             for ch in ch_str.chars() {
                 // Try to get font
-                let font_ref = renderer.get_font(family)
-                    .or_else(|| renderer.get_default_font());
+                let font_ref = renderer.get_typeface(family)
+                    .or_else(|| renderer.get_default_typeface());
                 
-                if let Some(font) = font_ref {
+                if let Some(typeface) = font_ref {
                     // Measure character using renderer
-                    let (advance, height) = renderer.measure_char(&font, ch, size);
+                    let (advance, height) = renderer.measure_char(&typeface, ch, size);
                     
                     let width = advance; 
                     

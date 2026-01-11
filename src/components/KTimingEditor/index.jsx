@@ -216,7 +216,7 @@ const KTimingEditor = ({
             }
             isAutoAdvancing.current = false;
         }
-    }, [lineIndex, currentLyric, onSeek, currentTime]);
+    }, [lineIndex, onSeek]); // Only run on explicit line change
 
     // Auto-pause / Loop / Auto-advance logic
     useEffect(() => {
@@ -281,7 +281,7 @@ const KTimingEditor = ({
     if (!currentLyric) {
         return (
             <div className="k-timing-editor">
-                 <KTimingHeader
+                <KTimingHeader
                     lyrics={lyrics || []}
                     lineIndex={lineIndex}
                     currentTime={currentTime}
