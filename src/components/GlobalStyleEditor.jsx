@@ -5,21 +5,21 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Globe } from "lucide-react";
 
 const GlobalStyleEditor = ({ availableFonts }) => {
-    const { globalStyle, updateState } = useAppStore();
+    const { globalStyle, updateState, preferences } = useAppStore();
 
     // Map globalStyle to flat values
     const values = useMemo(() => ({
-        fontFamily: globalStyle?.font?.family || 'Noto Sans SC',
-        fontSize: globalStyle?.font?.size || 72,
+        fontFamily: globalStyle?.font?.family || preferences?.defaultFont || 'Noto Sans SC',
+        fontSize: globalStyle?.font?.size || preferences?.defaultFontSize || 72,
         // Transform
         offsetX: globalStyle?.transform?.x || 0,
-        offsetY: globalStyle?.transform?.y || 0,
+        offsetY: globalStyle?.transform?.y || preferences?.defaultVerticalOffset || 0,
         scale: globalStyle?.transform?.scale ?? 1,
         rotation: globalStyle?.transform?.rotation || 0,
         opacity: globalStyle?.transform?.opacity ?? 1,
 
         // Effects
-        effect: globalStyle?.effect || 'none',
+        effect: globalStyle?.effect || preferences?.defaultEffect || 'none',
         animation: globalStyle?.animation || 'default',
 
         // Stroke

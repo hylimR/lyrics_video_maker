@@ -321,23 +321,28 @@ const KTimingEditor = ({
         if (!currentLyric || !isPlaying) return;
 
         if (currentTime >= currentLyric.endTime) {
+            console.log('⏱️ [KTiming] Time check:', { currentTime, endTime: currentLyric.endTime, loopMode, lineIndex });
             if (loopMode) {
                 // Loop mode: restart the current line
-                onSeek?.(currentLyric.startTime);
+                console.log('🔄 [KTiming] Looping line', lineIndex);
+                // Atomic Seek + Play (prevents pause glitch)
+                onSeek?.(currentLyric.startTime, true);
             } else {
                 // Non-loop mode: proceed to next line automatically
                 if (lineIndex < lyrics.length - 1) {
+                    console.log('➡️ [KTiming] Auto-advancing to next line');
                     // Save current state and move to next line
                     pushUpdates(syllables, charCustomizations, lineProperties);
                     isAutoAdvancing.current = true; // Flag as auto-advance
                     setKTimingIndex(lineIndex + 1);
                 } else {
                     // Last line: just pause
+                    console.log('🛑 [KTiming] End of lyrics, pausing');
                     onPause?.();
                 }
             }
         }
-    }, [currentTime, currentLyric, isPlaying, loopMode, onSeek, onPause, lineIndex, lyrics.length, pushUpdates, syllables, charCustomizations, lineProperties]);
+    }, [currentTime, currentLyric, isPlaying, loopMode, onSeek, onPlay, onPause, lineIndex, lyrics.length, pushUpdates, syllables, charCustomizations, lineProperties]);
 
     // Sync current line to currentTime (Handle scrubbing)
     useEffect(() => {

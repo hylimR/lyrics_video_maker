@@ -199,11 +199,7 @@ where
     // Initialize renderer & encoder
     let mut renderer = Renderer::new(encoder_config.width, encoder_config.height);
 
-    // --- Load Fonts ---
-    // Try to locate the default font "Noto Sans SC"
-    // In dev: ../public/fonts/NotoSansSC-Regular.otf
-    // In prod: We need to handle resource paths (omitted for brevity, assuming similar structure or system fallback)
-    
+    // --- TODO: Implement a more robust system font discovery mechanism ---
     let font_candidates = [
         "../public/fonts/NotoSansSC-Regular.otf",
         "fonts/NotoSansSC-Regular.otf", // Potential production path relative to binary if resources are copied
@@ -385,7 +381,7 @@ where
             total_duration: Some(duration),
         };
 
-        mux_audio_video(&video_path, &audio, &output_path, &muxer_config)
+        mux_audio_video(&video_path, &audio, &output_path, None, &muxer_config)
             .map_err(|e| PipelineError::FfmpegError(e.to_string()))?;
         
         let _ = std::fs::remove_file(&video_path);

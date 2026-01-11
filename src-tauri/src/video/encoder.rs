@@ -250,7 +250,7 @@ impl Drop for VideoEncoder {
 
 /// Find FFmpeg executable
 /// Priority: 1. Bundled with app, 2. ffmpeg-sidecar location, 3. System PATH, 4. Common paths
-fn find_ffmpeg() -> Option<String> {
+pub(crate) fn find_ffmpeg() -> Option<String> {
     // 1. Check for bundled FFmpeg (in the app's resource directory)
     if let Some(exe_path) = std::env::current_exe().ok() {
         let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));

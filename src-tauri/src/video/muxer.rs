@@ -75,6 +75,7 @@ pub fn mux_audio_video(
     video_path: &str,
     audio_path: &str,
     output_path: &str,
+    ffmpeg_path: Option<&str>,
     config: &MuxerConfig,
 ) -> Result<(), MuxerError> {
     // Verify input files exist
@@ -91,8 +92,15 @@ pub fn mux_audio_video(
     log::info!("Muxing: {} + {} -> {}", video_path, audio_path, output_path);
     log::debug!("FFmpeg args: {:?}", args);
 
+    // Find FFmpeg
+    let ffmpeg = if let Some(path) = ffmpeg_path {
+        path.to_string()
+    } else {
+        crate::video::encoder::find_ffmpeg().ok_or(MuxerError::FfmpegNotFound)?
+    };
+
     // Execute FFmpeg command
-    let output = Command::new("ffmpeg")
+    let output = Command::new(&ffmpeg)
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

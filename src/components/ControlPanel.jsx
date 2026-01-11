@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
     Play, Pause, SkipBack, SkipForward, Repeat, RotateCcw,
-    MousePointerClick, Delete, Scissors, ChevronUp, ChevronDown
+    MousePointerClick, Delete, Scissors, ChevronUp, ChevronDown, Bug
 } from "lucide-react";
 
 /**
@@ -191,6 +191,42 @@ const ControlPanel = ({
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Auto Split (A)</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-green-400"
+                                        onClick={async () => {
+                                            // Check if running in Tauri
+                                            if (window.__TAURI_INTERNALS__) {
+                                                try {
+                                                    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+                                                    const debugWindow = new WebviewWindow('debug-view', {
+                                                        url: '/debug',
+                                                        title: 'Debug View',
+                                                        width: 800,
+                                                        height: 900,
+                                                        resizable: true,
+                                                    });
+                                                    // Focus the window if it's already open
+                                                    debugWindow.once('tauri://error', (e) => {
+                                                        // If window already exists, it might throw, just try to focus
+                                                        console.warn("Debug window error (might already exist):", e);
+                                                    });
+                                                } catch (e) {
+                                                    console.error("Failed to open Tauri debug window:", e);
+                                                    // Fallback
+                                                    window.open('/debug', 'DebugView', 'width=800,height=900');
+                                                }
+                                            } else {
+                                                // Browser fallback
+                                                window.open('/debug', 'DebugView', 'width=800,height=900');
+                                            }
+                                        }}>
+                                        <Bug className="w-4 h-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Open Debug View</TooltipContent>
                             </Tooltip>
                         </div>
                     </div>

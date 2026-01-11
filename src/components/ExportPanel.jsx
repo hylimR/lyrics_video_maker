@@ -12,10 +12,13 @@ import ExportForm from './Export/ExportForm';
  * ExportPanel.jsx - Export Lyrics to KLyric, ASS, or Video (MP4)
  */
 const ExportPanel = ({ onClose }) => {
-    const { lyrics, klyricDoc, resolution, duration, audioSource } = useAppStore();
-    const [exportFormat, setExportFormat] = useState('klyric');
-    const [filename, setFilename] = useState('lyrics');
-    const [pretty, setPretty] = useState(true);
+    const { lyrics, klyricDoc, resolution, duration, audioSource, preferences } = useAppStore();
+
+    // Initialize from preferences or defaults
+    const [exportFormat, setExportFormat] = useState(preferences?.export?.format || 'klyric');
+    const [filename, setFilename] = useState(preferences?.export?.filenamePattern || 'lyrics');
+    const [pretty, setPretty] = useState(preferences?.export?.prettyPrint ?? true);
+
     const [exportStatus, setExportStatus] = useState(null);
 
     // Video export hook

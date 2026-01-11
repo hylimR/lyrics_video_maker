@@ -39,6 +39,19 @@ export const useAppStore = create(
                 availableFonts: [],
                 loadingFonts: new Set(),
 
+                // --- User Preferences (Persisted) ---
+                preferences: {
+                    export: {
+                        format: 'klyric', // 'klyric', 'ass', 'video'
+                        filenamePattern: 'lyrics',
+                        prettyPrint: true,
+                        video: {
+                            fps: 60,
+                            format: 'mp4'
+                        }
+                    }
+                },
+
                 // --- History State (Transient) ---
                 past: [],
                 future: [],
@@ -255,6 +268,10 @@ export const useAppStore = create(
                     newSet.delete(fontName);
                     return { loadingFonts: newSet };
                 }),
+
+                updatePreferences: (updates) => set((state) => ({
+                    preferences: { ...state.preferences, ...updates }
+                })),
 
                 // History Actions (Master Only)
                 undo: () => {

@@ -6,8 +6,10 @@ import FileUploader from '@/components/FileUploader';
 import LyricsEditor from '@/components/LyricsEditor';
 import KTimingEditor from '@/components/KTimingEditor';
 import ExportPanel from '@/components/ExportPanel';
+import PreferencesModal from '@/components/PreferencesModal';
 import GlobalStyleEditor from '@/components/GlobalStyleEditor';
-import { useSimulatedAudio } from '@/hooks/useSimulatedAudio';
+import AudioPlayer from '@/components/AudioPlayer';
+
 import { importSubtitleToKLyric } from '@/utils/KLyricFormat';
 import './App.css';
 
@@ -68,21 +70,17 @@ function App() {
   }, [setAvailableFonts]);
 
   // --- Audio System ---
-  const realAudioRef = useRef(null);
+  // Replaced manual audio ref with AudioPlayer ref
+  const audioRef = useRef(null);
 
-  // Simulated Audio (for demo)
-  const { audioRef: simulatedAudioRef, duration: simDuration, setDuration: setSimDuration } = useSimulatedAudio(28);
-
-  const [demoMode, setDemoMode] = useState(true);
   const [demoLoaded, setDemoLoaded] = useState(false);
   const [audioSource, setAudioSource] = useState(null);
-
-  const audioRef = demoMode ? simulatedAudioRef : realAudioRef;
 
   // --- UI State ---
   const [showFilePanel, setShowFilePanel] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // --- Preview Window State Management ---
@@ -147,77 +145,95 @@ function App() {
 
   // --- Sync Effects (P2P Model) ---
 
+  const [isAudioMaster, setIsAudioMaster] = useState(false);
+
+  // --- Audio Master Election ---
+  useEffect(() => {
+    if (!navigator.locks) {
+      setIsAudioMaster(true); // Fallback for environments without locks
+      return;
+    }
+
+    const requestLock = async () => {
+      // Request a lock held as long as the component is mounted
+      navigator.locks.request('lyric-app-audio-master', async (lock) => {
+        console.log('🎤 Acquired Audio Master Lock');
+        setIsAudioMaster(true);
+        // Hold the lock indefinitely until unmount (signal abort/promise resolve)
+        await new Promise(() => { });
+      });
+    };
+
+    requestLock();
+  }, []);
+
+
+  // --- Sync Effects (P2P Model) ---
+
   // 1. Sync Audio Element with Store Time (Incoming Sync)
   useEffect(() => {
     if (audioRef.current) {
       const diff = Math.abs(audioRef.current.currentTime - currentTime);
-      // Only seek if difference is significant (avoid fighting with self-updates)
+
+      // Only seek if difference is significant
       if (diff > 0.3) {
-        audioRef.current.currentTime = currentTime;
+        audioRef.current.seek(currentTime);
       }
 
-      // Handle Play/Pause
-      if (isPlaying && (audioRef.current.paused || audioRef.current.ended)) {
-        audioRef.current.play().catch(e => console.warn('Autoplay blocked', e));
-      } else if (!isPlaying && !audioRef.current.paused) {
-        audioRef.current.pause();
+      // Handle Play/Pause logic
+      if (isAudioMaster) {
+        if (isPlaying && (audioRef.current.paused || audioRef.current.ended)) {
+          // AudioPlayer exposed .play() via useImperativeHandle
+          audioRef.current.play();
+        } else if (!isPlaying && !audioRef.current.paused) {
+          audioRef.current.pause();
+        }
+      } else {
+        // Slave: Ensure we are paused to prevent sound, rely on visual sync
+        if (!audioRef.current.paused) audioRef.current.pause();
       }
     }
-  }, [currentTime, isPlaying, audioRef]);
+  }, [currentTime, isPlaying, audioRef, isAudioMaster]);
 
   // 2. Broadcast High-Frequency Time (Outgoing Sync)
+  // ONLY Master broadcasts time.
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || !isAudioMaster) return;
 
     const interval = setInterval(() => {
       if (audioRef.current) {
-        // We push our local time to the store, which broadcasts to peers
         setPlayback({
           currentTime: audioRef.current.currentTime,
           isPlaying: true
         });
       }
-    }, 100); // 10fps sync
+    }, 100);
 
     return () => clearInterval(interval);
-  }, [isPlaying, audioRef, setPlayback]);
+  }, [isPlaying, audioRef, setPlayback, isAudioMaster]);
 
-  // 3. Update Sync Duration when Local Audio Changes
-  useEffect(() => {
-    if (demoMode) {
-      if (Math.abs(duration - simDuration) > 1) {
-        updateState({ duration: simDuration });
-      }
-    }
-  }, [demoMode, simDuration, duration, updateState]);
+
 
 
   // --- Event Handlers ---
 
   const handlePlay = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.play();
-      setPlayback({ isPlaying: true, currentTime: audioRef.current.currentTime });
-    } else {
-      setPlayback({ isPlaying: true });
-    }
-  }, [audioRef, setPlayback]);
+    // Simply update state; useEffect will handle the imperative play()
+    setPlayback({ isPlaying: true });
+  }, [setPlayback]);
 
   const handlePause = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setPlayback({ isPlaying: false, currentTime: audioRef.current.currentTime });
-    } else {
-      setPlayback({ isPlaying: false });
-    }
-  }, [audioRef, setPlayback]);
+    setPlayback({ isPlaying: false });
+  }, [setPlayback]);
 
-  const handleSeek = useCallback((time) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
+  const handleSeek = useCallback((time, shouldPlay = false) => {
+    // Only update state; useEffect will handle the seek and play state
+    if (shouldPlay) {
+      setPlayback({ currentTime: time, isPlaying: true });
+    } else {
+      setPlayback({ currentTime: time });
     }
-    setPlayback({ currentTime: time });
-  }, [audioRef, setPlayback]);
+  }, [setPlayback]);
 
   // Handle Updates from Control Panel
   const handleResolutionChange = useCallback((newRes) => {
@@ -249,11 +265,11 @@ function App() {
             const { klyric, legacy } = importSubtitleToKLyric(content, 'sample_karaoke.ass');
             if (legacy.length > 0) {
               const maxEnd = Math.max(...legacy.map(l => l.endTime));
+              console.log('🎬 [App] Loaded Demo. Legacy items:', legacy.length, 'MaxEnd:', maxEnd, 'First Item:', legacy[0]);
 
               if (lyrics.length === 0) {
                 updateState({ lyrics: legacy, klyricDoc: klyric, duration: maxEnd + 2 });
               }
-              if (setSimDuration) setSimDuration(maxEnd + 2);
               console.log('🎬 Demo ASS loaded (converted to KLyric)', klyric.meta);
             }
           }
@@ -266,7 +282,6 @@ function App() {
               const res = await fetch(f, { method: 'HEAD' });
               if (res.ok) {
                 setAudioSource(f);
-                setDemoMode(false);
                 console.log('🎵 Demo audio found:', f);
                 break;
               }
@@ -279,7 +294,7 @@ function App() {
 
       loadDemoContent();
     }
-  }, [demoLoaded, updateState, lyrics.length, setSimDuration]);
+  }, [demoLoaded, updateState, lyrics.length]);
 
 
   // File Handlers
@@ -292,7 +307,6 @@ function App() {
       duration: maxEnd + 2,
       currentTime: 0
     });
-    if (demoMode && setSimDuration) setSimDuration(maxEnd + 2);
 
     // Log KLyric conversion info if available
     if (klyricDoc) {
@@ -302,11 +316,10 @@ function App() {
         version: klyricDoc.version
       });
     }
-  }, [updateState, demoMode, setSimDuration]);
+  }, [updateState]);
 
   const handleAudioLoaded = useCallback((url, fname) => {
     setAudioSource(url);
-    setDemoMode(false);
     updateState({ currentTime: 0 });
     console.log('🎵 User loaded audio:', fname);
   }, [updateState]);
@@ -322,20 +335,24 @@ function App() {
   const toggleExportPanel = () => { setShowExportPanel(p => !p); setShowFilePanel(false); setShowEditor(false); };
 
 
+  const handleDurationChange = useCallback((d) => {
+    updateState({ duration: d }, 'Update Duration', { skipHistory: true });
+  }, [updateState]);
+
+  const handleEnded = useCallback(() => {
+    setPlayback({ isPlaying: false });
+  }, [setPlayback]);
+
   return (
     <div className="app">
-      {/* Audio Element (Always render if source exists, allow P2P sync) */}
-      <audio
-        ref={realAudioRef}
+      {/* Audio Element (Wrapped in AudioPlayer) */}
+      <AudioPlayer
+        ref={audioRef}
         src={audioSource || undefined}
-        onTimeUpdate={() => {
-          // We drive the store via the Interval, but we could also do it here?
-          // Interval is smoother for high freq.
-        }}
-        onLoadedMetadata={() => {
-          if (realAudioRef.current) updateState({ duration: realAudioRef.current.duration });
-        }}
-        onEnded={() => setPlayback({ isPlaying: false })}
+        onDurationChange={handleDurationChange}
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onEnded={handleEnded}
       />
 
       {/* Top Navigation Bar */}
@@ -366,15 +383,9 @@ function App() {
           </button>
         </div>
 
-        {/* Center: Mode Toggle */}
-        <div className="navbar-center">
-          <button
-            className={`mode-toggle ${demoMode ? 'demo' : 'audio'}`}
-            onClick={() => setDemoMode(!demoMode)}
-          >
-            <span className="mode-icon">{demoMode ? '🎬' : '🎵'}</span>
-            <span className="mode-label">{demoMode ? 'DEMO' : 'AUDIO'}</span>
-          </button>
+        {/* Center: Title/Status */}
+        <div className="navbar-center opacity-50 text-sm font-medium tracking-widest">
+          LYRIC VIDEO MAKER
         </div>
 
         {/* Right: Actions */}
@@ -405,8 +416,15 @@ function App() {
             className={`nav-btn ${showExportPanel ? 'active' : ''}`}
             onClick={toggleExportPanel}
           >
-            <span className="btn-icon">📤</span>
             <span className="btn-text">Export</span>
+          </button>
+          <div className="divider" />
+          <button
+            className={`nav-btn ${showPreferences ? 'active' : ''}`}
+            onClick={() => setShowPreferences(true)}
+            title="Settings"
+          >
+            <span className="btn-icon">⚙️</span>
           </button>
         </div>
       </header>
@@ -444,8 +462,15 @@ function App() {
         <ExportPanel onClose={toggleExportPanel} />
       )}
 
+      {/* Preferences Modal */}
+      <PreferencesModal
+        open={showPreferences}
+        onOpenChange={setShowPreferences}
+      />
+
       {/* Main Content: Split Layout */}
       {/* Resizable Preview Panel Logic */}
+
       <MainLayout
         resolution={resolution}
         klyricDoc={useAppStore.getState().klyricDoc}
@@ -456,7 +481,6 @@ function App() {
         globalStyle={globalStyle}
         isPlaying={isPlaying}
         audioSource={audioSource}
-        demoMode={demoMode}
         handleLyricsEdited={handleLyricsEdited}
         handleSeek={handleSeek}
         handlePlay={handlePlay}
@@ -486,7 +510,7 @@ function App() {
 // Sub-component for Main Layout to keep App.jsx clean
 const MainLayout = ({
   resolution, klyricDoc, lyrics, currentTime, selectedFont, availableFonts, globalStyle,
-  isPlaying, audioSource, demoMode, handleLyricsEdited, handleSeek, handlePlay, handlePause,
+  isPlaying, audioSource, handleLyricsEdited, handleSeek, handlePlay, handlePause,
   undo, redo, past, future, toggleFilePanel
 }) => {
   const [previewWidth, setPreviewWidth] = useState(() => {
@@ -584,7 +608,7 @@ const MainLayout = ({
             currentTime={currentTime}
             isPlaying={isPlaying}
             audioSource={audioSource}
-            hasRealAudio={!demoMode && Boolean(audioSource)}
+            hasRealAudio={Boolean(audioSource)}
             resolution={resolution}
             onLyricsChange={handleLyricsEdited}
             onSeek={handleSeek}
@@ -614,3 +638,4 @@ const MainLayout = ({
 };
 
 export default App;
+
