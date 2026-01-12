@@ -143,6 +143,14 @@ pub struct Keyframe {
     /// Y offset in pixels
     #[serde(skip_serializing_if = "Option::is_none")]
     pub y: Option<f32>,
+
+    /// Blur sigma
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blur: Option<f32>,
+
+    /// Glitch offset (pixels)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glitch_offset: Option<f32>,
     
     /// Color at this keyframe
     #[serde(skip_serializing_if = "Option::is_none")]

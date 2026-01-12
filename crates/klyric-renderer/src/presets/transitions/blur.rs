@@ -17,13 +17,15 @@ pub fn blur_dissolve(duration: f64) -> Effect {
             Keyframe {
                 time: 0.0,
                 opacity: Some(0.0),
-                scale: Some(1.5), // Zoomed in and transparent
+                scale: Some(1.5),
+                blur: Some(10.0), // Start with strong blur
                 ..Default::default()
             },
             Keyframe {
                 time: 1.0,
                 opacity: Some(1.0),
                 scale: Some(1.0),
+                blur: Some(0.0), // End with no blur
                 ..Default::default()
             }
         ],
