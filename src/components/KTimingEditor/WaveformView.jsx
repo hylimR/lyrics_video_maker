@@ -44,12 +44,19 @@ const WaveformView = ({
         return getWaveformSlice(lyric.startTime, lyric.endTime);
     }, [lyric, getWaveformSlice]);
 
-    // Calculate time from X coordinate
+    const duration = lyric ? lyric.endTime - lyric.startTime : 0;
+
+    // Calculate time from X coordinate (Component Scope)
     const xToTime = (x) => {
         if (!lyric) return 0;
-        const duration = lyric.endTime - lyric.startTime;
         const boundedX = Math.max(0, Math.min(width, x));
         return lyric.startTime + (boundedX / width) * duration;
+    };
+
+    // Calculate X from time (Component Scope - Helper)
+    const timeToX = (t) => {
+        if (!lyric || duration === 0) return 0;
+        return ((t - lyric.startTime) / duration) * width;
     };
 
     const handleMouseDown = (e) => {
@@ -77,6 +84,47 @@ const WaveformView = ({
         isDragging.current = false;
     };
 
+    // ⚡ Bolt Optimization: Cache the static waveform drawing to avoid O(W) loop on every frame
+    const cachedWaveforms = useMemo(() => {
+        if (!lineWaveform || lineWaveform.length === 0 || !width || !height) return null;
+
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.floor(width * dpr);
+        const h = Math.floor(height * dpr);
+        const samplesPerPixel = lineWaveform.length / width; // Use CSS width for sampling distribution
+
+        // Create canvas for "unplayed" state
+        const unplayedCanvas = document.createElement('canvas');
+        unplayedCanvas.width = w;
+        unplayedCanvas.height = h;
+        const uCtx = unplayedCanvas.getContext('2d');
+        uCtx.scale(dpr, dpr);
+
+        // Create canvas for "played" state
+        const playedCanvas = document.createElement('canvas');
+        playedCanvas.width = w;
+        playedCanvas.height = h;
+        const pCtx = playedCanvas.getContext('2d');
+        pCtx.scale(dpr, dpr);
+
+        uCtx.fillStyle = 'rgba(60, 180, 80, 0.7)';
+        pCtx.fillStyle = 'rgba(100, 255, 130, 0.95)';
+
+        const centerY = height / 2;
+
+        for (let x = 0; x < width; x++) {
+            const sampleIdx = Math.floor(x * samplesPerPixel);
+            const amplitude = lineWaveform[sampleIdx] || 0;
+            const barHeight = amplitude * (height * 0.45); // Use CSS height
+
+            // Draw to both canvases
+            uCtx.fillRect(x, centerY - barHeight, 1, barHeight * 2);
+            pCtx.fillRect(x, centerY - barHeight, 1, barHeight * 2);
+        }
+
+        return { unplayed: unplayedCanvas, played: playedCanvas };
+    }, [lineWaveform, width, height]);
+
     // Draw the waveform
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -93,8 +141,6 @@ const WaveformView = ({
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
 
-        const duration = lyric.endTime - lyric.startTime;
-        const timeToX = (t) => ((t - lyric.startTime) / duration) * width;
         const centerY = height / 2;
 
         // Clear with dark background
@@ -123,31 +169,24 @@ const WaveformView = ({
             });
         }
 
-        // Draw waveform
-        if (lineWaveform && lineWaveform.length > 0) {
-            const samplesPerPixel = lineWaveform.length / width;
+        // Draw waveform (Using Cached Bitmaps)
+        if (cachedWaveforms) {
+            // Draw unplayed version (full width)
+            ctx.drawImage(cachedWaveforms.unplayed, 0, 0, width, height);
 
-            // Draw filled waveform (Aegisub style - mirrored)
-            for (let x = 0; x < width; x++) {
-                const sampleIdx = Math.floor(x * samplesPerPixel);
-                const amplitude = lineWaveform[sampleIdx] || 0;
-                const sampleTime = lyric.startTime + (x / width) * duration;
-
-                // Calculate bar height (mirrored from center)
-                const barHeight = amplitude * (height * 0.45);
-
-                // Color: Bright green for played, dimmer for unplayed
-                if (sampleTime <= currentTime) {
-                    // Played portion - bright green
-                    ctx.fillStyle = 'rgba(100, 255, 130, 0.95)';
-                } else {
-                    // Unplayed - dimmer green
-                    ctx.fillStyle = 'rgba(60, 180, 80, 0.7)';
-                }
-
-                // Draw mirrored bar (above and below center line)
-                ctx.fillRect(x, centerY - barHeight, 1, barHeight * 2);
+            // Draw played version (clipped)
+            const cursorX = timeToX(currentTime);
+            if (cursorX > 0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(0, 0, cursorX, height);
+                ctx.clip();
+                ctx.drawImage(cachedWaveforms.played, 0, 0, width, height);
+                ctx.restore();
             }
+        } else if (lineWaveform && lineWaveform.length > 0) {
+             // Should usually use cache if lineWaveform exists.
+             // If cache is somehow null but lineWaveform isn't (rare race), do nothing or fallback
         } else {
             // No waveform data - show loading message
             ctx.fillStyle = 'rgba(100, 255, 130, 0.5)';
@@ -180,7 +219,12 @@ const WaveformView = ({
         ctx.textAlign = 'center';
         ctx.fillText(formatTime(currentTime), width / 2, height - 4);
 
-    }, [lyric, syllables, currentTime, width, height, lineWaveform]);
+    }, [lyric, syllables, currentTime, width, height, lineWaveform, cachedWaveforms, duration]); // Added duration dependency, removed timeToX as it is constant-ish (depends on props)
+    // Wait, timeToX depends on width, lyric, duration.
+    // Since timeToX is defined in render scope, it is recreated every render.
+    // So if I use it in useEffect, I should add it to dependency, or verify it doesn't cause issues.
+    // Actually, `useEffect` depends on `width`, `lyric` anyway.
+    // So reusing `timeToX` from scope is fine.
 
     return (
         <canvas
