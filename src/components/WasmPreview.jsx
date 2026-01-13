@@ -380,6 +380,7 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
     }, [isReady, v2Doc]);
 
     // Render frame on time change
+    const imageDataRef = useRef(null);
     useEffect(() => {
         if (!isReady || !rendererRef.current || !canvasRef.current) return;
 
@@ -392,7 +393,15 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
             if (pixels && pixels.length > 0) {
                 const expectedSize = width * height * 4;
                 if (pixels.length === expectedSize) {
-                    const imageData = new ImageData(new Uint8ClampedArray(pixels), width, height);
+                    // Optimization: Reuse ImageData buffer to avoid creating new ImageData/Uint8ClampedArray
+                    // objects on every frame, which reduces Garbage Collection pressure significantly.
+                    if (!imageDataRef.current || imageDataRef.current.width !== width || imageDataRef.current.height !== height) {
+                        imageDataRef.current = new ImageData(width, height);
+                    }
+
+                    const imageData = imageDataRef.current;
+                    // Directly copy pixels into the clamped array buffer
+                    imageData.data.set(pixels);
                     ctx.putImageData(imageData, 0, 0);
                 } else {
                     ctx.fillStyle = '#220';
