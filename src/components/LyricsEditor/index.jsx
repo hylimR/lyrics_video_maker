@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import './LyricsEditor.css';
-import LyricLineEditor from './LyricLineEditor';
+import LyricsList from './LyricsList';
 import { formatTime } from '@/utils/timeUtils';
 
 /**
@@ -23,7 +23,6 @@ const LyricsEditor = ({
 }) => {
     const [localLyrics, setLocalLyrics] = useState([...lyrics]);
     const [hasChanges, setHasChanges] = useState(false);
-    const listRef = useRef(null);
 
     // Use a ref for currentTime to avoid passing it as a prop to children
     // causing unnecessary re-renders of all lines every frame.
@@ -36,16 +35,6 @@ const LyricsEditor = ({
     const activeIndex = localLyrics.findIndex(l =>
         currentTime >= l.startTime && currentTime < l.endTime
     );
-
-    // Scroll to active line
-    useEffect(() => {
-        if (activeIndex >= 0 && listRef.current) {
-            const activeElement = listRef.current.children[activeIndex];
-            if (activeElement) {
-                activeElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        }
-    }, [activeIndex]);
 
     const handleUpdate = useCallback((index, updates) => {
         setLocalLyrics(prev => {
@@ -174,32 +163,18 @@ const LyricsEditor = ({
                 </button>
             </div>
 
-            <div className="lyrics-list" ref={listRef}>
-                {localLyrics.map((lyric, index) => (
-                    <LyricLineEditor
-                        key={`${index}-${lyric.startTime}`}
-                        lyric={lyric}
-                        index={index}
-                        isActive={index === activeIndex}
-                        currentTimeRef={currentTimeRef}
-                        onUpdate={handleUpdate}
-                        onDelete={handleDelete}
-                        onSetStartTime={handleSetStartTime}
-                        onSetEndTime={handleSetEndTime}
-                        onMoveUp={handleMoveUp}
-                        onMoveDown={handleMoveDown}
-                        isFirst={index === 0}
-                        isLast={index === localLyrics.length - 1}
-                        availableFonts={availableFonts}
-                    />
-                ))}
-
-                {localLyrics.length === 0 && (
-                    <div className="empty-state">
-                        No lyrics. Click "Add Line" to start.
-                    </div>
-                )}
-            </div>
+            <LyricsList
+                localLyrics={localLyrics}
+                activeIndex={activeIndex}
+                currentTimeRef={currentTimeRef}
+                availableFonts={availableFonts}
+                onUpdate={handleUpdate}
+                onDelete={handleDelete}
+                onSetStartTime={handleSetStartTime}
+                onSetEndTime={handleSetEndTime}
+                onMoveUp={handleMoveUp}
+                onMoveDown={handleMoveDown}
+            />
 
             <div className="editor-footer">
                 <div className="footer-info">
