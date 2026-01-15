@@ -36,6 +36,8 @@ const WaveformView = ({
     height = 80
 }) => {
     const canvasRef = useRef(null);
+    const cachedUnplayedRef = useRef(null);
+    const cachedPlayedRef = useRef(null);
     const isDragging = useRef(false);
 
     // Get waveform slice for current lyric line
@@ -77,87 +79,152 @@ const WaveformView = ({
         isDragging.current = false;
     };
 
-    // Draw the waveform
+    // Draw the static waveform into offscreen canvases
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas || !lyric) return;
+        if (!lyric || !width || !height) return;
 
-        const ctx = canvas.getContext('2d');
+        // Initialize offscreen canvases if needed
+        if (!cachedUnplayedRef.current) cachedUnplayedRef.current = document.createElement('canvas');
+        if (!cachedPlayedRef.current) cachedPlayedRef.current = document.createElement('canvas');
+
+        const unplayedCanvas = cachedUnplayedRef.current;
+        const playedCanvas = cachedPlayedRef.current;
+        const ctxUnplayed = unplayedCanvas.getContext('2d');
+        const ctxPlayed = playedCanvas.getContext('2d');
 
         // Handle High DPI
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
-        ctx.scale(dpr, dpr);
 
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
+        // Resize offscreen canvases
+        [unplayedCanvas, playedCanvas].forEach(c => {
+            if (c.width !== width * dpr || c.height !== height * dpr) {
+                c.width = width * dpr;
+                c.height = height * dpr;
+            }
+        });
+
+        ctxUnplayed.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctxPlayed.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         const duration = lyric.endTime - lyric.startTime;
         const timeToX = (t) => ((t - lyric.startTime) / duration) * width;
         const centerY = height / 2;
 
-        // Clear with dark background
-        ctx.fillStyle = 'rgba(0, 30, 20, 0.98)';
-        ctx.fillRect(0, 0, width, height);
+        // Clear canvases with background color (for consistent blending/replacement)
+        [ctxUnplayed, ctxPlayed].forEach(ctx => {
+             ctx.fillStyle = 'rgba(0, 30, 20, 0.98)';
+             ctx.fillRect(0, 0, width, height);
+        });
 
-        // Draw center line
-        ctx.strokeStyle = 'rgba(50, 150, 80, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, centerY);
-        ctx.lineTo(width, centerY);
-        ctx.stroke();
-
-        // Draw syllable boundaries
-        if (syllables && syllables.length > 0) {
-            ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+        // Helper to draw common elements (grid, etc.)
+        const drawGrid = (ctx) => {
+            // Draw center line
+            ctx.strokeStyle = 'rgba(50, 150, 80, 0.4)';
             ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(width, centerY);
+            ctx.stroke();
 
-            syllables.forEach((syl) => {
-                const x = timeToX(lyric.startTime + syl.startOffset);
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, height);
-                ctx.stroke();
-            });
-        }
+            // Draw syllable boundaries
+            if (syllables && syllables.length > 0) {
+                ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+                ctx.lineWidth = 1;
+
+                syllables.forEach((syl) => {
+                    const x = timeToX(lyric.startTime + syl.startOffset);
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, height);
+                    ctx.stroke();
+                });
+            }
+        };
+
+        // Draw grid on both layers
+        drawGrid(ctxUnplayed);
+        drawGrid(ctxPlayed);
 
         // Draw waveform
         if (lineWaveform && lineWaveform.length > 0) {
             const samplesPerPixel = lineWaveform.length / width;
 
+            // Pre-calculate common values
+            const heightFactor = height * 0.45;
+
             // Draw filled waveform (Aegisub style - mirrored)
             for (let x = 0; x < width; x++) {
                 const sampleIdx = Math.floor(x * samplesPerPixel);
                 const amplitude = lineWaveform[sampleIdx] || 0;
-                const sampleTime = lyric.startTime + (x / width) * duration;
 
                 // Calculate bar height (mirrored from center)
-                const barHeight = amplitude * (height * 0.45);
+                const barHeight = amplitude * heightFactor;
 
-                // Color: Bright green for played, dimmer for unplayed
-                if (sampleTime <= currentTime) {
-                    // Played portion - bright green
-                    ctx.fillStyle = 'rgba(100, 255, 130, 0.95)';
-                } else {
-                    // Unplayed - dimmer green
-                    ctx.fillStyle = 'rgba(60, 180, 80, 0.7)';
-                }
+                // Draw to Unplayed (Dimmer green)
+                ctxUnplayed.fillStyle = 'rgba(60, 180, 80, 0.7)';
+                ctxUnplayed.fillRect(x, centerY - barHeight, 1, barHeight * 2);
 
-                // Draw mirrored bar (above and below center line)
-                ctx.fillRect(x, centerY - barHeight, 1, barHeight * 2);
+                // Draw to Played (Bright green)
+                ctxPlayed.fillStyle = 'rgba(100, 255, 130, 0.95)';
+                ctxPlayed.fillRect(x, centerY - barHeight, 1, barHeight * 2);
             }
         } else {
-            // No waveform data - show loading message
-            ctx.fillStyle = 'rgba(100, 255, 130, 0.5)';
-            ctx.font = '11px JetBrains Mono, monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('Loading waveform...', width / 2, centerY + 4);
+            // No waveform data - show loading message on BOTH
+            [ctxUnplayed, ctxPlayed].forEach(ctx => {
+                ctx.fillStyle = 'rgba(100, 255, 130, 0.5)';
+                ctx.font = '11px JetBrains Mono, monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('Loading waveform...', width / 2, centerY + 4);
+            });
         }
 
+    }, [lyric, syllables, width, height, lineWaveform]);
+
+
+    // Draw the dynamic frame (compositing)
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || !lyric) return;
+
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        // Ensure canvas size matches (in case it changed)
+        if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+             canvas.width = width * dpr;
+             canvas.height = height * dpr;
+        }
+
+        // Reset transform to identity for drawImage
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // 1. Draw Unplayed Layer (Background + Grid + Unplayed Bars)
+        if (cachedUnplayedRef.current) {
+            ctx.drawImage(cachedUnplayedRef.current, 0, 0);
+        } else {
+             ctx.fillStyle = 'rgba(0, 30, 20, 0.98)';
+             ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 2. Draw Played Layer (Background + Grid + Played Bars) - Clipped
+        const duration = lyric.endTime - lyric.startTime;
+        const timeToX = (t) => ((t - lyric.startTime) / duration) * width;
+        const cursorX = timeToX(currentTime); // logical pixels
+
+        if (cachedPlayedRef.current && cursorX > 0) {
+            ctx.save();
+            ctx.beginPath();
+            // Clip region in physical pixels
+            ctx.rect(0, 0, cursorX * dpr, height * dpr);
+            ctx.clip();
+            ctx.drawImage(cachedPlayedRef.current, 0, 0);
+            ctx.restore();
+        }
+
+        // Now set scale for UI elements (cursor, text) which use logical coordinates
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
         // Draw current time cursor (white line like Aegisub)
-        const cursorX = timeToX(currentTime);
         if (cursorX >= 0 && cursorX <= width) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.lineWidth = 1;
@@ -180,7 +247,7 @@ const WaveformView = ({
         ctx.textAlign = 'center';
         ctx.fillText(formatTime(currentTime), width / 2, height - 4);
 
-    }, [lyric, syllables, currentTime, width, height, lineWaveform]);
+    }, [currentTime, width, height, lyric, lineWaveform, syllables]);
 
     return (
         <canvas
