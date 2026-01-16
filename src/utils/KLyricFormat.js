@@ -437,8 +437,82 @@ function formatASSTime(seconds) {
 // --- All-in-One Import Function ---
 
 /**
+ * Format handler interface for detecting and parsing subtitle formats
+ * Each handler knows how to detect and parse a specific format
+ */
+const FORMAT_HANDLERS = [
+    {
+        name: 'lrc',
+        canHandle: (extension, content) => {
+            return extension === 'lrc' ||
+                   content.includes('[00:') ||
+                   content.includes('[01:');
+        },
+        parse: (content) => parseLRC(content)
+    },
+    {
+        name: 'srt',
+        canHandle: (extension, content) => {
+            return extension === 'srt' ||
+                   /^\d+\s*\n\d{2}:\d{2}:\d{2}/.test(content);
+        },
+        parse: (content) => parseSRT(content)
+    },
+    {
+        name: 'ass',
+        canHandle: (extension, content) => {
+            return extension === 'ass' ||
+                   extension === 'ssa' ||
+                   content.includes('[Script Info]');
+        },
+        parse: (content) => parseASS(content)
+    }
+];
+
+/**
+ * Try to parse content as KLyric format
+ * @param {string} content - File content
+ * @returns {Object|null} KLyric document or null if not valid KLyric
+ */
+function tryParseAsKLyric(content) {
+    try {
+        return parseKLyric(content);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Detect format and parse using appropriate handler
+ * @param {string} extension - File extension
+ * @param {string} content - File content
+ * @returns {Object} { lyrics, metadata, format }
+ */
+function detectAndParse(extension, content) {
+    // Try each format handler in order
+    for (const handler of FORMAT_HANDLERS) {
+        if (handler.canHandle(extension, content)) {
+            const result = handler.parse(content);
+            return {
+                lyrics: result.lyrics,
+                metadata: result.metadata,
+                format: handler.name
+            };
+        }
+    }
+
+    // Default to LRC if no handler matches
+    const result = parseLRC(content);
+    return {
+        lyrics: result.lyrics,
+        metadata: result.metadata,
+        format: 'lrc'
+    };
+}
+
+/**
  * Import any supported subtitle file and convert to KLyric format
- * 
+ *
  * @param {string} content - File content
  * @param {string} filename - Original filename
  * @param {Object} options - Import options
@@ -447,45 +521,21 @@ function formatASSTime(seconds) {
 export function importSubtitleToKLyric(content, filename = '', options = {}) {
     const extension = filename.split('.').pop()?.toLowerCase() || '';
 
-    let lyrics, metadata, format;
-
-    // Detect and parse based on format
+    // Check if already KLyric format (special case - no conversion needed)
     if (extension === 'klyric' || extension === 'json') {
-        // Already KLyric format
-        try {
-            const klyric = parseKLyric(content);
+        const klyric = tryParseAsKLyric(content);
+        if (klyric) {
             return {
                 klyric,
                 legacy: klyricToLegacy(klyric),
                 format: 'klyric'
             };
-        } catch {
-            // Fall through to try other formats
         }
+        // If parsing as KLyric failed, fall through to other format detection
     }
 
-    if (extension === 'lrc' || content.includes('[00:') || content.includes('[01:')) {
-        const result = parseLRC(content);
-        lyrics = result.lyrics;
-        metadata = result.metadata;
-        format = 'lrc';
-    } else if (extension === 'srt' || /^\d+\s*\n\d{2}:\d{2}:\d{2}/.test(content)) {
-        const result = parseSRT(content);
-        lyrics = result.lyrics;
-        metadata = result.metadata;
-        format = 'srt';
-    } else if (extension === 'ass' || extension === 'ssa' || content.includes('[Script Info]')) {
-        const result = parseASS(content);
-        lyrics = result.lyrics;
-        metadata = result.metadata;
-        format = 'ass';
-    } else {
-        // Default to LRC
-        const result = parseLRC(content);
-        lyrics = result.lyrics;
-        metadata = result.metadata;
-        format = 'lrc';
-    }
+    // Detect format and parse
+    const { lyrics, metadata, format } = detectAndParse(extension, content);
 
     // Convert to KLyric
     const klyric = lyricsToKLyric(lyrics, metadata, {
