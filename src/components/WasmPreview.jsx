@@ -12,6 +12,7 @@ import init, { KLyricWasmRenderer } from '../wasm/klyric_renderer';
 const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyrics, selectedFont, availableFonts, globalStyle }) => {
     const canvasRef = useRef(null);
     const rendererRef = useRef(null);
+    const imageDataRef = useRef(null);
     const [isReady, setIsReady] = useState(false);
     const [fontLoaded, setFontLoaded] = useState(false);
     const [error, setError] = useState(null);
@@ -392,7 +393,17 @@ const WasmPreview = ({ width = 1920, height = 1080, klyricDoc, currentTime, lyri
             if (pixels && pixels.length > 0) {
                 const expectedSize = width * height * 4;
                 if (pixels.length === expectedSize) {
-                    const imageData = new ImageData(new Uint8ClampedArray(pixels), width, height);
+                    let imageData = imageDataRef.current;
+
+                    // Reuse existing ImageData buffer if dimensions match to minimize GC
+                    if (!imageData || imageData.width !== width || imageData.height !== height) {
+                        imageData = new ImageData(new Uint8ClampedArray(pixels), width, height);
+                        imageDataRef.current = imageData;
+                    } else {
+                        // Update pixel data in-place
+                        imageData.data.set(pixels);
+                    }
+
                     ctx.putImageData(imageData, 0, 0);
                 } else {
                     ctx.fillStyle = '#220';
