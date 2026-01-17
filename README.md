@@ -77,7 +77,7 @@ It supports:
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start Frontend (Browser mode) |
-| `npm run tauri:dev` | Start Desktop App (Tauri mode) |
+| `npm run dev:tauri` | Start Desktop App (Tauri mode) |
 | `npm run build:wasm` | **Crucial:** Recompile Rust renderer to WASM |
 | `npm run build` | Build Frontend for production |
 | `npm run tauri:build` | Build Desktop Installer |

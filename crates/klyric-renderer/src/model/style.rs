@@ -32,38 +32,46 @@ pub struct Style {
 #[serde(rename_all = "camelCase")]
 pub struct Font {
     /// Font family (comma-separated for fallbacks)
-    #[serde(default = "default_font_family")]
-    pub family: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
     
     /// Font size in pixels
-    #[serde(default = "default_font_size")]
-    pub size: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<f32>,
     
     /// Font weight (100-900)
-    #[serde(default = "default_font_weight")]
-    pub weight: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weight: Option<u32>,
     
     /// Font style
-    #[serde(default)]
-    pub style: FontStyle,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<FontStyle>,
     
     /// Letter spacing in pixels
-    #[serde(default)]
-    pub letter_spacing: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub letter_spacing: Option<f32>,
 }
 
-fn default_font_family() -> String { "Noto Sans SC".to_string() }
-fn default_font_size() -> f32 { 72.0 }
-fn default_font_weight() -> u32 { 700 }
+pub fn default_font_family() -> String { "Noto Sans SC".to_string() }
+pub fn default_font_size() -> f32 { 72.0 }
+pub fn default_font_weight() -> u32 { 700 }
+
+impl Font {
+    pub fn family_or_default(&self) -> String { self.family.clone().unwrap_or_else(default_font_family) }
+    pub fn size_or_default(&self) -> f32 { self.size.unwrap_or_else(default_font_size) }
+    pub fn weight_or_default(&self) -> u32 { self.weight.unwrap_or_else(default_font_weight) }
+    pub fn style_or_default(&self) -> FontStyle { self.style.clone().unwrap_or_default() }
+    pub fn letter_spacing_or_default(&self) -> f32 { self.letter_spacing.unwrap_or(0.0) }
+}
 
 impl Default for Font {
     fn default() -> Self {
         Self {
-            family: default_font_family(),
-            size: default_font_size(),
-            weight: default_font_weight(),
-            style: FontStyle::default(),
-            letter_spacing: 0.0,
+            family: None,
+            size: None,
+            weight: None,
+            style: None,
+            letter_spacing: None,
         }
     }
 }
@@ -162,12 +170,17 @@ impl<'de> serde::Deserialize<'de> for FillStroke {
 #[serde(rename_all = "camelCase")]
 pub struct Stroke {
     /// Stroke width in pixels
-    #[serde(default)]
-    pub width: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<f32>,
     
     /// Stroke color
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+}
+
+impl Stroke {
+    pub fn width_or_default(&self) -> f32 { self.width.unwrap_or(0.0) }
+    pub fn color_or_default(&self) -> String { self.color.clone().unwrap_or_default() }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -178,20 +191,27 @@ pub struct Shadow {
     pub color: Option<String>,
     
     /// Horizontal offset in pixels
-    #[serde(default = "default_shadow_offset")]
-    pub x: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x: Option<f32>,
     
     /// Vertical offset in pixels
-    #[serde(default = "default_shadow_offset")]
-    pub y: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y: Option<f32>,
     
     /// Blur radius in pixels
-    #[serde(default = "default_shadow_blur")]
-    pub blur: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blur: Option<f32>,
 }
 
-fn default_shadow_offset() -> f32 { 2.0 }
-fn default_shadow_blur() -> f32 { 4.0 }
+pub fn default_shadow_offset() -> f32 { 2.0 }
+pub fn default_shadow_blur() -> f32 { 4.0 }
+
+impl Shadow {
+    pub fn x_or_default(&self) -> f32 { self.x.unwrap_or_else(default_shadow_offset) }
+    pub fn y_or_default(&self) -> f32 { self.y.unwrap_or_else(default_shadow_offset) }
+    pub fn blur_or_default(&self) -> f32 { self.blur.unwrap_or_else(default_shadow_blur) }
+    pub fn color_or_default(&self) -> String { self.color.clone().unwrap_or_default() }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -201,13 +221,19 @@ pub struct Glow {
     pub color: Option<String>,
     
     /// Glow blur radius
-    #[serde(default = "default_glow_blur")]
-    pub blur: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blur: Option<f32>,
     
     /// Glow intensity (0-1)
-    #[serde(default = "default_glow_intensity")]
-    pub intensity: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intensity: Option<f32>,
 }
 
-fn default_glow_blur() -> f32 { 8.0 }
-fn default_glow_intensity() -> f32 { 0.5 }
+pub fn default_glow_blur() -> f32 { 8.0 }
+pub fn default_glow_intensity() -> f32 { 0.5 }
+
+impl Glow {
+    pub fn blur_or_default(&self) -> f32 { self.blur.unwrap_or_else(default_glow_blur) }
+    pub fn intensity_or_default(&self) -> f32 { self.intensity.unwrap_or_else(default_glow_intensity) }
+    pub fn color_or_default(&self) -> String { self.color.clone().unwrap_or_default() }
+}

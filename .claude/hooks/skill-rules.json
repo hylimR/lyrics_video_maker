@@ -1,0 +1,399 @@
+{
+  "$schema": "./skill-rules.schema.json",
+  "version": "2.0",
+  "config": {
+    "minConfidenceScore": 3,
+    "showMatchReasons": true,
+    "maxSkillsToShow": 5
+  },
+  "scoring": {
+    "keyword": 2,
+    "keywordPattern": 3,
+    "pathPattern": 4,
+    "directoryMatch": 5,
+    "intentPattern": 4,
+    "contentPattern": 3,
+    "contextPattern": 2
+  },
+  "directoryMappings": {
+    "crates/klyric-renderer": "rust-renderer",
+    "crates/klyric-gui": "rust-renderer",
+    "src-tauri/src/commands": "tauri-commands",
+    "src-tauri/src/video": "tauri-commands",
+    "src/store": "zustand-cross-tab",
+    "src/components": "react-ui-patterns",
+    "src/hooks": "react-ui-patterns",
+    "src/utils/KLyricFormat": "klyric-format",
+    ".agent/specs": "klyric-format"
+  },
+  "skills": {
+    "rust-renderer": {
+      "description": "Dual-target Rust rendering engine (WASM/Native) with tiny-skia and skia-safe",
+      "priority": 9,
+      "triggers": {
+        "keywords": [
+          "renderer",
+          "render",
+          "wasm",
+          "tiny-skia",
+          "skia-safe",
+          "effects",
+          "animation"
+        ],
+        "keywordPatterns": [
+          "\\brender(?:er|ing)?\\b",
+          "\\bwasm\\b",
+          "\\bskia\\b"
+        ],
+        "pathPatterns": [
+          "**/klyric-renderer/**",
+          "**/*.wasm",
+          "**/wasm_renderer.rs"
+        ],
+        "intentPatterns": [
+          "(?:add|create|implement).*(?:effect|animation)",
+          "(?:render|draw).*(?:text|character|lyric)",
+          "(?:wasm|native).*(?:target|build)"
+        ],
+        "contentPatterns": [
+          "tiny_skia",
+          "skia_safe",
+          "wasm_bindgen",
+          "target_arch"
+        ]
+      },
+      "relatedSkills": [
+        "klyric-format"
+      ]
+    },
+    "klyric-format": {
+      "description": "KLyric v2.0 JSON format - document structure, styling, timing, effects",
+      "priority": 8,
+      "triggers": {
+        "keywords": [
+          "klyric",
+          "format",
+          "timing",
+          "k-timing",
+          "ktiming",
+          "style",
+          "theme"
+        ],
+        "keywordPatterns": [
+          "\\bklyric\\b",
+          "\\bk-?timing\\b",
+          "\\blyric format\\b"
+        ],
+        "pathPatterns": [
+          "**/KLyricFormat.js",
+          "**/model/*.rs",
+          "**/*.klyric",
+          "**/KLYRIC_FORMAT_SPEC.md"
+        ],
+        "intentPatterns": [
+          "(?:parse|convert).*(?:ass|srt|lrc|klyric)",
+          "(?:add|define).*(?:style|effect|timing)",
+          "(?:import|export).*(?:lyric|subtitle)"
+        ],
+        "contentPatterns": [
+          "KLyricDocumentV2",
+          "importSubtitleToKLyric",
+          "klyricToLegacy"
+        ]
+      },
+      "relatedSkills": [
+        "rust-renderer"
+      ]
+    },
+    "zustand-cross-tab": {
+      "description": "Cross-tab state sync with Zustand - Master/Client, BroadcastChannel, history",
+      "priority": 8,
+      "triggers": {
+        "keywords": [
+          "zustand",
+          "store",
+          "state",
+          "sync",
+          "broadcast",
+          "master",
+          "client",
+          "undo",
+          "redo"
+        ],
+        "keywordPatterns": [
+          "\\bzustand\\b",
+          "\\bstore\\b",
+          "\\bcross-?tab\\b",
+          "\\bbroadcast\\b"
+        ],
+        "pathPatterns": [
+          "**/useAppStore.js",
+          "**/store/**"
+        ],
+        "intentPatterns": [
+          "(?:add|update).*(?:state|store)",
+          "(?:sync|broadcast).*(?:state|tab)",
+          "(?:undo|redo|history)"
+        ],
+        "contentPatterns": [
+          "updateState",
+          "setPlayback",
+          "BroadcastChannel",
+          "isMaster"
+        ]
+      }
+    },
+    "tauri-commands": {
+      "description": "Tauri IPC commands - FFmpeg, video export, system fonts",
+      "priority": 8,
+      "triggers": {
+        "keywords": [
+          "tauri",
+          "command",
+          "invoke",
+          "ffmpeg",
+          "export",
+          "video",
+          "ipc"
+        ],
+        "keywordPatterns": [
+          "\\btauri\\b",
+          "\\binvoke\\b",
+          "\\bffmpeg\\b"
+        ],
+        "pathPatterns": [
+          "**/src-tauri/**",
+          "**/commands/*.rs",
+          "**/video/*.rs"
+        ],
+        "intentPatterns": [
+          "(?:add|create).*(?:command|ipc)",
+          "(?:export|render).*(?:video|mp4)",
+          "(?:call|invoke).*(?:tauri|backend)"
+        ],
+        "contentPatterns": [
+          "#[tauri::command]",
+          "invoke(",
+          "ffmpeg_sidecar"
+        ]
+      },
+      "relatedSkills": [
+        "rust-renderer"
+      ]
+    },
+    "testing-patterns": {
+      "description": "Jest/Vitest testing patterns and TDD workflow",
+      "priority": 7,
+      "triggers": {
+        "keywords": [
+          "test",
+          "jest",
+          "vitest",
+          "spec",
+          "mock",
+          "factory"
+        ],
+        "keywordPatterns": [
+          "\\btest(?:s|ing)?\\b",
+          "\\bspec\\b",
+          "unit test"
+        ],
+        "pathPatterns": [
+          "**/*.test.ts",
+          "**/*.test.tsx",
+          "**/*.test.js",
+          "**/*.spec.ts"
+        ],
+        "intentPatterns": [
+          "(?:write|add|create|fix).*(?:test|spec)",
+          "(?:test|spec).*(?:for|of|the)"
+        ],
+        "contentPatterns": [
+          "describe(",
+          "it(",
+          "expect(",
+          "vi.mock",
+          "jest.mock"
+        ]
+      }
+    },
+    "react-ui-patterns": {
+      "description": "React patterns, hooks, loading states, error handling",
+      "priority": 6,
+      "triggers": {
+        "keywords": [
+          "react",
+          "hook",
+          "useeffect",
+          "usestate",
+          "usememo",
+          "component"
+        ],
+        "keywordPatterns": [
+          "\\buse[A-Z]\\w+\\b",
+          "\\bhook\\b",
+          "\\bcomponent\\b"
+        ],
+        "pathPatterns": [
+          "**/hooks/**",
+          "**/use*.js",
+          "**/components/**/*.jsx"
+        ],
+        "intentPatterns": [
+          "(?:create|write).*(?:hook|component)",
+          "(?:handle).*(?:loading|error|async)"
+        ],
+        "contentPatterns": [
+          "useState",
+          "useEffect",
+          "useCallback",
+          "useMemo"
+        ]
+      }
+    },
+    "systematic-debugging": {
+      "description": "Four-phase debugging with root cause analysis",
+      "priority": 9,
+      "triggers": {
+        "keywords": [
+          "bug",
+          "debug",
+          "fix",
+          "error",
+          "issue",
+          "broken",
+          "crash",
+          "failing"
+        ],
+        "keywordPatterns": [
+          "\\bbug\\b",
+          "\\bfix\\b",
+          "\\berror\\b",
+          "doesn't work",
+          "not working"
+        ],
+        "intentPatterns": [
+          "(?:fix|debug|resolve|investigate).*(?:bug|error|issue|problem)",
+          "(?:why).*(?:not working|broken|failing|crash)"
+        ]
+      },
+      "excludePatterns": [
+        "fix typo",
+        "fix formatting",
+        "fix lint"
+      ]
+    },
+    "core-components": {
+      "description": "Core component library and design system",
+      "priority": 6,
+      "triggers": {
+        "keywords": [
+          "component",
+          "ui",
+          "button",
+          "panel",
+          "editor",
+          "canvas"
+        ],
+        "keywordPatterns": [
+          "\\bcomponent\\b",
+          "\\bpanel\\b",
+          "\\beditor\\b"
+        ],
+        "pathPatterns": [
+          "**/components/**/*.jsx",
+          "**/components/**/*.css"
+        ],
+        "intentPatterns": [
+          "(?:create|build|add).*(?:component)",
+          "(?:style|design).*(?:component|ui)"
+        ]
+      }
+    },
+    "documentation": {
+      "description": "Documentation standards and project docs",
+      "priority": 4,
+      "triggers": {
+        "keywords": [
+          "documentation",
+          "readme",
+          "docs",
+          "spec",
+          "specification"
+        ],
+        "keywordPatterns": [
+          "\\bdoc(?:s|umentation)?\\b",
+          "\\breadme\\b"
+        ],
+        "pathPatterns": [
+          "**/docs/**",
+          "**/*.md",
+          "**/README*",
+          "**/.agent/**"
+        ],
+        "intentPatterns": [
+          "(?:write|add|update).*(?:doc|documentation)",
+          "(?:document).*(?:function|component|api)"
+        ]
+      }
+    },
+    "verification-before-completion": {
+      "description": "Evidence-based completion claims protocol",
+      "priority": 8,
+      "triggers": {
+        "keywords": [
+          "verify",
+          "check",
+          "confirm",
+          "done",
+          "complete",
+          "finished"
+        ],
+        "intentPatterns": [
+          "(?:is it|are we).*(?:done|complete|finished)",
+          "(?:verify|check|confirm).*(?:works|passes)"
+        ],
+        "contextPatterns": [
+          "before claiming",
+          "make sure",
+          "double check"
+        ]
+      }
+    },
+    "design-lyrics": {
+      "description": "LLM-powered lyric video designer - generates styled KLyric documents with animations and effects",
+      "priority": 9,
+      "userInvocable": true,
+      "triggers": {
+        "keywords": [
+          "design",
+          "style",
+          "animate",
+          "mood",
+          "genre",
+          "theme",
+          "visual",
+          "neon",
+          "bouncy",
+          "energetic",
+          "calm"
+        ],
+        "keywordPatterns": [
+          "\\bdesign.*lyric",
+          "\\bstyle.*video",
+          "\\banimate.*text",
+          "\\bgenerate.*style"
+        ],
+        "intentPatterns": [
+          "(?:design|create|generate|make).*(?:style|animation|effect|theme)",
+          "(?:style|animate|design).*(?:lyric|video|text)",
+          "(?:energetic|calm|moody|neon|bouncy).*(?:style|animation|effect)"
+        ]
+      },
+      "relatedSkills": [
+        "klyric-format",
+        "rust-renderer"
+      ]
+    }
+  }
+}

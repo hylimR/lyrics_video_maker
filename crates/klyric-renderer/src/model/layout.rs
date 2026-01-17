@@ -48,71 +48,91 @@ pub enum Anchor {
 #[serde(rename_all = "camelCase")]
 pub struct Transform {
     /// X offset in pixels
-    #[serde(default)]
-    pub x: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x: Option<f32>,
     
     /// Y offset in pixels
-    #[serde(default)]
-    pub y: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y: Option<f32>,
     
     /// Rotation in degrees
-    #[serde(default)]
-    pub rotation: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<f32>,
     
     /// Uniform scale factor
-    #[serde(default = "default_scale")]
-    pub scale: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale: Option<f32>,
     
     /// Horizontal scale factor
-    #[serde(default = "default_scale")]
-    pub scale_x: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale_x: Option<f32>,
     
     /// Vertical scale factor
-    #[serde(default = "default_scale")]
-    pub scale_y: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scale_y: Option<f32>,
     
     /// Opacity (0-1)
-    #[serde(default = "default_opacity")]
-    pub opacity: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f32>,
     
     /// Transform anchor X (0-1, 0.5 = center)
-    #[serde(default = "default_anchor")]
-    pub anchor_x: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor_x: Option<f32>,
     
     /// Transform anchor Y (0-1, 0.5 = center)
-    #[serde(default = "default_anchor")]
-    pub anchor_y: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor_y: Option<f32>,
 
     /// Blur sigma
-    #[serde(default)]
-    pub blur: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blur: Option<f32>,
 
     /// Glitch offset (pixels to shift channels)
-    #[serde(default)]
-    pub glitch_offset: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glitch_offset: Option<f32>,
+    
+    /// Hue shift in degrees
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hue_shift: Option<f32>,
 }
 
 impl Default for Transform {
     fn default() -> Self {
         Self {
-            x: 0.0,
-            y: 0.0,
-            rotation: 0.0,
-            scale: 1.0,
-            scale_x: 1.0,
-            scale_y: 1.0,
-            opacity: 1.0,
-            anchor_x: 0.5,
-            anchor_y: 0.5,
-            blur: 0.0,
-            glitch_offset: 0.0,
+            x: None,
+            y: None,
+            rotation: None,
+            scale: None,
+            scale_x: None,
+            scale_y: None,
+            opacity: None,
+            anchor_x: None,
+            anchor_y: None,
+            blur: None,
+            glitch_offset: None,
+            hue_shift: None,
         }
     }
 }
 
-fn default_scale() -> f32 { 1.0 }
-fn default_opacity() -> f32 { 1.0 }
-fn default_anchor() -> f32 { 0.5 }
+pub fn default_scale() -> f32 { 1.0 }
+pub fn default_opacity() -> f32 { 1.0 }
+pub fn default_anchor() -> f32 { 0.5 }
+
+impl Transform {
+    pub fn x_val(&self) -> f32 { self.x.unwrap_or(0.0) }
+    pub fn y_val(&self) -> f32 { self.y.unwrap_or(0.0) }
+    pub fn rotation_val(&self) -> f32 { self.rotation.unwrap_or(0.0) }
+    pub fn scale_val(&self) -> f32 { self.scale.unwrap_or_else(default_scale) }
+    pub fn scale_x_val(&self) -> f32 { self.scale_x.unwrap_or_else(default_scale) }
+    pub fn scale_y_val(&self) -> f32 { self.scale_y.unwrap_or_else(default_scale) }
+    pub fn opacity_val(&self) -> f32 { self.opacity.unwrap_or_else(default_opacity) }
+    pub fn anchor_x_val(&self) -> f32 { self.anchor_x.unwrap_or_else(default_anchor) }
+    pub fn anchor_y_val(&self) -> f32 { self.anchor_y.unwrap_or_else(default_anchor) }
+    pub fn blur_val(&self) -> f32 { self.blur.unwrap_or(0.0) }
+    pub fn glitch_offset_val(&self) -> f32 { self.glitch_offset.unwrap_or(0.0) }
+    pub fn hue_shift_val(&self) -> f32 { self.hue_shift.unwrap_or(0.0) }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]

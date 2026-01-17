@@ -1,0 +1,95 @@
+{
+  "includeCoAuthoredBy": true,
+  "env": {
+    "INSIDE_CLAUDE_CODE": "1",
+    "BASH_DEFAULT_TIMEOUT_MS": "420000",
+    "BASH_MAX_TIMEOUT_MS": "420000"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/skill-eval.js\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Prevent editing on main branch\n[ \"$(git branch --show-current)\" != \"main\" ] || { echo '{\"block\": true, \"message\": \"Cannot edit files on main branch. Create a feature branch first.\"}' >&2; exit 2; }",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Auto-format JS/TS files with Prettier\nif [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" =~ \\.(js|jsx|ts|tsx)$ ]]; then\n  file_path=\"${CLAUDE_TOOL_INPUT_FILE_PATH}\"\n  npx prettier --write \"$file_path\" 2>&1\n  exit_code=$?\n  if [ $exit_code -ne 0 ]; then\n    echo '{\"feedback\": \"Formatting failed. Check file for syntax errors.\"}' >&2\n    exit 1\n  else\n    echo '{\"feedback\": \"Formatting applied.\", \"suppressOutput\": true}'\n  fi\nfi",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Auto-format Rust files with cargo fmt\nif [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" =~ \\.rs$ ]]; then\n  echo '{\"feedback\": \"Formatting Rust code...\"}' >&2\n  cargo fmt --all 2>&1\n  exit_code=$?\n  if [ $exit_code -ne 0 ]; then\n    echo '{\"feedback\": \"Rust formatting failed.\"}' >&2\n    exit 1\n  else\n    echo '{\"feedback\": \"Rust code formatted.\", \"suppressOutput\": true}'\n  fi\nfi",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Run cargo clippy on Rust file changes (non-blocking)\nif [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" =~ \\.rs$ ]]; then\n  echo '{\"feedback\": \"Running clippy...\"}' >&2\n  output=$(cargo clippy --all-targets --all-features 2>&1 | head -50)\n  if echo \"$output\" | grep -q \"^error\"; then\n    echo '{\"feedback\": \"Clippy found errors:\"}' >&2\n    echo \"$output\" | grep -A 2 \"^error\" | head -20 >&2\n  fi\n  # Non-blocking\n  exit 0\nfi",
+            "timeout": 60
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Remind to rebuild WASM when renderer changes\nif [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" =~ crates/klyric-renderer/ ]]; then\n  echo '{\"feedback\": \"⚠️ WASM rebuild needed: Run npm run build:wasm to see changes in preview\"}' >&2\nfi\nexit 0",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Auto-install dependencies when package.json changes\nif [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" =~ package\\.json$ ]]; then\n  echo '{\"feedback\": \"Installing dependencies...\"}' >&2\n  npm install >/dev/null 2>&1 && echo '{\"feedback\": \"Dependencies installed.\", \"suppressOutput\": true}' || {\n    echo '{\"feedback\": \"Failed to install dependencies.\"}' >&2\n    exit 1\n  }\nfi",
+            "timeout": 60
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Auto-run tests when test files change\nif [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" =~ \\.test\\.(js|jsx|ts|tsx)$ ]]; then\n  echo '{\"feedback\": \"Running tests...\"}' >&2\n  npm test -- --findRelatedTests \"${CLAUDE_TOOL_INPUT_FILE_PATH}\" --passWithNoTests 2>&1 | tail -30\n  exit_code=${PIPESTATUS[0]}\n  if [ $exit_code -eq 0 ]; then\n    echo '{\"feedback\": \"Tests passed.\"}'\n  else\n    echo '{\"feedback\": \"Tests failed. See output above.\"}' >&2\n  fi\nfi",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}

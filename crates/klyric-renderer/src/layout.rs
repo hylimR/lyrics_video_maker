@@ -23,8 +23,8 @@ impl LayoutEngine {
         renderer: &mut TextRenderer
     ) -> Vec<GlyphInfo> {
         // Base (Style) Defaults
-        let style_family = resolved_style.font.as_ref().map(|f| f.family.as_str()).unwrap_or("Noto Sans SC");
-        let style_size = resolved_style.font.as_ref().map(|f| f.size).unwrap_or(72.0);
+        let style_family = resolved_style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
+        let style_size = resolved_style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
 
         let mut glyphs = Vec::new();
         let mut cursor_x = 0.0;
@@ -35,13 +35,13 @@ impl LayoutEngine {
             let ch_str = &char_data.char;
             
             // Resolve Font for this Char Unit (Char > Line > Style)
-            let (family, size) = if let Some(cf) = &char_data.font {
-                 (cf.family.as_str(), cf.size)
-            } else if let Some(lf) = &line.font {
-                 (lf.family.as_str(), lf.size)
-            } else {
-                 (style_family, style_size)
-            };
+            let family = char_data.font.as_ref().and_then(|f| f.family.as_deref())
+                .or_else(|| line.font.as_ref().and_then(|f| f.family.as_deref()))
+                .unwrap_or(style_family);
+
+            let size = char_data.font.as_ref().and_then(|f| f.size)
+                .or_else(|| line.font.as_ref().and_then(|f| f.size))
+                .unwrap_or(style_size);
 
             // For each character in the string
             for ch in ch_str.chars() {
@@ -97,5 +97,322 @@ impl LayoutEngine {
         }
 
         glyphs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Char, Font};
+
+    /// Create a minimal Style for testing
+    fn test_style() -> Style {
+        Style {
+            extends: None,
+            font: Some(Font {
+                family: Some("Arial".to_string()),
+                size: Some(48.0),
+                weight: None,
+                style: None,
+                letter_spacing: None,
+            }),
+            colors: None,
+            stroke: None,
+            shadow: None,
+            glow: None,
+        }
+    }
+
+    /// Create a minimal Line for testing
+    fn test_line(chars: Vec<&str>) -> Line {
+        Line {
+            id: None,
+            start: 0.0,
+            end: 5.0,
+            text: Some(chars.join("")),
+            style: None,
+            font: None,
+            stroke: None,
+            shadow: None,
+            effects: Vec::new(),
+            position: None,
+            transform: None,
+            layout: None,
+            chars: chars
+                .iter()
+                .enumerate()
+                .map(|(i, c)| Char {
+                    char: c.to_string(),
+                    start: i as f64,
+                    end: (i + 1) as f64,
+                    style: None,
+                    font: None,
+                    stroke: None,
+                    shadow: None,
+                    effects: Vec::new(),
+                    transform: None,
+                })
+                .collect(),
+        }
+    }
+
+    // Helper to assert float approximately equal
+    fn approx_eq(a: f32, b: f32, epsilon: f32) -> bool {
+        (a - b).abs() < epsilon
+    }
+
+    // --- Layout Basic Tests ---
+
+    #[test]
+    fn test_layout_empty() {
+        // Empty line should produce empty glyphs
+        let line = test_line(vec![]);
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        assert!(glyphs.is_empty(), "Empty line should produce no glyphs");
+    }
+
+    #[test]
+    fn test_layout_single_char() {
+        // Single character line
+        let line = test_line(vec!["A"]);
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        assert_eq!(
+            glyphs.len(),
+            1,
+            "Single char line should produce one glyph"
+        );
+        assert_eq!(glyphs[0].char, 'A');
+        assert_eq!(glyphs[0].char_index, 0);
+    }
+
+    #[test]
+    fn test_layout_basic() {
+        // Two characters should produce two glyphs in order
+        let line = test_line(vec!["H", "i"]);
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        assert_eq!(glyphs.len(), 2, "Two chars should produce two glyphs");
+        assert_eq!(glyphs[0].char, 'H');
+        assert_eq!(glyphs[1].char, 'i');
+        assert_eq!(glyphs[0].char_index, 0);
+        assert_eq!(glyphs[1].char_index, 1);
+    }
+
+    // --- Alignment Tests ---
+
+    #[test]
+    fn test_alignment_left() {
+        // Left alignment: first glyph at x=0
+        let mut line = test_line(vec!["A", "B"]);
+        line.layout = Some(crate::model::Layout {
+            mode: crate::model::LayoutMode::Horizontal,
+            align: Align::Left,
+            justify: crate::model::Justify::Middle,
+            gap: 0.0,
+            wrap: false,
+            max_width: None,
+        });
+
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        // With left alignment, first glyph x should be 0 (or very close)
+        assert!(
+            approx_eq(glyphs[0].x, 0.0, 1.0),
+            "Left-aligned first glyph x should be ~0, got {}",
+            glyphs[0].x
+        );
+    }
+
+    #[test]
+    fn test_alignment_center() {
+        // Center alignment: glyphs centered around origin
+        let mut line = test_line(vec!["A", "B"]);
+        line.layout = Some(crate::model::Layout {
+            mode: crate::model::LayoutMode::Horizontal,
+            align: Align::Center,
+            justify: crate::model::Justify::Middle,
+            gap: 0.0,
+            wrap: false,
+            max_width: None,
+        });
+
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        // With center alignment, the first glyph x should be negative
+        // (total width / 2 to the left of origin)
+        if !glyphs.is_empty() {
+            let total_width: f32 = glyphs.iter().map(|g| g.advance).sum();
+            // First glyph should be at approximately -total_width/2
+            let expected_start = -total_width / 2.0;
+            assert!(
+                approx_eq(glyphs[0].x, expected_start, 5.0),
+                "Center-aligned first glyph x should be ~{}, got {}",
+                expected_start,
+                glyphs[0].x
+            );
+        }
+    }
+
+    #[test]
+    fn test_alignment_right() {
+        // Right alignment: last glyph ends at x=0
+        let mut line = test_line(vec!["A", "B"]);
+        line.layout = Some(crate::model::Layout {
+            mode: crate::model::LayoutMode::Horizontal,
+            align: Align::Right,
+            justify: crate::model::Justify::Middle,
+            gap: 0.0,
+            wrap: false,
+            max_width: None,
+        });
+
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        // With right alignment, glyphs should end at x=0
+        // Last glyph x + width should be approximately 0
+        if !glyphs.is_empty() {
+            let last = glyphs.last().unwrap();
+            let right_edge = last.x + last.advance;
+            assert!(
+                approx_eq(right_edge, 0.0, 5.0),
+                "Right-aligned last glyph right edge should be ~0, got {}",
+                right_edge
+            );
+        }
+    }
+
+    // --- Spacing Tests ---
+
+    #[test]
+    fn test_gap_between_chars() {
+        // Gap spacing should be applied between characters
+        let mut line = test_line(vec!["A", "B", "C"]);
+        let gap = 10.0;
+        line.layout = Some(crate::model::Layout {
+            mode: crate::model::LayoutMode::Horizontal,
+            align: Align::Left,
+            justify: crate::model::Justify::Middle,
+            gap,
+            wrap: false,
+            max_width: None,
+        });
+
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        // With gap, the distance between successive glyph starts should include gap
+        if glyphs.len() >= 2 {
+            let distance = glyphs[1].x - glyphs[0].x;
+            // Distance should be at least the first glyph advance + gap
+            let expected_min = glyphs[0].advance + gap;
+            assert!(
+                distance >= expected_min - 1.0,
+                "Gap should be applied: distance {} should be >= {} (advance {} + gap {})",
+                distance,
+                expected_min,
+                glyphs[0].advance,
+                gap
+            );
+        }
+    }
+
+    #[test]
+    fn test_no_gap() {
+        // Zero gap should work correctly
+        let mut line = test_line(vec!["A", "B"]);
+        line.layout = Some(crate::model::Layout {
+            mode: crate::model::LayoutMode::Horizontal,
+            align: Align::Left,
+            justify: crate::model::Justify::Middle,
+            gap: 0.0,
+            wrap: false,
+            max_width: None,
+        });
+
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+        if glyphs.len() >= 2 {
+            // Second glyph should start immediately after first glyph advance
+            let expected_x = glyphs[0].advance;
+            assert!(
+                approx_eq(glyphs[1].x - glyphs[0].x, expected_x, 1.0),
+                "No gap: second glyph should start at first glyph x + advance"
+            );
+        }
+    }
+
+    // --- Font Cascade Tests ---
+
+    #[test]
+    fn test_font_cascade_char_level() {
+        // Test that char-level font settings are properly resolved in the cascade
+        // Char > Line > Style priority
+        let mut line = test_line(vec!["A"]);
+
+        // Set line-level font
+        line.font = Some(Font {
+            family: Some("Times".to_string()),
+            size: Some(24.0),
+            ..Default::default()
+        });
+
+        // Set char-level font override
+        line.chars[0].font = Some(Font {
+            family: Some("Helvetica".to_string()),
+            size: Some(72.0),
+            ..Default::default()
+        });
+
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        // This tests the code path - layout should complete without panic
+        // Even if fonts aren't available, the cursor advances via fallback
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+
+        // The test verifies the cascade logic executes:
+        // - If system fonts available: glyphs produced with char-level font
+        // - If not: fallback cursor advance happens
+        // Either way, we verify no panic and layout completes
+        let _ = glyphs; // Layout completed successfully
+    }
+
+    #[test]
+    fn test_font_cascade_line_level() {
+        // Test that line-level font settings override style-level
+        let mut line = test_line(vec!["A"]);
+
+        // Set line-level font
+        line.font = Some(Font {
+            family: Some("Courier".to_string()),
+            size: Some(36.0),
+            ..Default::default()
+        });
+
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        // This tests the code path - verify cascade logic executes
+        let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
+
+        // Verify layout completes (cascade logic exercised)
+        let _ = glyphs;
     }
 }

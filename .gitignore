@@ -1,3 +1,12 @@
+# Build and Temporary Files
+/target/
+node_modules
+dist
+dist-ssr
+*.local
+tauri_errors.txt
+test_renders/
+
 # Logs
 logs
 *.log
@@ -6,11 +15,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
 
 # Editor directories and files
 .vscode/*
@@ -23,11 +27,15 @@ dist-ssr
 *.sln
 *.sw?
 
-# Rust / Tauri
+# Rust / Tauri Legacy
 src-tauri/target/
 src-tauri/gen/
 crates/*/target/
 **/*.rs.bk
+
+# AI & Agent Tools
+.agent/
+.gemini/
 
 # Video Exports
 *.mp4
@@ -35,7 +43,3 @@ crates/*/target/
 *.avi
 *.mkv
 *.webm
-
-# Misc
-tauri_errors.txt
-test_renders/

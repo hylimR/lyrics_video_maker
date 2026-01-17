@@ -1,5 +1,5 @@
 use anyhow::Result;
-use skia_safe::{Canvas, Color, Paint, Rect, Matrix, Path, Point, Image, Surface, BlendMode, PaintStyle, MaskFilter, BlurStyle, ImageFilter};
+use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces};
 use std::collections::HashSet;
 
 use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing};
@@ -41,23 +41,24 @@ impl<'a> LineRenderer<'a> {
         let (base_x, base_y) = self.compute_line_position(line);
 
         // Resolve font size for rasterization (Base)
-        let style_family = style.font.as_ref().map(|f| f.family.as_str()).unwrap_or("Noto Sans SC");
-        let style_size = style.font.as_ref().map(|f| f.size).unwrap_or(72.0);
+        let style_family = style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
+        let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
         
         // Loop:
-        for (idx, glyph) in glyphs.iter().enumerate() {
+        for (_idx, glyph) in glyphs.iter().enumerate() {
              let char_absolute_x = base_x + glyph.x;
              let char_absolute_y = base_y + glyph.y;
              
              // Resolve Font for THIS glyph (matches layout logic)
              let char_data = line.chars.get(glyph.char_index);
-             let (family, size) = if let Some(c) = char_data.and_then(|c| c.font.as_ref()) {
-                 (c.family.as_str(), c.size)
-             } else if let Some(l) = &line.font {
-                 (l.family.as_str(), l.size)
-             } else {
-                 (style_family, style_size)
-             };
+             
+             let family = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.family.as_deref()))
+                .or_else(|| line.font.as_ref().and_then(|f| f.family.as_deref()))
+                .unwrap_or(style_family);
+
+             let size = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.size))
+                .or_else(|| line.font.as_ref().and_then(|f| f.size))
+                .unwrap_or(style_size);
 
              // Get typeface and path
              let typeface = self.text_renderer.get_typeface(family)
@@ -103,17 +104,18 @@ impl<'a> LineRenderer<'a> {
                      let char_transform = char_data.and_then(|c| c.transform.clone()).unwrap_or_default();
                      
                      let base_transform = Transform {
-                         x: line_transform.x + char_transform.x,
-                         y: line_transform.y + char_transform.y,
-                         rotation: line_transform.rotation + char_transform.rotation,
-                         scale: line_transform.scale * char_transform.scale,
-                         scale_x: line_transform.scale_x * char_transform.scale_x,
-                         scale_y: line_transform.scale_y * char_transform.scale_y,
-                         opacity: line_transform.opacity * char_transform.opacity,
-                         anchor_x: char_transform.anchor_x,
-                         anchor_y: char_transform.anchor_y,
-                         blur: line_transform.blur + char_transform.blur,
-                         glitch_offset: line_transform.glitch_offset + char_transform.glitch_offset,
+                         x: Some(line_transform.x_val() + char_transform.x_val()),
+                         y: Some(line_transform.y_val() + char_transform.y_val()),
+                         rotation: Some(line_transform.rotation_val() + char_transform.rotation_val()),
+                         scale: Some(line_transform.scale_val() * char_transform.scale_val()),
+                         scale_x: Some(line_transform.scale_x_val() * char_transform.scale_x_val()),
+                         scale_y: Some(line_transform.scale_y_val() * char_transform.scale_y_val()),
+                         opacity: Some(line_transform.opacity_val() * char_transform.opacity_val()),
+                         anchor_x: Some(char_transform.anchor_x_val()),
+                         anchor_y: Some(char_transform.anchor_y_val()), // Anchor is not additive usually, char overrides line
+                         blur: Some(line_transform.blur_val() + char_transform.blur_val()),
+                         glitch_offset: Some(line_transform.glitch_offset_val() + char_transform.glitch_offset_val()),
+                         hue_shift: Some(line_transform.hue_shift_val() + char_transform.hue_shift_val()),
                      };
                      
                      // ... Effect Resolution Logic (Same as before) ...
@@ -176,12 +178,12 @@ impl<'a> LineRenderer<'a> {
                      paint.set_color(text_color);
                      paint.set_anti_alias(true);
                      
-                     let final_opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
+                     let final_opacity = final_transform.opacity_val() * (1.0 - disintegration_progress as f32);
                      paint.set_alpha_f(final_opacity);
 
                      // Apply Blur
-                     if final_transform.blur > 0.0 {
-                         paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur, false));
+                     if final_transform.blur_val() > 0.0 {
+                         paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
                      }
 
                      // --- DRAWING ---
@@ -192,14 +194,14 @@ impl<'a> LineRenderer<'a> {
                      self.canvas.save();
                      
                      // Apply Transforms
-                     self.canvas.translate((draw_x + final_transform.x, draw_y + final_transform.y));
+                     self.canvas.translate((draw_x + final_transform.x_val(), draw_y + final_transform.y_val()));
                      
                      let path_center_x = bounds.center_x();
                      let path_center_y = bounds.center_y();
                      
                      self.canvas.translate((path_center_x, path_center_y));
-                     self.canvas.rotate(final_transform.rotation, None);
-                     self.canvas.scale((final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y));
+                     self.canvas.rotate(final_transform.rotation_val(), None);
+                     self.canvas.scale((final_transform.scale_val() * final_transform.scale_x_val(), final_transform.scale_val() * final_transform.scale_y_val()));
                      self.canvas.translate((-path_center_x, -path_center_y));
                      
                      // --- 1. SHADOW ---
@@ -217,12 +219,12 @@ impl<'a> LineRenderer<'a> {
                                  
                                  // Apply blur to shadow if needed (or inherit from transform?)
                                  // For now, if there's global blur, apply it to shadow too
-                                 if final_transform.blur > 0.0 {
-                                     shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur, false));
+                                 if final_transform.blur_val() > 0.0 {
+                                     shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
                                  }
                                  
                                  self.canvas.save();
-                                 self.canvas.translate((shadow.x, shadow.y));
+                                 self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
                                  self.canvas.draw_path(&path, &shadow_paint);
                                  self.canvas.restore();
                              }
@@ -235,18 +237,18 @@ impl<'a> LineRenderer<'a> {
                                        else { style.stroke.as_ref() };
 
                      if let Some(stroke) = stroke_opts {
-                         if stroke.width > 0.0 {
+                         if stroke.width_or_default() > 0.0 {
                              if let Some(color_hex) = &stroke.color {
                                  if let Some(stroke_color) = parse_color(color_hex) {
                                      let mut stroke_paint = Paint::default();
                                      stroke_paint.set_style(PaintStyle::Stroke);
-                                     stroke_paint.set_stroke_width(stroke.width);
+                                     stroke_paint.set_stroke_width(stroke.width_or_default());
                                      stroke_paint.set_color(stroke_color);
                                      stroke_paint.set_alpha_f(final_opacity);
                                      stroke_paint.set_anti_alias(true);
                                      
-                                     if final_transform.blur > 0.0 {
-                                         stroke_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur, false));
+                                     if final_transform.blur_val() > 0.0 {
+                                         stroke_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
                                      }
 
                                      self.canvas.draw_path(&path, &stroke_paint);
@@ -257,9 +259,9 @@ impl<'a> LineRenderer<'a> {
 
                      // --- 3. MAIN TEXT (With Glitch Logic) ---
                      if paint.alpha_f() > 0.001 {
-                         if final_transform.glitch_offset.abs() > 0.01 {
+                         if final_transform.glitch_offset_val().abs() > 0.01 {
                              // Glitch Effect: Draw channels separately
-                             let offset = final_transform.glitch_offset;
+                             let offset = final_transform.glitch_offset_val();
 
                              // Red Channel
                              let mut r_paint = paint.clone();
@@ -351,11 +353,11 @@ impl<'a> LineRenderer<'a> {
                              }
                          }
 
-                         if let Some(mut surface) = Surface::new_raster_n32_premul((capture_w, capture_h)) {
+                         if let Some(mut surface) = surfaces::raster_n32_premul((capture_w, capture_h)) {
                              let c = surface.canvas();
                              // Center the path in the capture
-                             let tx = (capture_w as f32 / 2.0) - cx;
-                             let ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
+                             let _tx = (capture_w as f32 / 2.0) - cx;
+                             let _ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
                              // path bounds .top might be negative.
                              // bounds.y is usually negative (ascender).
                              // If bounds y is -50, height 70.
@@ -377,10 +379,10 @@ impl<'a> LineRenderer<'a> {
 
                              // Calculate screen bounds for the emitter
                              let bounds_rect = CharBounds {
-                                 x: draw_x + final_transform.x + bounds_left - 10.0, // Adjust back
-                                 y: draw_y + final_transform.y + bounds_top - 10.0,
-                                 width: capture_w as f32 * final_transform.scale,
-                                 height: capture_h as f32 * final_transform.scale,
+                                 x: draw_x + final_transform.x_val() + bounds_left - 10.0, // Adjust back
+                                 y: draw_y + final_transform.y_val() + bounds_top - 10.0,
+                                 width: capture_w as f32 * final_transform.scale_val(),
+                                 height: capture_h as f32 * final_transform.scale_val(),
                              };
 
                              let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
@@ -454,10 +456,10 @@ impl<'a> LineRenderer<'a> {
                          self.active_keys.insert(key.clone());
                          
                          let bounds_rect = CharBounds {
-                             x: draw_x + final_transform.x + bounds.left, 
-                             y: draw_y + final_transform.y + bounds.top, 
-                             width: w * final_transform.scale, 
-                             height: h * final_transform.scale,
+                             x: draw_x + final_transform.x_val() + bounds.left, 
+                             y: draw_y + final_transform.y_val() + bounds.top, 
+                             width: w * final_transform.scale_val(), 
+                             height: h * final_transform.scale_val(),
                          };
                          
                          let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
@@ -488,10 +490,10 @@ impl<'a> LineRenderer<'a> {
                              self.active_keys.insert(key.clone());
                              
                              let bounds_rect = CharBounds {
-                                 x: draw_x + final_transform.x + bounds.left, 
-                                 y: draw_y + final_transform.y + bounds.top, 
-                                 width: w * final_transform.scale, 
-                                 height: h * final_transform.scale,
+                                 x: draw_x + final_transform.x_val() + bounds.left, 
+                                 y: draw_y + final_transform.y_val() + bounds.top, 
+                                 width: w * final_transform.scale_val(), 
+                                 height: h * final_transform.scale_val(),
                              };
                              
                              // Offset seed slightly so it doesn't match other effects exactly

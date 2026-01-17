@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/klyric-gui",
+    "crates/klyric-renderer",
+    "crates/klyric-preview",
+]
+resolver = "2"

@@ -3,7 +3,7 @@ pub mod particle_system;
 pub mod line_renderer;
 
 use anyhow::Result;
-use skia_safe::{Surface, Canvas, Color, Paint, ImageInfo, ColorType, AlphaType, surfaces};
+use skia_safe::{Canvas, Color, ImageInfo, ColorType, AlphaType, surfaces, Surface};
 use std::collections::HashSet;
 
 use crate::model::KLyricDocumentV2;
@@ -21,6 +21,8 @@ pub struct Renderer {
     particle_system: ParticleRenderSystem,
     /// Last rendered time for delta calculation
     last_time: f64,
+    /// Cached surface for rendering
+    surface: Option<Surface>,
 }
 
 impl Renderer {
@@ -31,6 +33,7 @@ impl Renderer {
             text_renderer: TextRenderer::new(),
             particle_system: ParticleRenderSystem::new(),
             last_time: 0.0,
+            surface: None,
         }
     }
     
@@ -38,13 +41,8 @@ impl Renderer {
         &mut self.text_renderer
     }
 
-    /// Render a frame and return raw RGBA pixels
-    pub fn render_frame(&mut self, doc: &KLyricDocumentV2, time: f64) -> Result<Vec<u8>> {
-        let mut surface = surfaces::raster_n32_premul((self.width as i32, self.height as i32))
-            .ok_or_else(|| anyhow::anyhow!("Failed to create skia surface"))?;
-            
-        let canvas = surface.canvas();
-            
+    /// Render directly to an existing Canvas
+    pub fn render_to_canvas(&mut self, canvas: &Canvas, doc: &KLyricDocumentV2, time: f64) -> Result<()> {
         // Calculate delta time
         let dt = if self.last_time > 0.0 { (time - self.last_time).max(0.0) } else { 0.0 };
         self.last_time = time;
@@ -77,6 +75,37 @@ impl Renderer {
         // 3. Update and render particles
         self.particle_system.update(dt as f32, &active_emitter_keys);
         self.particle_system.render(canvas);
+
+        Ok(())
+    }
+
+    /// Render a frame and return raw RGBA pixels
+    pub fn render_frame(&mut self, doc: &KLyricDocumentV2, time: f64) -> Result<Vec<u8>> {
+        // Check if we need to recreate the surface
+        let needs_recreate = if let Some(s) = &self.surface {
+            s.width() != self.width as i32 || s.height() != self.height as i32
+        } else {
+            true
+        };
+        
+        if needs_recreate {
+            log::info!(" creating/recreating renderer surface: {}x{}", self.width, self.height);
+            let surface = surfaces::raster_n32_premul((self.width as i32, self.height as i32))
+                 .ok_or_else(|| anyhow::anyhow!("Failed to create skia surface"))?;
+            self.surface = Some(surface);
+        }
+        
+        // Take surface ownerhip temporarily to avoid double borrow
+        let mut surface = self.surface.take().expect("Surface should exist");
+        
+        // Render
+        let render_result = self.render_to_canvas(surface.canvas(), doc, time);
+        
+        if let Err(e) = render_result {
+            // Put surface back before returning error
+            self.surface = Some(surface);
+            return Err(e);
+        }
         
         // Return pixels (RGBA or BGRA? Surface N32 usually implies native. We might need specific ColorType::RGBA8888)
         // Ensure we get RGBA for ffmpeg
@@ -88,7 +117,12 @@ impl Renderer {
             None
         );
         
-        if surface.read_pixels(&info, &mut pixels, (self.width * 4) as usize, (0, 0)) {
+        let read_success = surface.read_pixels(&info, &mut pixels, (self.width * 4) as usize, (0, 0));
+        
+        // Put surface back
+        self.surface = Some(surface);
+        
+        if read_success {
             Ok(pixels)
         } else {
             Err(anyhow::anyhow!("Failed to read pixels from surface"))
@@ -127,3 +161,204 @@ impl Renderer {
         canvas.clear(Color::BLACK);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use crate::model::{Project, Resolution, Theme, Background};
+
+    /// Create a minimal empty document for testing
+    fn minimal_doc() -> KLyricDocumentV2 {
+        KLyricDocumentV2 {
+            schema: None,
+            version: "2.0".to_string(),
+            project: Project {
+                title: "Test".to_string(),
+                artist: None,
+                album: None,
+                duration: 10.0,
+                resolution: Resolution {
+                    width: 1920,
+                    height: 1080,
+                },
+                fps: 30,
+                audio: None,
+                created: None,
+                modified: None,
+            },
+            theme: None,
+            styles: HashMap::new(),
+            effects: HashMap::new(),
+            lines: Vec::new(),
+        }
+    }
+
+    /// Create a document with custom background color
+    fn doc_with_background(color: &str) -> KLyricDocumentV2 {
+        let mut doc = minimal_doc();
+        doc.theme = Some(Theme {
+            background: Some(Background {
+                bg_type: crate::model::BackgroundType::Solid,
+                color: Some(color.to_string()),
+                gradient: None,
+                image: None,
+                video: None,
+                opacity: 1.0,
+            }),
+            default_style: None,
+        });
+        doc
+    }
+
+    // --- Renderer Creation Tests ---
+
+    #[test]
+    fn test_new_dimensions() {
+        let renderer = Renderer::new(800, 600);
+
+        assert_eq!(renderer.width, 800, "Width should be stored correctly");
+        assert_eq!(renderer.height, 600, "Height should be stored correctly");
+    }
+
+    // --- Render Frame Tests ---
+
+    #[test]
+    fn test_render_empty_doc() {
+        let mut renderer = Renderer::new(100, 100);
+        let doc = minimal_doc();
+
+        let pixels = renderer.render_frame(&doc, 0.0).expect("Render should succeed");
+
+        // Correct pixel count: width * height * 4 bytes (RGBA)
+        let expected_size = 100 * 100 * 4;
+        assert_eq!(
+            pixels.len(),
+            expected_size,
+            "Pixel buffer should have correct size: {} vs {}",
+            pixels.len(),
+            expected_size
+        );
+    }
+
+    #[test]
+    fn test_render_black_background() {
+        let mut renderer = Renderer::new(10, 10);
+        let doc = minimal_doc();
+
+        let pixels = renderer.render_frame(&doc, 0.0).expect("Render should succeed");
+
+        // Check that pixels are black (R=0, G=0, B=0)
+        // Due to premultiplied alpha, fully opaque black is (0, 0, 0, 255)
+        let mut non_black_count = 0;
+        for chunk in pixels.chunks_exact(4) {
+            // Allow small tolerance for GPU precision
+            if chunk[0] > 5 || chunk[1] > 5 || chunk[2] > 5 {
+                non_black_count += 1;
+            }
+        }
+
+        assert_eq!(
+            non_black_count, 0,
+            "Default background should be black, found {} non-black pixels",
+            non_black_count
+        );
+    }
+
+    #[test]
+    fn test_render_custom_background() {
+        let mut renderer = Renderer::new(10, 10);
+        let doc = doc_with_background("#FF0000"); // Red
+
+        let pixels = renderer.render_frame(&doc, 0.0).expect("Render should succeed");
+
+        // Check that we have red pixels
+        // At least one pixel should be red
+        let mut red_count = 0;
+        for chunk in pixels.chunks_exact(4) {
+            if chunk[0] > 200 && chunk[1] < 50 && chunk[2] < 50 {
+                red_count += 1;
+            }
+        }
+
+        assert!(
+            red_count > 0,
+            "Custom red background should produce red pixels"
+        );
+    }
+
+    // --- Particle Effect Tests ---
+
+    #[test]
+    fn test_particle_effect_add() {
+        let mut renderer = Renderer::new(100, 100);
+        let bounds = CharBounds {
+            x: 50.0,
+            y: 50.0,
+            width: 20.0,
+            height: 20.0,
+        };
+
+        // Add a particle effect
+        renderer.add_particle_effect(EffectPreset::Fire, bounds, 42);
+
+        // Verify emitter was added
+        assert!(
+            !renderer.particle_system.particle_emitters.is_empty(),
+            "Particle emitter should be added"
+        );
+    }
+
+    #[test]
+    fn test_burst_effect() {
+        let mut renderer = Renderer::new(100, 100);
+
+        // Trigger a burst effect
+        renderer.burst_effect(EffectPreset::Sparkle, 50.0, 50.0, 20.0, 20.0, 123);
+
+        // Verify emitter was created
+        assert!(
+            !renderer.particle_system.particle_emitters.is_empty(),
+            "Burst emitter should be created"
+        );
+    }
+
+    #[test]
+    fn test_clear_particles() {
+        let mut renderer = Renderer::new(100, 100);
+
+        // Add some effects
+        renderer.burst_effect(EffectPreset::Fire, 50.0, 50.0, 20.0, 20.0, 1);
+        renderer.burst_effect(EffectPreset::Sparkle, 50.0, 50.0, 20.0, 20.0, 2);
+
+        assert!(
+            !renderer.particle_system.particle_emitters.is_empty(),
+            "Should have emitters before clear"
+        );
+
+        // Clear all
+        renderer.clear_particles();
+
+        assert!(
+            renderer.particle_system.particle_emitters.is_empty(),
+            "All emitters should be cleared"
+        );
+    }
+
+    // --- Text Renderer Access Tests ---
+
+    #[test]
+    fn test_text_renderer_mut() {
+        let mut renderer = Renderer::new(100, 100);
+
+        // Get mutable reference
+        let text_renderer = renderer.text_renderer_mut();
+
+        // Should be able to use it (verify it's a valid reference)
+        assert!(
+            text_renderer.get_default_typeface().is_none(),
+            "Text renderer should be accessible"
+        );
+    }
+}
+

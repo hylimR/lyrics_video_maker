@@ -87,7 +87,7 @@ impl EffectEngine {
             }
             
             let progress = Self::calculate_progress(current_time, effect, &trigger_context);
-            if progress < 0.0 || progress > 1.0 {
+            if !(0.0..=1.0).contains(&progress) {
                 continue;
             }
             
@@ -151,10 +151,10 @@ impl EffectEngine {
                          apply_property(&mut final_transform, "scale", Self::lerp(s as f64, e as f64, segment_eased));
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
-                        final_transform.scale_x = Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                        final_transform.scale_x = Some(Self::lerp(s as f64, e as f64, segment_eased) as f32);
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
-                        final_transform.scale_y = Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                        final_transform.scale_y = Some(Self::lerp(s as f64, e as f64, segment_eased) as f32);
                     }
                     if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
                          apply_property(&mut final_transform, "rotation", Self::lerp(s as f64, e as f64, segment_eased));
@@ -194,7 +194,7 @@ impl EffectEngine {
         }
         
         let elapsed = current_time - start;
-        (elapsed / duration).min(1.0).max(0.0)
+        (elapsed / duration).clamp(0.0, 1.0)
     }
 }
 
@@ -212,17 +212,402 @@ pub struct TriggerContext {
 
 fn apply_property(transform: &mut Transform, prop: &str, value: f64) {
     match prop {
-        "opacity" => transform.opacity = value as f32,
+        "opacity" => transform.opacity = Some(value as f32),
         "scale" => {
-            transform.scale = value as f32;
-            transform.scale_x = value as f32;
-            transform.scale_y = value as f32;
+            transform.scale = Some(value as f32);
+            transform.scale_x = Some(value as f32);
+            transform.scale_y = Some(value as f32);
         },
-        "x" => transform.x = value as f32,
-        "y" => transform.y = value as f32,
-        "rotation" => transform.rotation = value as f32,
-        "blur" => transform.blur = value as f32,
-        "glitch_offset" | "glitch" => transform.glitch_offset = value as f32,
+        "x" => transform.x = Some(value as f32),
+        "y" => transform.y = Some(value as f32),
+        "rotation" => transform.rotation = Some(value as f32),
+        "blur" => transform.blur = Some(value as f32),
+        "glitch_offset" | "glitch" => transform.glitch_offset = Some(value as f32),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{AnimatedValue, Effect, EffectTrigger, EffectType};
+    use std::collections::HashMap;
+
+    /// Helper for float comparison with tolerance
+    fn approx_eq(a: f64, b: f64, tolerance: f64) -> bool {
+        (a - b).abs() < tolerance
+    }
+
+    // ============================================================================
+    // EASING FUNCTION TESTS (16 tests)
+    // ============================================================================
+
+    #[test]
+    fn test_ease_linear() {
+        // Linear easing: f(t) = t
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::Linear), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::Linear), 0.5, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::Linear), 1.0, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_in_quad() {
+        // EaseInQuad: f(t) = t^2
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseInQuad), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseInQuad), 0.25, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseInQuad), 1.0, 1e-9));
+        // Also test alias EaseIn
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseIn), 0.25, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_out_quad() {
+        // EaseOutQuad: f(t) = t * (2 - t)
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseOutQuad), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseOutQuad), 0.75, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseOutQuad), 1.0, 1e-9));
+        // Also test alias EaseOut
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseOut), 0.75, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_in_out_quad() {
+        // EaseInOutQuad: split function at t=0.5
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseInOutQuad), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.25, &Easing::EaseInOutQuad), 0.125, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseInOutQuad), 0.5, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseInOutQuad), 1.0, 1e-9));
+        // Also test alias EaseInOut
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseInOut), 0.5, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_in_cubic() {
+        // EaseInCubic: f(t) = t^3
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseInCubic), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseInCubic), 0.125, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseInCubic), 1.0, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_out_cubic() {
+        // EaseOutCubic: f(t) = (t-1)^3 + 1
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseOutCubic), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseOutCubic), 0.875, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseOutCubic), 1.0, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_in_out_cubic() {
+        // EaseInOutCubic: split function at t=0.5
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseInOutCubic), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseInOutCubic), 0.5, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseInOutCubic), 1.0, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_in_sine() {
+        // EaseInSine: f(t) = 1 - cos(t * PI / 2)
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseInSine), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseInSine), 1.0, 1e-9));
+        // At t=0.5, should be ~0.293
+        let mid = EffectEngine::ease(0.5, &Easing::EaseInSine);
+        assert!(mid > 0.0 && mid < 0.5);
+    }
+
+    #[test]
+    fn test_ease_out_sine() {
+        // EaseOutSine: f(t) = sin(t * PI / 2)
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseOutSine), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseOutSine), 1.0, 1e-9));
+        // At t=0.5, should be ~0.707
+        let mid = EffectEngine::ease(0.5, &Easing::EaseOutSine);
+        assert!(mid > 0.5 && mid < 1.0);
+    }
+
+    #[test]
+    fn test_ease_in_out_sine() {
+        // EaseInOutSine: f(t) = -(cos(PI * t) - 1) / 2
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseInOutSine), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseInOutSine), 0.5, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseInOutSine), 1.0, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_in_expo() {
+        // EaseInExpo: f(0) = 0, otherwise f(t) = 2^(10(t-1))
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseInExpo), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseInExpo), 1.0, 1e-9));
+        // Exponential start: very small value at t=0.5
+        let mid = EffectEngine::ease(0.5, &Easing::EaseInExpo);
+        assert!(mid > 0.0 && mid < 0.1);
+    }
+
+    #[test]
+    fn test_ease_out_expo() {
+        // EaseOutExpo: f(1) = 1, otherwise f(t) = 1 - 2^(-10t)
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseOutExpo), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseOutExpo), 1.0, 1e-9));
+        // Exponential end: very high value at t=0.5
+        let mid = EffectEngine::ease(0.5, &Easing::EaseOutExpo);
+        assert!(mid > 0.9 && mid < 1.0);
+    }
+
+    #[test]
+    fn test_ease_out_elastic() {
+        // EaseOutElastic: special case for 0 and 1
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseOutElastic), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseOutElastic), 1.0, 1e-9));
+        // Elastic can overshoot, at t=0.5 it should be around 1.0
+        let mid = EffectEngine::ease(0.5, &Easing::EaseOutElastic);
+        assert!(mid > 0.9);
+    }
+
+    #[test]
+    fn test_ease_out_bounce() {
+        // EaseOutBounce: defined in 4 sections
+        assert!(approx_eq(EffectEngine::ease(0.0, &Easing::EaseOutBounce), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::ease(1.0, &Easing::EaseOutBounce), 1.0, 1e-9));
+        // Test a point in the "bounce" region
+        let mid = EffectEngine::ease(0.5, &Easing::EaseOutBounce);
+        assert!(mid > 0.5 && mid < 1.0);
+    }
+
+    #[test]
+    fn test_ease_fallback() {
+        // Unimplemented easing functions should fall back to linear
+        // EaseInQuart is defined in enum but not implemented, so falls back to t
+        assert!(approx_eq(EffectEngine::ease(0.5, &Easing::EaseInQuart), 0.5, 1e-9));
+    }
+
+    #[test]
+    fn test_ease_boundary_consistency() {
+        // All easing functions should have f(0) close to 0 and f(1) close to 1
+        let easings = vec![
+            Easing::Linear,
+            Easing::EaseIn,
+            Easing::EaseOut,
+            Easing::EaseInOut,
+            Easing::EaseInQuad,
+            Easing::EaseOutQuad,
+            Easing::EaseInOutQuad,
+            Easing::EaseInCubic,
+            Easing::EaseOutCubic,
+            Easing::EaseInOutCubic,
+            Easing::EaseInSine,
+            Easing::EaseOutSine,
+            Easing::EaseInOutSine,
+            Easing::EaseInExpo,
+            Easing::EaseOutExpo,
+            Easing::EaseOutElastic,
+            Easing::EaseOutBounce,
+        ];
+
+        for easing in easings {
+            let at_zero = EffectEngine::ease(0.0, &easing);
+            let at_one = EffectEngine::ease(1.0, &easing);
+            assert!(approx_eq(at_zero, 0.0, 1e-6), "Easing {:?} at 0.0 should be 0", easing);
+            assert!(approx_eq(at_one, 1.0, 1e-6), "Easing {:?} at 1.0 should be 1", easing);
+        }
+    }
+
+    // ============================================================================
+    // LERP TESTS (3 tests)
+    // ============================================================================
+
+    #[test]
+    fn test_lerp_basic() {
+        // lerp(0, 100, 0.5) = 50
+        assert!(approx_eq(EffectEngine::lerp(0.0, 100.0, 0.0), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::lerp(0.0, 100.0, 0.5), 50.0, 1e-9));
+        assert!(approx_eq(EffectEngine::lerp(0.0, 100.0, 1.0), 100.0, 1e-9));
+    }
+
+    #[test]
+    fn test_lerp_negative() {
+        // lerp with negative values
+        assert!(approx_eq(EffectEngine::lerp(-100.0, 100.0, 0.5), 0.0, 1e-9));
+        assert!(approx_eq(EffectEngine::lerp(-50.0, -10.0, 0.5), -30.0, 1e-9));
+    }
+
+    #[test]
+    fn test_lerp_same() {
+        // lerp when start == end
+        assert!(approx_eq(EffectEngine::lerp(42.0, 42.0, 0.0), 42.0, 1e-9));
+        assert!(approx_eq(EffectEngine::lerp(42.0, 42.0, 0.5), 42.0, 1e-9));
+        assert!(approx_eq(EffectEngine::lerp(42.0, 42.0, 1.0), 42.0, 1e-9));
+    }
+
+    // ============================================================================
+    // PROGRESS CALCULATION TESTS (3 tests)
+    // ============================================================================
+
+    fn make_effect(duration: Option<f64>, delay: f64) -> Effect {
+        Effect {
+            effect_type: EffectType::Transition,
+            trigger: EffectTrigger::Enter,
+            duration,
+            delay,
+            easing: Easing::Linear,
+            properties: HashMap::new(),
+            mode: None,
+            direction: None,
+            keyframes: Vec::new(),
+            preset: None,
+            particle_config: None,
+            iterations: 1,
+        }
+    }
+
+    fn make_context(start: f64, end: f64) -> TriggerContext {
+        TriggerContext {
+            start_time: start,
+            end_time: end,
+            current_time: start,
+            active: true,
+        }
+    }
+
+    #[test]
+    fn test_calculate_progress_before() {
+        // Before effect starts, progress should be -1.0
+        let effect = make_effect(Some(1.0), 0.0);
+        let ctx = make_context(5.0, 10.0);
+        
+        // Current time 4.0 is before start_time 5.0
+        let progress = EffectEngine::calculate_progress(4.0, &effect, &ctx);
+        assert!(progress < 0.0, "Progress before start should be negative");
+    }
+
+    #[test]
+    fn test_calculate_progress_during() {
+        // During effect, progress should be 0.0 to 1.0
+        let effect = make_effect(Some(2.0), 0.0);
+        let ctx = make_context(0.0, 10.0);
+        
+        // At start
+        let at_start = EffectEngine::calculate_progress(0.0, &effect, &ctx);
+        assert!(approx_eq(at_start, 0.0, 1e-9));
+        
+        // At middle (1s into 2s duration)
+        let at_mid = EffectEngine::calculate_progress(1.0, &effect, &ctx);
+        assert!(approx_eq(at_mid, 0.5, 1e-9));
+        
+        // At end
+        let at_end = EffectEngine::calculate_progress(2.0, &effect, &ctx);
+        assert!(approx_eq(at_end, 1.0, 1e-9));
+    }
+
+    #[test]
+    fn test_calculate_progress_after() {
+        // After effect ends, progress should be clamped to 1.0
+        let effect = make_effect(Some(1.0), 0.0);
+        let ctx = make_context(0.0, 10.0);
+        
+        // Way past the end
+        let progress = EffectEngine::calculate_progress(100.0, &effect, &ctx);
+        assert!(approx_eq(progress, 1.0, 1e-9));
+    }
+
+    // ============================================================================
+    // TRANSFORM APPLICATION TESTS (3 tests)
+    // ============================================================================
+
+    #[test]
+    fn test_apply_property_opacity() {
+        let mut transform = Transform::default();
+        apply_property(&mut transform, "opacity", 0.5);
+        assert!(approx_eq(transform.opacity.unwrap() as f64, 0.5, 1e-6));
+    }
+
+    #[test]
+    fn test_apply_property_scale() {
+        let mut transform = Transform::default();
+        apply_property(&mut transform, "scale", 2.0);
+        assert!(approx_eq(transform.scale.unwrap() as f64, 2.0, 1e-6));
+        assert!(approx_eq(transform.scale_x.unwrap() as f64, 2.0, 1e-6));
+        assert!(approx_eq(transform.scale_y.unwrap() as f64, 2.0, 1e-6));
+    }
+
+    #[test]
+    fn test_compute_transform_no_effects() {
+        // compute_transform with empty effects should return base transform unchanged
+        let base = Transform {
+            x: Some(10.0),
+            y: Some(20.0),
+            opacity: Some(0.8),
+            ..Default::default()
+        };
+        let ctx = make_context(0.0, 10.0);
+        
+        let result = EffectEngine::compute_transform(5.0, &base, &[], ctx);
+        
+        assert!(approx_eq(result.x.unwrap() as f64, 10.0, 1e-6));
+        assert!(approx_eq(result.y.unwrap() as f64, 20.0, 1e-6));
+        assert!(approx_eq(result.opacity.unwrap() as f64, 0.8, 1e-6));
+    }
+
+    #[test]
+    fn test_compute_transform_with_transition() {
+        // Test transition effect applying opacity change
+        let base = Transform::default();
+        let ctx = make_context(0.0, 10.0);
+        
+        let mut props = HashMap::new();
+        props.insert("opacity".to_string(), AnimatedValue { from: 0.0, to: 1.0 });
+        
+        let effect = Effect {
+            effect_type: EffectType::Transition,
+            trigger: EffectTrigger::Enter,
+            duration: Some(2.0),
+            delay: 0.0,
+            easing: Easing::Linear,
+            properties: props,
+            mode: None,
+            direction: None,
+            keyframes: Vec::new(),
+            preset: None,
+            particle_config: None,
+            iterations: 1,
+        };
+        
+        // At t=1.0, progress is 0.5, so opacity should be 0.5
+        let result = EffectEngine::compute_transform(1.0, &base, &[effect], ctx);
+        assert!(approx_eq(result.opacity.unwrap() as f64, 0.5, 1e-6));
+    }
+
+    #[test]
+    fn test_apply_property_all_types() {
+        let mut transform = Transform::default();
+        
+        apply_property(&mut transform, "x", 100.0);
+        apply_property(&mut transform, "y", 200.0);
+        apply_property(&mut transform, "rotation", 45.0);
+        apply_property(&mut transform, "blur", 5.0);
+        apply_property(&mut transform, "glitch_offset", 10.0);
+        
+        assert!(approx_eq(transform.x.unwrap() as f64, 100.0, 1e-6));
+        assert!(approx_eq(transform.y.unwrap() as f64, 200.0, 1e-6));
+        assert!(approx_eq(transform.rotation.unwrap() as f64, 45.0, 1e-6));
+        assert!(approx_eq(transform.blur.unwrap() as f64, 5.0, 1e-6));
+        assert!(approx_eq(transform.glitch_offset.unwrap() as f64, 10.0, 1e-6));
+    }
+
+    #[test]
+    fn test_apply_property_glitch_alias() {
+        // Test that "glitch" is an alias for "glitch_offset"
+        let mut transform = Transform::default();
+        apply_property(&mut transform, "glitch", 15.0);
+        assert!(approx_eq(transform.glitch_offset.unwrap() as f64, 15.0, 1e-6));
+    }
+
+    #[test]
+    fn test_apply_property_unknown() {
+        // Unknown property should be ignored
+        let mut transform = Transform::default();
+        apply_property(&mut transform, "unknown_property", 999.0);
+        // Transform should remain in default state
+        assert!(transform.x.is_none());
+        assert!(transform.opacity.is_none());
     }
 }

@@ -45,6 +45,7 @@
 
 pub mod model;
 pub mod parser;
+pub mod importer;
 pub mod style;
 pub mod effects;
 pub mod layout;

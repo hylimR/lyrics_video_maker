@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::layout::{Position, Layout, Transform};
 use super::style::{Font, Stroke, Shadow};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Line {
     /// Unique identifier

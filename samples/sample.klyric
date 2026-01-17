@@ -1,0 +1,2632 @@
+{
+  "version": "2.0",
+  "project": {
+    "title": "Default KARASS file",
+    "artist": "",
+    "duration": 253.61,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    },
+    "fps": 30,
+    "audio": "\\\\?\\D:\\Workspace\\lyric_video_maker_claude\\public\\sample.wav",
+    "created": "2026-01-17T01:52:24.002196700+00:00",
+    "modified": "2026-01-17T01:52:24.002212500+00:00"
+  },
+  "theme": {},
+  "styles": {
+    "base": {
+      "font": {
+        "family": "Noto Sans SC",
+        "size": 72.0,
+        "weight": 700,
+        "style": "normal",
+        "letterSpacing": 0.0
+      },
+      "colors": {
+        "inactive": {
+          "fill": "#888888"
+        },
+        "active": {
+          "fill": "#FFFF00"
+        },
+        "complete": {
+          "fill": "#FFFFFF"
+        }
+      },
+      "stroke": {
+        "width": 3.0,
+        "color": "#000000"
+      },
+      "shadow": {
+        "color": "rgba(0,0,0,0.5)",
+        "x": 2.0,
+        "y": 2.0,
+        "blur": 4.0
+      }
+    }
+  },
+  "lines": [
+    {
+      "id": "line-0",
+      "start": 0.14,
+      "end": 4.49,
+      "text": "阳光下的泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "阳",
+          "start": 1.44,
+          "end": 1.54,
+          "transform": {
+            "x": 69.0,
+            "y": 0.0,
+            "rotation": 0.0,
+            "scale": 1.0,
+            "scaleX": 1.0,
+            "scaleY": 1.0,
+            "opacity": 1.0,
+            "anchorX": 0.5,
+            "anchorY": 0.5,
+            "blur": 0.0,
+            "glitchOffset": 0.0
+          }
+        },
+        {
+          "char": "光",
+          "start": 1.83,
+          "end": 1.95
+        },
+        {
+          "char": "下",
+          "start": 2.13,
+          "end": 2.23
+        },
+        {
+          "char": "的",
+          "start": 2.55,
+          "end": 2.66
+        },
+        {
+          "char": "泡",
+          "start": 3.04,
+          "end": 3.14
+        },
+        {
+          "char": "沫",
+          "start": 3.5,
+          "end": 3.71
+        }
+      ]
+    },
+    {
+      "id": "line-1",
+      "start": 4.49,
+      "end": 7.86,
+      "text": "是彩色的",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "是",
+          "start": 4.95,
+          "end": 5.06
+        },
+        {
+          "char": "彩",
+          "start": 5.3,
+          "end": 5.39
+        },
+        {
+          "char": "色",
+          "start": 5.78,
+          "end": 5.9
+        },
+        {
+          "char": "的",
+          "start": 6.52,
+          "end": 6.64
+        }
+      ]
+    },
+    {
+      "id": "line-2",
+      "start": 7.86,
+      "end": 11.51,
+      "text": "就像被骗的我",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "就",
+          "start": 8.34,
+          "end": 8.45
+        },
+        {
+          "char": "像",
+          "start": 8.78,
+          "end": 8.89
+        },
+        {
+          "char": "被",
+          "start": 9.18,
+          "end": 9.29
+        },
+        {
+          "char": "骗",
+          "start": 9.63,
+          "end": 9.74
+        },
+        {
+          "char": "的",
+          "start": 10.09,
+          "end": 10.19
+        },
+        {
+          "char": "我",
+          "start": 10.57,
+          "end": 11.43
+        }
+      ]
+    },
+    {
+      "id": "line-3",
+      "start": 11.51,
+      "end": 14.84,
+      "text": "是幸福的",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "是",
+          "start": 11.94,
+          "end": 12.08
+        },
+        {
+          "char": "幸",
+          "start": 12.37,
+          "end": 12.48
+        },
+        {
+          "char": "福",
+          "start": 12.87,
+          "end": 13.45
+        },
+        {
+          "char": "的",
+          "start": 13.7,
+          "end": 13.97
+        }
+      ]
+    },
+    {
+      "id": "line-4",
+      "start": 14.84,
+      "end": 18.49,
+      "text": "追究什麼对错",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "追",
+          "start": 15.44,
+          "end": 15.57
+        },
+        {
+          "char": "究",
+          "start": 15.86,
+          "end": 16.11
+        },
+        {
+          "char": "什",
+          "start": 16.31,
+          "end": 16.45
+        },
+        {
+          "char": "麼",
+          "start": 16.8,
+          "end": 17.12
+        },
+        {
+          "char": "对",
+          "start": 17.29,
+          "end": 17.45
+        },
+        {
+          "char": "错",
+          "start": 17.69,
+          "end": 18.5
+        }
+      ]
+    },
+    {
+      "id": "line-5",
+      "start": 18.49,
+      "end": 21.92,
+      "text": "你的谎言",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "你",
+          "start": 18.52,
+          "end": 18.55
+        },
+        {
+          "char": "的",
+          "start": 19.05,
+          "end": 19.21
+        },
+        {
+          "char": "谎",
+          "start": 19.5,
+          "end": 19.66
+        },
+        {
+          "char": "言",
+          "start": 20.01,
+          "end": 20.79
+        }
+      ]
+    },
+    {
+      "id": "line-6",
+      "start": 21.92,
+      "end": 27.01,
+      "text": "基於你还爱我",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "基",
+          "start": 22.47,
+          "end": 22.6
+        },
+        {
+          "char": "於",
+          "start": 22.92,
+          "end": 23.04
+        },
+        {
+          "char": "你",
+          "start": 23.37,
+          "end": 23.49
+        },
+        {
+          "char": "还",
+          "start": 23.83,
+          "end": 23.96
+        },
+        {
+          "char": "爱",
+          "start": 24.24,
+          "end": 24.37
+        },
+        {
+          "char": "我",
+          "start": 24.72,
+          "end": 26.62
+        }
+      ]
+    },
+    {
+      "id": "line-7",
+      "start": 28.46,
+      "end": 31.74,
+      "text": "美丽的泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "美",
+          "start": 28.83,
+          "end": 28.99
+        },
+        {
+          "char": "丽",
+          "start": 29.16,
+          "end": 29.29
+        },
+        {
+          "char": "的",
+          "start": 29.58,
+          "end": 29.72
+        },
+        {
+          "char": "泡",
+          "start": 30.05,
+          "end": 30.21
+        },
+        {
+          "char": "沫",
+          "start": 30.49,
+          "end": 31.77
+        }
+      ]
+    },
+    {
+      "id": "line-8",
+      "start": 31.74,
+      "end": 35.53,
+      "text": "虽然一刹花火",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "虽",
+          "start": 32.23,
+          "end": 32.42
+        },
+        {
+          "char": "然",
+          "start": 32.65,
+          "end": 32.77
+        },
+        {
+          "char": "一",
+          "start": 33.05,
+          "end": 33.2
+        },
+        {
+          "char": "刹",
+          "start": 33.5,
+          "end": 33.68
+        },
+        {
+          "char": "花",
+          "start": 34.0,
+          "end": 34.54
+        },
+        {
+          "char": "火",
+          "start": 34.79,
+          "end": 35.02
+        }
+      ]
+    },
+    {
+      "id": "line-9",
+      "start": 35.53,
+      "end": 38.83,
+      "text": "你所有承诺",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "你",
+          "start": 35.83,
+          "end": 35.96
+        },
+        {
+          "char": "所",
+          "start": 36.24,
+          "end": 36.36
+        },
+        {
+          "char": "有",
+          "start": 36.68,
+          "end": 36.97
+        },
+        {
+          "char": "承",
+          "start": 37.14,
+          "end": 37.32
+        },
+        {
+          "char": "诺",
+          "start": 37.57,
+          "end": 38.58
+        }
+      ]
+    },
+    {
+      "id": "line-10",
+      "start": 38.83,
+      "end": 42.54,
+      "text": "虽然都太脆弱",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "虽",
+          "start": 39.27,
+          "end": 39.42
+        },
+        {
+          "char": "然",
+          "start": 39.73,
+          "end": 39.88
+        },
+        {
+          "char": "都",
+          "start": 40.16,
+          "end": 40.3
+        },
+        {
+          "char": "太",
+          "start": 40.64,
+          "end": 40.79
+        },
+        {
+          "char": "脆",
+          "start": 41.15,
+          "end": 41.65
+        },
+        {
+          "char": "弱",
+          "start": 41.99,
+          "end": 42.2
+        }
+      ]
+    },
+    {
+      "id": "line-11",
+      "start": 42.54,
+      "end": 45.82,
+      "text": "但爱像泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "但",
+          "start": 42.96,
+          "end": 43.09
+        },
+        {
+          "char": "爱",
+          "start": 43.33,
+          "end": 43.43
+        },
+        {
+          "char": "像",
+          "start": 43.73,
+          "end": 43.86
+        },
+        {
+          "char": "泡",
+          "start": 44.19,
+          "end": 44.45
+        },
+        {
+          "char": "沫",
+          "start": 44.68,
+          "end": 45.79
+        }
+      ]
+    },
+    {
+      "id": "line-12",
+      "start": 45.82,
+      "end": 49.7,
+      "text": "如果能够看破",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "如",
+          "start": 46.35,
+          "end": 46.48
+        },
+        {
+          "char": "果",
+          "start": 46.82,
+          "end": 46.96
+        },
+        {
+          "char": "能",
+          "start": 47.24,
+          "end": 47.38
+        },
+        {
+          "char": "够",
+          "start": 47.73,
+          "end": 48.04
+        },
+        {
+          "char": "看",
+          "start": 48.22,
+          "end": 48.71
+        },
+        {
+          "char": "破",
+          "start": 48.99,
+          "end": 49.57
+        }
+      ]
+    },
+    {
+      "id": "line-13",
+      "start": 49.7,
+      "end": 53.6,
+      "text": "有什麼难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "有",
+          "start": 50.06,
+          "end": 50.21
+        },
+        {
+          "char": "什",
+          "start": 50.4,
+          "end": 50.53
+        },
+        {
+          "char": "麼",
+          "start": 50.79,
+          "end": 50.93
+        },
+        {
+          "char": "难",
+          "start": 51.24,
+          "end": 51.49
+        },
+        {
+          "char": "过",
+          "start": 51.69,
+          "end": 53.41
+        }
+      ]
+    },
+    {
+      "id": "line-14",
+      "start": 57.53,
+      "end": 61.05,
+      "text": "早该知道泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "早",
+          "start": 57.84,
+          "end": 57.97
+        },
+        {
+          "char": "该",
+          "start": 58.23,
+          "end": 58.37
+        },
+        {
+          "char": "知",
+          "start": 58.76,
+          "end": 59.04
+        },
+        {
+          "char": "道",
+          "start": 59.24,
+          "end": 59.48
+        },
+        {
+          "char": "泡",
+          "start": 59.68,
+          "end": 59.95
+        },
+        {
+          "char": "沫",
+          "start": 60.09,
+          "end": 60.9
+        }
+      ]
+    },
+    {
+      "id": "line-15",
+      "start": 61.05,
+      "end": 64.3,
+      "text": "一触就破",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "一",
+          "start": 61.38,
+          "end": 61.53
+        },
+        {
+          "char": "触",
+          "start": 61.79,
+          "end": 61.94
+        },
+        {
+          "char": "就",
+          "start": 62.29,
+          "end": 62.83
+        },
+        {
+          "char": "破",
+          "start": 63.16,
+          "end": 63.77
+        }
+      ]
+    },
+    {
+      "id": "line-16",
+      "start": 64.3,
+      "end": 68.13,
+      "text": "就像已伤的心",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "就",
+          "start": 64.85,
+          "end": 65.0
+        },
+        {
+          "char": "像",
+          "start": 65.25,
+          "end": 65.41
+        },
+        {
+          "char": "已",
+          "start": 65.7,
+          "end": 65.85
+        },
+        {
+          "char": "伤",
+          "start": 66.16,
+          "end": 66.33
+        },
+        {
+          "char": "的",
+          "start": 66.62,
+          "end": 66.8
+        },
+        {
+          "char": "心",
+          "start": 67.04,
+          "end": 67.91
+        }
+      ]
+    },
+    {
+      "id": "line-17",
+      "start": 68.13,
+      "end": 71.53,
+      "text": "不胜折磨",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "不",
+          "start": 68.52,
+          "end": 68.69
+        },
+        {
+          "char": "胜",
+          "start": 68.93,
+          "end": 69.11
+        },
+        {
+          "char": "折",
+          "start": 69.41,
+          "end": 70.0
+        },
+        {
+          "char": "磨",
+          "start": 70.24,
+          "end": 71.03
+        }
+      ]
+    },
+    {
+      "id": "line-18",
+      "start": 71.53,
+      "end": 75.1,
+      "text": "也不是谁的错",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "也",
+          "start": 71.99,
+          "end": 72.14
+        },
+        {
+          "char": "不",
+          "start": 72.37,
+          "end": 72.51
+        },
+        {
+          "char": "是",
+          "start": 72.79,
+          "end": 72.94
+        },
+        {
+          "char": "谁",
+          "start": 73.25,
+          "end": 73.58
+        },
+        {
+          "char": "的",
+          "start": 73.7,
+          "end": 73.85
+        },
+        {
+          "char": "错",
+          "start": 74.14,
+          "end": 75.08
+        }
+      ]
+    },
+    {
+      "id": "line-19",
+      "start": 75.1,
+      "end": 78.6,
+      "text": "谎言再多",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "谎",
+          "start": 75.53,
+          "end": 75.69
+        },
+        {
+          "char": "言",
+          "start": 75.96,
+          "end": 76.09
+        },
+        {
+          "char": "再",
+          "start": 76.4,
+          "end": 76.91
+        },
+        {
+          "char": "多",
+          "start": 77.29,
+          "end": 78.38
+        }
+      ]
+    },
+    {
+      "id": "line-20",
+      "start": 78.6,
+      "end": 84.23,
+      "text": "基於你还爱我",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "基",
+          "start": 78.98,
+          "end": 79.14
+        },
+        {
+          "char": "於",
+          "start": 79.43,
+          "end": 79.7
+        },
+        {
+          "char": "你",
+          "start": 79.88,
+          "end": 80.23
+        },
+        {
+          "char": "还",
+          "start": 80.4,
+          "end": 80.62
+        },
+        {
+          "char": "爱",
+          "start": 80.82,
+          "end": 81.01
+        },
+        {
+          "char": "我",
+          "start": 81.22,
+          "end": 83.35
+        }
+      ]
+    },
+    {
+      "id": "line-21",
+      "start": 85.09,
+      "end": 88.32,
+      "text": "美丽的泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "美",
+          "start": 85.35,
+          "end": 85.56
+        },
+        {
+          "char": "丽",
+          "start": 85.67,
+          "end": 85.81
+        },
+        {
+          "char": "的",
+          "start": 86.04,
+          "end": 86.19
+        },
+        {
+          "char": "泡",
+          "start": 86.53,
+          "end": 86.77
+        },
+        {
+          "char": "沫",
+          "start": 87.01,
+          "end": 88.33
+        }
+      ]
+    },
+    {
+      "id": "line-22",
+      "start": 88.32,
+      "end": 92.07,
+      "text": "虽然一刹花火",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "虽",
+          "start": 88.72,
+          "end": 88.88
+        },
+        {
+          "char": "然",
+          "start": 89.17,
+          "end": 89.29
+        },
+        {
+          "char": "一",
+          "start": 89.54,
+          "end": 89.68
+        },
+        {
+          "char": "刹",
+          "start": 90.0,
+          "end": 90.18
+        },
+        {
+          "char": "花",
+          "start": 90.52,
+          "end": 91.03
+        },
+        {
+          "char": "火",
+          "start": 91.31,
+          "end": 91.8
+        }
+      ]
+    },
+    {
+      "id": "line-23",
+      "start": 92.07,
+      "end": 95.42,
+      "text": "你所有承诺",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "你",
+          "start": 92.31,
+          "end": 92.48
+        },
+        {
+          "char": "所",
+          "start": 92.67,
+          "end": 92.82
+        },
+        {
+          "char": "有",
+          "start": 93.09,
+          "end": 93.24
+        },
+        {
+          "char": "承",
+          "start": 93.53,
+          "end": 93.74
+        },
+        {
+          "char": "诺",
+          "start": 94.02,
+          "end": 95.14
+        }
+      ]
+    },
+    {
+      "id": "line-24",
+      "start": 95.42,
+      "end": 99.05,
+      "text": "虽然都太脆弱",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "虽",
+          "start": 95.85,
+          "end": 96.0
+        },
+        {
+          "char": "然",
+          "start": 96.21,
+          "end": 96.35
+        },
+        {
+          "char": "都",
+          "start": 96.65,
+          "end": 96.93
+        },
+        {
+          "char": "太",
+          "start": 97.12,
+          "end": 97.47
+        },
+        {
+          "char": "脆",
+          "start": 97.6,
+          "end": 98.07
+        },
+        {
+          "char": "弱",
+          "start": 98.38,
+          "end": 98.84
+        }
+      ]
+    },
+    {
+      "id": "line-25",
+      "start": 99.05,
+      "end": 102.54,
+      "text": "爱本是泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "爱",
+          "start": 99.35,
+          "end": 99.5
+        },
+        {
+          "char": "本",
+          "start": 99.75,
+          "end": 99.87
+        },
+        {
+          "char": "是",
+          "start": 100.12,
+          "end": 100.25
+        },
+        {
+          "char": "泡",
+          "start": 100.59,
+          "end": 100.72
+        },
+        {
+          "char": "沫",
+          "start": 101.06,
+          "end": 102.34
+        }
+      ]
+    },
+    {
+      "id": "line-26",
+      "start": 102.54,
+      "end": 106.16,
+      "text": "如果能够看破",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "如",
+          "start": 102.84,
+          "end": 102.99
+        },
+        {
+          "char": "果",
+          "start": 103.27,
+          "end": 103.55
+        },
+        {
+          "char": "能",
+          "start": 103.73,
+          "end": 103.95
+        },
+        {
+          "char": "够",
+          "start": 104.2,
+          "end": 104.41
+        },
+        {
+          "char": "看",
+          "start": 104.67,
+          "end": 105.07
+        },
+        {
+          "char": "破",
+          "start": 105.39,
+          "end": 105.93
+        }
+      ]
+    },
+    {
+      "id": "line-27",
+      "start": 106.16,
+      "end": 111.03,
+      "text": "有什麼难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "有",
+          "start": 106.45,
+          "end": 106.61
+        },
+        {
+          "char": "什",
+          "start": 106.85,
+          "end": 106.98
+        },
+        {
+          "char": "麼",
+          "start": 107.23,
+          "end": 107.46
+        },
+        {
+          "char": "难",
+          "start": 107.69,
+          "end": 107.96
+        },
+        {
+          "char": "过",
+          "start": 108.18,
+          "end": 110.74
+        }
+      ]
+    },
+    {
+      "id": "line-28",
+      "start": 113.27,
+      "end": 116.82,
+      "text": "再美的花朵",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "再",
+          "start": 113.53,
+          "end": 113.72
+        },
+        {
+          "char": "美",
+          "start": 113.87,
+          "end": 114.01
+        },
+        {
+          "char": "的",
+          "start": 114.27,
+          "end": 114.4
+        },
+        {
+          "char": "花",
+          "start": 114.72,
+          "end": 114.86
+        },
+        {
+          "char": "朵",
+          "start": 115.17,
+          "end": 116.45
+        }
+      ]
+    },
+    {
+      "id": "line-29",
+      "start": 116.82,
+      "end": 120.13,
+      "text": "盛开过就凋落",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "盛",
+          "start": 117.07,
+          "end": 117.23
+        },
+        {
+          "char": "开",
+          "start": 117.4,
+          "end": 117.55
+        },
+        {
+          "char": "过",
+          "start": 117.8,
+          "end": 117.94
+        },
+        {
+          "char": "就",
+          "start": 118.28,
+          "end": 118.43
+        },
+        {
+          "char": "凋",
+          "start": 118.78,
+          "end": 119.33
+        },
+        {
+          "char": "落",
+          "start": 119.57,
+          "end": 120.02
+        }
+      ]
+    },
+    {
+      "id": "line-30",
+      "start": 120.13,
+      "end": 123.73,
+      "text": "再亮眼的星",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "再",
+          "start": 120.53,
+          "end": 120.7
+        },
+        {
+          "char": "亮",
+          "start": 120.93,
+          "end": 121.12
+        },
+        {
+          "char": "眼",
+          "start": 121.35,
+          "end": 121.51
+        },
+        {
+          "char": "的",
+          "start": 121.82,
+          "end": 121.98
+        },
+        {
+          "char": "星",
+          "start": 122.28,
+          "end": 123.68
+        }
+      ]
+    },
+    {
+      "id": "line-31",
+      "start": 123.73,
+      "end": 127.28,
+      "text": "一闪过就堕落",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "一",
+          "start": 124.04,
+          "end": 124.23
+        },
+        {
+          "char": "闪",
+          "start": 124.45,
+          "end": 124.59
+        },
+        {
+          "char": "过",
+          "start": 124.85,
+          "end": 124.98
+        },
+        {
+          "char": "就",
+          "start": 125.28,
+          "end": 125.55
+        },
+        {
+          "char": "堕",
+          "start": 125.76,
+          "end": 126.36
+        },
+        {
+          "char": "落",
+          "start": 126.65,
+          "end": 126.9
+        }
+      ]
+    },
+    {
+      "id": "line-32",
+      "start": 127.28,
+      "end": 130.7,
+      "text": "爱本是泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "爱",
+          "start": 127.6,
+          "end": 127.77
+        },
+        {
+          "char": "本",
+          "start": 127.96,
+          "end": 128.1
+        },
+        {
+          "char": "是",
+          "start": 128.41,
+          "end": 128.56
+        },
+        {
+          "char": "泡",
+          "start": 128.87,
+          "end": 129.01
+        },
+        {
+          "char": "沫",
+          "start": 129.34,
+          "end": 130.5
+        }
+      ]
+    },
+    {
+      "id": "line-33",
+      "start": 130.7,
+      "end": 134.43,
+      "text": "如果能够看破",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "如",
+          "start": 131.0,
+          "end": 131.16
+        },
+        {
+          "char": "果",
+          "start": 131.48,
+          "end": 131.66
+        },
+        {
+          "char": "能",
+          "start": 131.9,
+          "end": 132.07
+        },
+        {
+          "char": "够",
+          "start": 132.39,
+          "end": 132.57
+        },
+        {
+          "char": "看",
+          "start": 132.92,
+          "end": 133.4
+        },
+        {
+          "char": "破",
+          "start": 133.7,
+          "end": 133.95
+        }
+      ]
+    },
+    {
+      "id": "line-34",
+      "start": 134.43,
+      "end": 139.49,
+      "text": "有什麼难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "有",
+          "start": 134.62,
+          "end": 134.77
+        },
+        {
+          "char": "什",
+          "start": 135.03,
+          "end": 135.17
+        },
+        {
+          "char": "麼",
+          "start": 135.44,
+          "end": 135.58
+        },
+        {
+          "char": "难",
+          "start": 135.93,
+          "end": 136.15
+        },
+        {
+          "char": "过",
+          "start": 136.36,
+          "end": 138.13
+        }
+      ]
+    },
+    {
+      "id": "line-35",
+      "start": 141.39,
+      "end": 146.59,
+      "text": "为什麼难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "为",
+          "start": 141.75,
+          "end": 141.91
+        },
+        {
+          "char": "什",
+          "start": 142.11,
+          "end": 142.26
+        },
+        {
+          "char": "麼",
+          "start": 142.53,
+          "end": 142.69
+        },
+        {
+          "char": "难",
+          "start": 142.99,
+          "end": 143.15
+        },
+        {
+          "char": "过",
+          "start": 143.49,
+          "end": 146.36
+        }
+      ]
+    },
+    {
+      "id": "line-36",
+      "start": 148.47,
+      "end": 154.47,
+      "text": "有什麼难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "有",
+          "start": 148.78,
+          "end": 148.92
+        },
+        {
+          "char": "什",
+          "start": 149.13,
+          "end": 149.28
+        },
+        {
+          "char": "麼",
+          "start": 149.58,
+          "end": 149.79
+        },
+        {
+          "char": "难",
+          "start": 150.05,
+          "end": 150.21
+        },
+        {
+          "char": "过",
+          "start": 150.56,
+          "end": 153.93
+        }
+      ]
+    },
+    {
+      "id": "line-37",
+      "start": 155.63,
+      "end": 164.7,
+      "text": "为什麼难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "为",
+          "start": 155.81,
+          "end": 155.99
+        },
+        {
+          "char": "什",
+          "start": 156.16,
+          "end": 156.33
+        },
+        {
+          "char": "麼",
+          "start": 156.63,
+          "end": 156.85
+        },
+        {
+          "char": "难",
+          "start": 157.12,
+          "end": 157.24
+        },
+        {
+          "char": "过",
+          "start": 157.53,
+          "end": 164.71
+        }
+      ]
+    },
+    {
+      "id": "line-38",
+      "start": 166.24,
+      "end": 169.75,
+      "text": "全都是泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "全",
+          "start": 166.49,
+          "end": 166.63
+        },
+        {
+          "char": "都",
+          "start": 166.82,
+          "end": 166.96
+        },
+        {
+          "char": "是",
+          "start": 167.24,
+          "end": 167.39
+        },
+        {
+          "char": "泡",
+          "start": 167.7,
+          "end": 167.84
+        },
+        {
+          "char": "沫",
+          "start": 168.13,
+          "end": 169.59
+        }
+      ]
+    },
+    {
+      "id": "line-39",
+      "start": 169.75,
+      "end": 173.05,
+      "text": "只一刹的花火",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "只",
+          "start": 170.01,
+          "end": 170.15
+        },
+        {
+          "char": "一",
+          "start": 170.37,
+          "end": 170.52
+        },
+        {
+          "char": "刹",
+          "start": 170.78,
+          "end": 170.92
+        },
+        {
+          "char": "的",
+          "start": 171.2,
+          "end": 171.36
+        },
+        {
+          "char": "花",
+          "start": 171.75,
+          "end": 172.34
+        },
+        {
+          "char": "火",
+          "start": 172.55,
+          "end": 173.12
+        }
+      ]
+    },
+    {
+      "id": "line-40",
+      "start": 173.05,
+      "end": 176.7,
+      "text": "你所有承诺",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "你",
+          "start": 173.48,
+          "end": 173.63
+        },
+        {
+          "char": "所",
+          "start": 173.87,
+          "end": 174.12
+        },
+        {
+          "char": "有",
+          "start": 174.32,
+          "end": 174.49
+        },
+        {
+          "char": "承",
+          "start": 174.76,
+          "end": 175.15
+        },
+        {
+          "char": "诺",
+          "start": 175.34,
+          "end": 176.45
+        }
+      ]
+    },
+    {
+      "id": "line-41",
+      "start": 176.7,
+      "end": 180.26,
+      "text": "全部都太脆弱",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "全",
+          "start": 177.07,
+          "end": 177.2
+        },
+        {
+          "char": "部",
+          "start": 177.39,
+          "end": 177.51
+        },
+        {
+          "char": "都",
+          "start": 177.8,
+          "end": 177.93
+        },
+        {
+          "char": "太",
+          "start": 178.27,
+          "end": 178.46
+        },
+        {
+          "char": "脆",
+          "start": 178.75,
+          "end": 179.35
+        },
+        {
+          "char": "弱",
+          "start": 179.6,
+          "end": 179.94
+        }
+      ]
+    },
+    {
+      "id": "line-42",
+      "start": 180.26,
+      "end": 183.7,
+      "text": "而你的轮廓",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "而",
+          "start": 180.55,
+          "end": 180.71
+        },
+        {
+          "char": "你",
+          "start": 180.93,
+          "end": 181.06
+        },
+        {
+          "char": "的",
+          "start": 181.34,
+          "end": 181.47
+        },
+        {
+          "char": "轮",
+          "start": 181.81,
+          "end": 182.21
+        },
+        {
+          "char": "廓",
+          "start": 182.31,
+          "end": 183.5
+        }
+      ]
+    },
+    {
+      "id": "line-43",
+      "start": 183.7,
+      "end": 187.39,
+      "text": "怪我没有看破",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "怪",
+          "start": 184.12,
+          "end": 184.26
+        },
+        {
+          "char": "我",
+          "start": 184.47,
+          "end": 184.59
+        },
+        {
+          "char": "没",
+          "start": 184.86,
+          "end": 185.01
+        },
+        {
+          "char": "有",
+          "start": 185.34,
+          "end": 185.48
+        },
+        {
+          "char": "看",
+          "start": 185.81,
+          "end": 186.32
+        },
+        {
+          "char": "破",
+          "start": 186.61,
+          "end": 187.16
+        }
+      ]
+    },
+    {
+      "id": "line-44",
+      "start": 187.39,
+      "end": 192.83,
+      "text": "才如此难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "才",
+          "start": 187.67,
+          "end": 187.85
+        },
+        {
+          "char": "如",
+          "start": 188.04,
+          "end": 188.16
+        },
+        {
+          "char": "此",
+          "start": 188.45,
+          "end": 188.69
+        },
+        {
+          "char": "难",
+          "start": 188.9,
+          "end": 189.02
+        },
+        {
+          "char": "过",
+          "start": 189.3,
+          "end": 192.4
+        }
+      ]
+    },
+    {
+      "id": "line-45",
+      "start": 194.32,
+      "end": 197.82,
+      "text": "相爱的把握",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "相",
+          "start": 194.64,
+          "end": 194.79
+        },
+        {
+          "char": "爱",
+          "start": 195.02,
+          "end": 195.15
+        },
+        {
+          "char": "的",
+          "start": 195.44,
+          "end": 195.59
+        },
+        {
+          "char": "把",
+          "start": 195.91,
+          "end": 196.08
+        },
+        {
+          "char": "握",
+          "start": 196.36,
+          "end": 197.7
+        }
+      ]
+    },
+    {
+      "id": "line-46",
+      "start": 197.82,
+      "end": 201.36,
+      "text": "要如何再搜索",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "要",
+          "start": 198.19,
+          "end": 198.32
+        },
+        {
+          "char": "如",
+          "start": 198.54,
+          "end": 198.67
+        },
+        {
+          "char": "何",
+          "start": 198.98,
+          "end": 199.23
+        },
+        {
+          "char": "再",
+          "start": 199.47,
+          "end": 199.72
+        },
+        {
+          "char": "搜",
+          "start": 199.9,
+          "end": 200.5
+        },
+        {
+          "char": "索",
+          "start": 200.67,
+          "end": 200.91
+        }
+      ]
+    },
+    {
+      "id": "line-47",
+      "start": 201.36,
+      "end": 204.88,
+      "text": "相拥著寂寞",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "相",
+          "start": 201.61,
+          "end": 201.75
+        },
+        {
+          "char": "拥",
+          "start": 202.08,
+          "end": 202.23
+        },
+        {
+          "char": "著",
+          "start": 202.5,
+          "end": 202.64
+        },
+        {
+          "char": "寂",
+          "start": 202.96,
+          "end": 203.23
+        },
+        {
+          "char": "寞",
+          "start": 203.36,
+          "end": 204.61
+        }
+      ]
+    },
+    {
+      "id": "line-48",
+      "start": 204.88,
+      "end": 208.34,
+      "text": "难道就不寂寞",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "难",
+          "start": 205.26,
+          "end": 205.45
+        },
+        {
+          "char": "道",
+          "start": 205.63,
+          "end": 205.78
+        },
+        {
+          "char": "就",
+          "start": 206.06,
+          "end": 206.21
+        },
+        {
+          "char": "不",
+          "start": 206.51,
+          "end": 206.7
+        },
+        {
+          "char": "寂",
+          "start": 206.99,
+          "end": 207.56
+        },
+        {
+          "char": "寞",
+          "start": 207.83,
+          "end": 208.39
+        }
+      ]
+    },
+    {
+      "id": "line-49",
+      "start": 208.34,
+      "end": 211.91,
+      "text": "爱本是泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "爱",
+          "start": 208.8,
+          "end": 208.93
+        },
+        {
+          "char": "本",
+          "start": 209.18,
+          "end": 209.3
+        },
+        {
+          "char": "是",
+          "start": 209.58,
+          "end": 209.69
+        },
+        {
+          "char": "泡",
+          "start": 210.02,
+          "end": 210.15
+        },
+        {
+          "char": "沫",
+          "start": 210.45,
+          "end": 211.74
+        }
+      ]
+    },
+    {
+      "id": "line-50",
+      "start": 211.91,
+      "end": 215.64,
+      "text": "怪我没有看破",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "怪",
+          "start": 212.27,
+          "end": 212.4
+        },
+        {
+          "char": "我",
+          "start": 212.65,
+          "end": 212.76
+        },
+        {
+          "char": "没",
+          "start": 213.06,
+          "end": 213.19
+        },
+        {
+          "char": "有",
+          "start": 213.54,
+          "end": 213.66
+        },
+        {
+          "char": "看",
+          "start": 214.04,
+          "end": 214.48
+        },
+        {
+          "char": "破",
+          "start": 214.92,
+          "end": 215.44
+        }
+      ]
+    },
+    {
+      "id": "line-51",
+      "start": 215.64,
+      "end": 219.94,
+      "text": "才如此难过",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "才",
+          "start": 215.92,
+          "end": 216.05
+        },
+        {
+          "char": "如",
+          "start": 216.29,
+          "end": 216.44
+        },
+        {
+          "char": "此",
+          "start": 216.69,
+          "end": 216.84
+        },
+        {
+          "char": "难",
+          "start": 217.12,
+          "end": 217.25
+        },
+        {
+          "char": "过",
+          "start": 217.6,
+          "end": 219.68
+        }
+      ]
+    },
+    {
+      "id": "line-52",
+      "start": 223.49,
+      "end": 227.01,
+      "text": "在雨下的泡沫",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "在",
+          "start": 223.77,
+          "end": 223.91
+        },
+        {
+          "char": "雨",
+          "start": 224.16,
+          "end": 224.29
+        },
+        {
+          "char": "下",
+          "start": 224.58,
+          "end": 224.74
+        },
+        {
+          "char": "的",
+          "start": 225.04,
+          "end": 225.18
+        },
+        {
+          "char": "泡",
+          "start": 225.51,
+          "end": 225.64
+        },
+        {
+          "char": "沫",
+          "start": 225.99,
+          "end": 226.98
+        }
+      ]
+    },
+    {
+      "id": "line-53",
+      "start": 227.01,
+      "end": 230.54,
+      "text": "一触就破",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "一",
+          "start": 227.37,
+          "end": 227.53
+        },
+        {
+          "char": "触",
+          "start": 227.74,
+          "end": 227.86
+        },
+        {
+          "char": "就",
+          "start": 228.15,
+          "end": 228.85
+        },
+        {
+          "char": "破",
+          "start": 229.02,
+          "end": 229.64
+        }
+      ]
+    },
+    {
+      "id": "line-54",
+      "start": 230.54,
+      "end": 234.04,
+      "text": "当初炽热的心",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "当",
+          "start": 230.88,
+          "end": 231.03
+        },
+        {
+          "char": "初",
+          "start": 231.23,
+          "end": 231.37
+        },
+        {
+          "char": "炽",
+          "start": 231.66,
+          "end": 231.8
+        },
+        {
+          "char": "热",
+          "start": 232.09,
+          "end": 232.24
+        },
+        {
+          "char": "的",
+          "start": 232.53,
+          "end": 232.67
+        },
+        {
+          "char": "心",
+          "start": 232.97,
+          "end": 233.97
+        }
+      ]
+    },
+    {
+      "id": "line-55",
+      "start": 234.04,
+      "end": 237.7,
+      "text": "早已沉没",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "早",
+          "start": 234.41,
+          "end": 234.56
+        },
+        {
+          "char": "已",
+          "start": 234.8,
+          "end": 234.95
+        },
+        {
+          "char": "沉",
+          "start": 235.31,
+          "end": 235.97
+        },
+        {
+          "char": "没",
+          "start": 236.15,
+          "end": 236.81
+        }
+      ]
+    },
+    {
+      "id": "line-56",
+      "start": 237.7,
+      "end": 241.27,
+      "text": "说什麼你爱我",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "说",
+          "start": 237.93,
+          "end": 238.11
+        },
+        {
+          "char": "什",
+          "start": 238.33,
+          "end": 238.46
+        },
+        {
+          "char": "麼",
+          "start": 238.7,
+          "end": 238.85
+        },
+        {
+          "char": "你",
+          "start": 239.15,
+          "end": 239.29
+        },
+        {
+          "char": "爱",
+          "start": 239.62,
+          "end": 239.78
+        },
+        {
+          "char": "我",
+          "start": 240.12,
+          "end": 241.03
+        }
+      ]
+    },
+    {
+      "id": "line-57",
+      "start": 241.27,
+      "end": 244.82,
+      "text": "如果骗我",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "如",
+          "start": 241.49,
+          "end": 241.64
+        },
+        {
+          "char": "果",
+          "start": 241.87,
+          "end": 242.02
+        },
+        {
+          "char": "骗",
+          "start": 242.34,
+          "end": 242.96
+        },
+        {
+          "char": "我",
+          "start": 243.22,
+          "end": 244.45
+        }
+      ]
+    },
+    {
+      "id": "line-58",
+      "start": 244.82,
+      "end": 251.61,
+      "text": "我宁愿你沉默",
+      "style": "base",
+      "effects": [
+        "fadeIn"
+      ],
+      "position": {
+        "x": 960.0,
+        "y": 540.0,
+        "anchor": "center"
+      },
+      "chars": [
+        {
+          "char": "我",
+          "start": 245.42,
+          "end": 245.54
+        },
+        {
+          "char": "宁",
+          "start": 245.76,
+          "end": 245.84
+        },
+        {
+          "char": "愿",
+          "start": 245.91,
+          "end": 246.03
+        },
+        {
+          "char": "你",
+          "start": 246.33,
+          "end": 246.44
+        },
+        {
+          "char": "沉",
+          "start": 246.72,
+          "end": 246.84
+        },
+        {
+          "char": "默",
+          "start": 247.15,
+          "end": 249.79
+        }
+      ]
+    }
+  ]
+}
