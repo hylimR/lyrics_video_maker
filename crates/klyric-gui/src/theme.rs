@@ -11,6 +11,21 @@ use iced::{Border, Color, Theme, Background};
 /// Font used for icons (Segoe UI Emoji)
 pub const ICON_FONT: iced::Font = iced::Font::with_name("Segoe UI Emoji");
 
+/// Icons for the application
+pub mod icons {
+    pub const FILE_OPEN: &str = "📁";
+    pub const FILE_SAVE: &str = "💾";
+    pub const EXPORT: &str = "📤";
+    pub const DEBUG: &str = "🐞";
+    pub const SETTINGS: &str = "⚙️";
+    pub const VISIBLE: &str = "👁";
+    pub const PREVIEW: &str = "📽️";
+    pub const INFO: &str = "ℹ";
+    pub const CHECK: &str = "✔";
+    pub const CROSS: &str = "✖";
+    pub const REFRESH: &str = "⟳";
+}
+
 /// Background colors (darkest to lightest)
 pub mod colors {
     use iced::Color;
