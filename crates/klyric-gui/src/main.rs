@@ -41,7 +41,18 @@ fn main() -> iced::Result {
             
             // Store the main window ID synchronously to avoid race condition in view()
             state.main_window = Some(id);
+
+            // Initial font scan task
+            let scan_task = iced::Task::perform(
+                async {
+                    tokio::task::spawn_blocking(utils::font_loader::scan_system_fonts).await.unwrap()
+                },
+                message::Message::FontScanComplete
+            );
             
-            (state, open_task.discard())
+            (state, iced::Task::batch(vec![
+                open_task.map(message::Message::MainWindowOpened),
+                scan_task
+            ]))
         })
 }

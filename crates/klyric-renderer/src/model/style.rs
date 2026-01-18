@@ -26,7 +26,13 @@ pub struct Style {
     /// Glow effect settings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub glow: Option<Glow>,
+    
+    /// Global transform
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transform: Option<Transform>,
 }
+
+use super::layout::Transform;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

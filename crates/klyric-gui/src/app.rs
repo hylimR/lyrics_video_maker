@@ -31,6 +31,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
 
         Message::FontScanComplete(fonts) => {
+            log::info!("Font scan complete. Found {} fonts.", fonts.len());
             state.available_fonts = fonts;
             state.font_scan_complete = true;
             
@@ -356,6 +357,13 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 let t = line.transform.get_or_insert_with(Default::default);
                 t.x = Some(v);
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let t = style.transform.get_or_insert_with(Default::default);
+                    t.x = Some(v);
+                    state.is_dirty = true;
+                 }
             }
         }
         Message::UnsetOffsetX => {
@@ -365,6 +373,12 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             } else if let Some(line) = state.current_line_mut() {
                 if let Some(t) = line.transform.as_mut() { t.x = None; }
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(t) = style.transform.as_mut() { t.x = None; }
+                    state.is_dirty = true;
+                 }
             }
         }
         
@@ -377,6 +391,13 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 let t = line.transform.get_or_insert_with(Default::default);
                 t.y = Some(v);
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let t = style.transform.get_or_insert_with(Default::default);
+                    t.y = Some(v);
+                    state.is_dirty = true;
+                 }
             }
         }
         Message::UnsetOffsetY => {
@@ -386,6 +407,12 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             } else if let Some(line) = state.current_line_mut() {
                 if let Some(t) = line.transform.as_mut() { t.y = None; }
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(t) = style.transform.as_mut() { t.y = None; }
+                    state.is_dirty = true;
+                 }
             }
         }
         
@@ -398,6 +425,13 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 let t = line.transform.get_or_insert_with(Default::default);
                 t.rotation = Some(v);
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let t = style.transform.get_or_insert_with(Default::default);
+                    t.rotation = Some(v);
+                    state.is_dirty = true;
+                 }
             }
         }
         Message::UnsetRotation => {
@@ -407,6 +441,12 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             } else if let Some(line) = state.current_line_mut() {
                 if let Some(t) = line.transform.as_mut() { t.rotation = None; }
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(t) = style.transform.as_mut() { t.rotation = None; }
+                    state.is_dirty = true;
+                 }
             }
         }
         
@@ -419,6 +459,13 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 let t = line.transform.get_or_insert_with(Default::default);
                 t.scale = Some(v);
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let t = style.transform.get_or_insert_with(Default::default);
+                    t.scale = Some(v);
+                    state.is_dirty = true;
+                 }
             }
         }
         Message::UnsetScale => {
@@ -428,6 +475,12 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             } else if let Some(line) = state.current_line_mut() {
                 if let Some(t) = line.transform.as_mut() { t.scale = None; }
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(t) = style.transform.as_mut() { t.scale = None; }
+                    state.is_dirty = true;
+                 }
             }
         }
         
@@ -440,6 +493,13 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 let t = line.transform.get_or_insert_with(Default::default);
                 t.opacity = Some(v);
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let t = style.transform.get_or_insert_with(Default::default);
+                    t.opacity = Some(v);
+                    state.is_dirty = true;
+                 }
             }
         }
         Message::UnsetOpacity => {
@@ -449,6 +509,12 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             } else if let Some(line) = state.current_line_mut() {
                 if let Some(t) = line.transform.as_mut() { t.opacity = None; }
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(t) = style.transform.as_mut() { t.opacity = None; }
+                    state.is_dirty = true;
+                 }
             }
         }
         
@@ -527,6 +593,13 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 let stroke = line.stroke.get_or_insert_with(Default::default);
                 stroke.color = Some(val);
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let s = style.stroke.get_or_insert_with(Default::default);
+                    s.color = Some(val);
+                    state.is_dirty = true;
+                 }
             }
         }
         Message::UnsetStrokeColor => {
@@ -536,6 +609,12 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             } else if let Some(line) = state.current_line_mut() {
                 if let Some(s) = line.stroke.as_mut() { s.color = None; }
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(s) = style.stroke.as_mut() { s.color = None; }
+                    state.is_dirty = true;
+                }
             }
         }
 
@@ -549,6 +628,13 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                     let s = line.stroke.get_or_insert_with(Default::default);
                     s.width = Some(num);
                     state.is_dirty = true;
+                } else {
+                     if let Some(doc) = &mut state.document {
+                        let style = doc.styles.entry("base".to_string()).or_default();
+                        let s = style.stroke.get_or_insert_with(Default::default);
+                        s.width = Some(num);
+                        state.is_dirty = true;
+                     }
                 }
              }
         }
@@ -559,6 +645,149 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             } else if let Some(line) = state.current_line_mut() {
                 if let Some(s) = line.stroke.as_mut() { s.width = None; }
                 state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(s) = style.stroke.as_mut() { s.width = None; }
+                    state.is_dirty = true;
+                }
+            }
+        }
+
+        // Shadow Handlers
+        Message::SetShadowColor(val) => {
+            if let Some(ch) = state.current_char_mut() {
+                let s = ch.shadow.get_or_insert_with(Default::default);
+                s.color = Some(val);
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                let s = line.shadow.get_or_insert_with(Default::default);
+                s.color = Some(val);
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let s = style.shadow.get_or_insert_with(Default::default);
+                    s.color = Some(val);
+                    state.is_dirty = true;
+                 }
+            }
+        }
+        Message::UnsetShadowColor => {
+             if let Some(ch) = state.current_char_mut() {
+                if let Some(s) = ch.shadow.as_mut() { s.color = None; }
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                if let Some(s) = line.shadow.as_mut() { s.color = None; }
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(s) = style.shadow.as_mut() { s.color = None; }
+                    state.is_dirty = true;
+                }
+            }
+        }
+
+        Message::SetShadowOffsetX(val) => {
+            if let Some(ch) = state.current_char_mut() {
+                let s = ch.shadow.get_or_insert_with(Default::default);
+                s.x = Some(val);
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                let s = line.shadow.get_or_insert_with(Default::default);
+                s.x = Some(val);
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let s = style.shadow.get_or_insert_with(Default::default);
+                    s.x = Some(val);
+                    state.is_dirty = true;
+                 }
+            }
+        }
+        Message::UnsetShadowOffsetX => {
+             if let Some(ch) = state.current_char_mut() {
+                if let Some(s) = ch.shadow.as_mut() { s.x = None; }
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                if let Some(s) = line.shadow.as_mut() { s.x = None; }
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(s) = style.shadow.as_mut() { s.x = None; }
+                    state.is_dirty = true;
+                }
+            }
+        }
+
+        Message::SetShadowOffsetY(val) => {
+            if let Some(ch) = state.current_char_mut() {
+                let s = ch.shadow.get_or_insert_with(Default::default);
+                s.y = Some(val);
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                let s = line.shadow.get_or_insert_with(Default::default);
+                s.y = Some(val);
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let s = style.shadow.get_or_insert_with(Default::default);
+                    s.y = Some(val);
+                    state.is_dirty = true;
+                 }
+            }
+        }
+        Message::UnsetShadowOffsetY => {
+             if let Some(ch) = state.current_char_mut() {
+                if let Some(s) = ch.shadow.as_mut() { s.y = None; }
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                if let Some(s) = line.shadow.as_mut() { s.y = None; }
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(s) = style.shadow.as_mut() { s.y = None; }
+                    state.is_dirty = true;
+                }
+            }
+        }
+
+        Message::SetShadowBlur(val) => {
+            if let Some(ch) = state.current_char_mut() {
+                let s = ch.shadow.get_or_insert_with(Default::default);
+                s.blur = Some(val);
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                let s = line.shadow.get_or_insert_with(Default::default);
+                s.blur = Some(val);
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let s = style.shadow.get_or_insert_with(Default::default);
+                    s.blur = Some(val);
+                    state.is_dirty = true;
+                 }
+            }
+        }
+        Message::UnsetShadowBlur => {
+             if let Some(ch) = state.current_char_mut() {
+                if let Some(s) = ch.shadow.as_mut() { s.blur = None; }
+                state.is_dirty = true;
+            } else if let Some(line) = state.current_line_mut() {
+                if let Some(s) = line.shadow.as_mut() { s.blur = None; }
+                state.is_dirty = true;
+            } else {
+                 if let Some(doc) = &mut state.document {
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    if let Some(s) = style.shadow.as_mut() { s.blur = None; }
+                    state.is_dirty = true;
+                }
             }
         }
         

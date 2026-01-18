@@ -182,7 +182,7 @@ pub fn smart_font_picker<'a>(
     // standard pick_list doesn't support "dimmed" text easily unless we wrap it or custom style.
     // For now, just show the value.
     
-    let selected = if is_overridden { value } else { Some(resolved) };
+    let selected = if is_overridden { value } else { Some(resolved.clone()) };
     
     let label_text = text(label).size(12).color(theme::colors::TEXT_SECONDARY);
     
@@ -196,11 +196,53 @@ pub fn smart_font_picker<'a>(
     )
     .text_size(12)
     .padding([4, 8])
+    .placeholder(if is_overridden { "" } else { &resolved }) // Use placeholder if not overridden for cleaner look or just for fallback
     .width(Length::Fill);
     
     let mut content = row![
         label_text.width(Length::Fixed(70.0)),
         picker,
+    ].align_y(Alignment::Center).spacing(8);
+
+    if is_overridden {
+        let reset_btn = button(text("↺").size(12))
+            .on_press(on_reset)
+            .style(theme::button_icon_style)
+            .padding(4);
+        content = content.push(reset_btn);
+    } else {
+        content = content.push(Space::with_width(Length::Fixed(24.0)));
+    }
+
+    content.into()
+}
+
+/// Renders a color input (text for now)
+pub fn smart_color_input<'a, F>(
+    label: &'a str,
+    value: Option<String>,
+    resolved: String,
+    _inherited: String,
+    on_change: F,
+    on_reset: Message,
+) -> Element<'a, Message> 
+where F: Fn(String) -> Message + 'a
+{
+    let is_overridden = value.is_some();
+    let display_text = if is_overridden { value.unwrap() } else { resolved };
+    
+    let label_text = text(label).size(12).color(theme::colors::TEXT_SECONDARY);
+
+    let input = text_input("#RRGGBB", &display_text)
+        .on_input(on_change)
+        .style(if is_overridden { theme::text_input_style } else { theme::text_input_inherit_style })
+        .size(12)
+        .padding([4, 8])
+        .width(Length::Fill);
+
+    let mut content = row![
+        label_text.width(Length::Fixed(70.0)),
+        input,
     ].align_y(Alignment::Center).spacing(8);
 
     if is_overridden {
@@ -309,9 +351,7 @@ fn content(state: &AppState) -> Element<'_, Message> {
     column![
         typography_section(state),
         Space::with_height(1),
-        // Color section merged? Or separate? 
-        // Let's put colors in typography for now
-        
+        shadow_section(state),
         Space::with_height(1),
         transform_section(state),
     ].spacing(1).into()
@@ -455,6 +495,18 @@ fn typography_section(state: &AppState) -> Element<'_, Message> {
             Space::with_height(10),
             text("STROKE").size(11).color(theme::colors::TEXT_SECONDARY),
              smart_number_input("Width", stroke_w_loc, stroke_w_res, stroke_w_inh, Message::SetStrokeWidth, Message::UnsetStrokeWidth),
+             
+              // Stroke Color
+             {
+                 let (s_col_loc, s_col_res, s_col_inh) = resolve_string(
+                    state,
+                    |c| c.stroke.as_ref().and_then(|s| s.color.clone()),
+                    |l| l.stroke.as_ref().and_then(|s| s.color.clone()),
+                    |s| s.stroke.as_ref().and_then(|s| s.color.clone()),
+                    "#000000"
+                );
+                smart_color_input("Color", s_col_loc, s_col_res, s_col_inh, Message::SetStrokeColor, Message::UnsetStrokeColor)
+             }
         ]
         .spacing(4)
     )
@@ -465,37 +517,35 @@ fn typography_section(state: &AppState) -> Element<'_, Message> {
 }
 
 fn transform_section(state: &AppState) -> Element<'_, Message> {
-    // Transform is only valid for Char/Line. Global has no transform in this context (yet).
-    if state.selected_line.is_none() {
-        return Space::with_height(0).into();
-    }
+    // Transform is valid for Global/Line/Char
+    
     
     let (x_loc, x_res, x_inh) = resolve_float(
         state,
         |c| c.transform.as_ref().and_then(|t| t.x),
         |l| l.transform.as_ref().and_then(|t| t.x),
-        |_| None,
+        |s| s.transform.as_ref().and_then(|t| t.x),
         0.0
     );
      let (y_loc, y_res, y_inh) = resolve_float(
         state,
         |c| c.transform.as_ref().and_then(|t| t.y),
         |l| l.transform.as_ref().and_then(|t| t.y),
-        |_| None,
+        |s| s.transform.as_ref().and_then(|t| t.y),
         0.0
     );
      let (rot_loc, rot_res, rot_inh) = resolve_float(
         state,
         |c| c.transform.as_ref().and_then(|t| t.rotation),
         |l| l.transform.as_ref().and_then(|t| t.rotation),
-        |_| None,
+        |s| s.transform.as_ref().and_then(|t| t.rotation),
         0.0
     );
      let (scale_loc, scale_res, scale_inh) = resolve_float(
         state,
         |c| c.transform.as_ref().and_then(|t| t.scale),
         |l| l.transform.as_ref().and_then(|t| t.scale),
-        |_| None,
+        |s| s.transform.as_ref().and_then(|t| t.scale),
         1.0
     );
 
@@ -503,7 +553,7 @@ fn transform_section(state: &AppState) -> Element<'_, Message> {
         state,
         |c| c.transform.as_ref().and_then(|t| t.opacity),
         |l| l.transform.as_ref().and_then(|t| t.opacity),
-        |_| None,
+        |s| s.transform.as_ref().and_then(|t| t.opacity),
         1.0
     );
 
@@ -516,6 +566,56 @@ fn transform_section(state: &AppState) -> Element<'_, Message> {
              smart_slider("Rotation", rot_loc, rot_res, rot_inh, -360.0..=360.0, 1.0, Message::SetRotation, Message::UnsetRotation),
              smart_slider("Scale", scale_loc, scale_res, scale_inh, 0.0..=5.0, 0.1, Message::SetScale, Message::UnsetScale),
              smart_slider("Opacity", op_loc, op_res, op_inh, 0.0..=1.0, 0.01, Message::SetOpacity, Message::UnsetOpacity),
+        ]
+        .spacing(4)
+    )
+    .style(theme::card_style)
+    .padding(12)
+    .width(Length::Fill)
+    .into()
+}
+
+fn shadow_section(state: &AppState) -> Element<'_, Message> {
+    let (col_loc, col_res, col_inh) = resolve_string(
+        state,
+        |c| c.shadow.as_ref().and_then(|s| s.color.clone()),
+        |l| l.shadow.as_ref().and_then(|s| s.color.clone()),
+        |s| s.shadow.as_ref().and_then(|s| s.color.clone()),
+        "#000000"
+    );
+
+    let (x_loc, x_res, x_inh) = resolve_float(
+        state,
+        |c| c.shadow.as_ref().and_then(|s| s.x),
+        |l| l.shadow.as_ref().and_then(|s| s.x),
+        |s| s.shadow.as_ref().and_then(|s| s.x),
+        0.0
+    );
+    
+    let (y_loc, y_res, y_inh) = resolve_float(
+        state,
+        |c| c.shadow.as_ref().and_then(|s| s.y),
+        |l| l.shadow.as_ref().and_then(|s| s.y),
+        |s| s.shadow.as_ref().and_then(|s| s.y),
+        0.0
+    );
+    
+    let (blur_loc, blur_res, blur_inh) = resolve_float(
+        state,
+        |c| c.shadow.as_ref().and_then(|s| s.blur),
+        |l| l.shadow.as_ref().and_then(|s| s.blur),
+        |s| s.shadow.as_ref().and_then(|s| s.blur),
+        0.0
+    );
+
+    container(
+        column![
+            text("SHADOW").size(11).color(theme::colors::TEXT_SECONDARY),
+            Space::with_height(10),
+            smart_color_input("Color", col_loc, col_res, col_inh, Message::SetShadowColor, Message::UnsetShadowColor),
+            smart_slider("Offset X", x_loc, x_res, x_inh, -20.0..=20.0, 0.5, Message::SetShadowOffsetX, Message::UnsetShadowOffsetX),
+            smart_slider("Offset Y", y_loc, y_res, y_inh, -20.0..=20.0, 0.5, Message::SetShadowOffsetY, Message::UnsetShadowOffsetY),
+            smart_slider("Blur", blur_loc, blur_res, blur_inh, 0.0..=20.0, 0.5, Message::SetShadowBlur, Message::UnsetShadowBlur),
         ]
         .spacing(4)
     )

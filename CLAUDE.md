@@ -8,6 +8,14 @@ A professional **Lyric Video Generator** built entirely in Rust. Creates high-qu
 
 **Stack:** Pure Rust with Iced GUI framework and skia-safe rendering.
 
+## Mandatory Checks
+
+> [!IMPORTANT]
+> **CRITICAL: You must run these checks before applying any code change.**
+> 1. **Compilation**: `cargo check --workspace`
+> 2. **Tests**: `cargo test --workspace`
+> **Failure to do so is a violation of protocol.**
+
 ## Development Commands
 
 ```bash

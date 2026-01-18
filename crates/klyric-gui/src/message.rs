@@ -57,6 +57,16 @@ pub enum Message {
     SetStrokeWidth(String),
     UnsetStrokeWidth,
     
+    // Shadow edits
+    SetShadowColor(String),
+    UnsetShadowColor,
+    SetShadowOffsetX(f32),
+    UnsetShadowOffsetX,
+    SetShadowOffsetY(f32),
+    UnsetShadowOffsetY,
+    SetShadowBlur(f32),
+    UnsetShadowBlur,
+    
     // K-Timing specific
     MarkSyllable,           // Space key pressed - mark current time
     AdvanceChar,            // Move to next character
