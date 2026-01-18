@@ -851,34 +851,34 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
     // Styled toolbar
     let toolbar = container(
         row![
-            button(theme::icon_text("📁", "Open"))
+            button(theme::icon_text(theme::icons::FILE_OPEN, "Open"))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::OpenFile),
-            button(theme::icon_text("💾", "Save"))
+            button(theme::icon_text(theme::icons::FILE_SAVE, "Save"))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::SaveFile),
             Space::with_width(Length::Fixed(16.0)),
             container(horizontal_rule(1)).width(Length::Fixed(1.0)).height(Length::Fixed(24.0)),
             Space::with_width(Length::Fixed(16.0)),
-            button(theme::icon_text("📤", "Export"))
+            button(theme::icon_text(theme::icons::EXPORT, "Export"))
                 .style(theme::primary_button_style)
                 .padding([6, 16])
                 .on_press(Message::OpenExportPanel),
             Space::with_width(Length::Fixed(12.0)),
             // Style button removed as panel is permanent
-            button(theme::icon_text("🐞", "Debug"))
+            button(theme::icon_text(theme::icons::DEBUG, "Debug"))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::OpenDebugWindow),  
             Space::with_width(Length::Fixed(12.0)),
-            button(theme::icon_text("⚙️", "Settings"))
+            button(theme::icon_text(theme::icons::SETTINGS, "Settings"))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::ToggleSettings),
             Space::with_width(Length::Fill),
-            button(theme::icon_text("👁", if state.show_preview { "Hide Preview" } else { "Preview" }))
+            button(theme::icon_text(theme::icons::VISIBLE, if state.show_preview { "Hide Preview" } else { "Preview" }))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::TogglePreview),
@@ -956,7 +956,7 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
         // Empty state with nice styling
         container(
             column![
-                theme::icon_sized("📽️", 64.0),
+                theme::icon_sized(theme::icons::PREVIEW, 64.0),
                 Space::with_height(Length::Fixed(16.0)),
                 text("No document loaded").size(24),
                 Space::with_height(Length::Fixed(8.0)),
@@ -988,10 +988,9 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
         column![
             toolbar,
             container(content)
-                .style(theme::content_area_style)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .padding([8, 0]),
+                .padding([8, 16]),
             timeline_bar,
         ]
     )
