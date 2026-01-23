@@ -1,90 +1,92 @@
 # Lyric Video Maker
 
-A professional **Lyric Video Generator** built with **React**, **Vite**, and **Tauri**.
-The application allows users to create high-quality lyric videos with advanced timing (K-Timing), per-character animations, and visual effects.
+A professional **Lyric Video Generator** built entirely in **Rust**. This tool allows users to create high-quality lyric videos with advanced timing (K-Timing), per-character animations, and visual effects, utilizing the **Iced** GUI framework and **Skia** rendering engine.
 
 ## 🚀 Project Overview
 
-**Core Architecture:**
-- **Hybrid Rendering:**
-  - **Preview:** Uses a custom **Rust** rendering engine compiled to **WASM** (`crates/klyric-renderer`) for high-performance browser preview.
-  - **Export:** Uses the same Rust crate natively via **Tauri** and **FFmpeg** for high-quality video encoding.
-- **State Sync:** Multi-window support (Editor/Preview) synchronized via `BroadcastChannel` and **Zustand**.
-- **Data Format:** Custom **KLyric v2.0** JSON format for rich styling and animation definition.
+**Core Features:**
+- **K-Timing Editor:** Precise per-character timing adjustments.
+- **Real-time Preview:** High-performance preview using a custom Rust renderer (`klyric-renderer`).
+- **Rich Styling:** CSS-like styling (stroke, shadow, fill, fonts) and particle effects.
+- **Native Export:** High-quality video encoding via FFmpeg.
+- **Cross-Platform:** Runs natively on Linux, Windows, and macOS.
 
 ## 🛠️ Tech Stack
 
 | Component | Technology | Description |
 |-----------|------------|-------------|
-| **Frontend** | React 19 + Vite | Core UI framework (Latest React) |
-| **State** | Zustand | Global state management with cross-tab sync |
-| **Preview** | Rust -> WASM | `klyric-renderer` compiled to WebAssembly |
-| **Desktop** | Tauri v2 + Rust | Native shell, file system, system integration |
-| **Video** | FFmpeg | Video encoding (via `ffmpeg-sidecar`) |
-| **Graphics** | tiny-skia | 2D CPU rendering (Rust) |
+| **GUI** | Iced 0.13 | Native, Elm-inspired GUI framework |
+| **Language** | Rust | Core logic, safety, and performance |
+| **Rendering** | Skia (via `skia-safe`) | Industry-standard 2D graphics engine |
+| **Audio** | Rodio | Audio playback and synchronization |
+| **Video** | FFmpeg | Video encoding pipeline |
+| **Format** | KLyric v2.0 | Custom JSON format for rich lyrics styling |
 
-## 📂 Directory Structure
+## 📂 Architecture
+
+The workspace is organized into three main crates:
 
 ```
-├── src/                        # Frontend Application
-│   ├── components/             # React UI Components
-│   │   ├── WasmPreview.jsx     # Main Preview Component (WASM consumer)
-│   │   └── ...
-│   ├── store/                  # Zustand Store (Sync logic)
-│   ├── wasm/                   # Compiled WASM Output
-│   └── ...
-├── src-tauri/                  # Tauri Backend
-│   ├── src/                    # Native Rust Logic
-│   └── Cargo.toml              # Native Dependencies
-├── crates/                     # Shared Rust Logic
-│   └── klyric-renderer/        # Core Rendering Engine (Lib)
-│       ├── src/
-│       │   ├── lib.rs          # Crate Entry (WASM/Native exports)
-│       │   ├── model.rs        # KLyric Data Models
-│       │   └── renderer.rs     # Rendering Logic (tiny-skia)
-│       └── Cargo.toml
-└── .agent/                     # Agent Context & Specs
-    └── specs/                  # KLyric Format Specs
+crates/
+├── klyric-gui/          # Main Desktop Application
+│   └── Built with Iced. Handles UI, state management, and user interaction.
+│
+├── klyric-renderer/     # Core Rendering Engine
+│   └── Pure Rust library. Handles parsing, layout, effects, and drawing.
+│   └── Supports dual targets: Native (skia-safe) and WASM (tiny-skia).
+│
+└── klyric-preview/      # Standalone Previewer
+    └── Lightweight OpenGL preview window using winit + glutin.
 ```
 
-## 🧠 Key Concepts
+## ⚡ Getting Started
 
-### KLyric Format (v2.0)
-The project relies on a custom JSON-based format for lyrics, defined in `crates/klyric-renderer/src/model.rs`.
-It supports:
-- **Hierarchical Structure:** Project -> Theme -> Styles -> Lines -> Syllables/Chars.
-- **Rich Styling:** CSS-like properties (font, fill, stroke, shadow).
-- **Animation:** Per-character effects (fadeIn, move, scale) and transitions.
+### Prerequisites
 
-### Rendering Pipeline
-1.  **Input:** User edits lyrics/styles in React UI.
-2.  **State:** Updates `useAppStore` (Zustand).
-3.  **Preview (WASM):**
-    - State -> JSON -> `KLyricWasmRenderer` (WASM).
-    - Rust parses JSON -> Layouts Text -> Renders to `Uint8ClampedArray`.
-    - JS puts image data onto `<canvas>`.
-4.  **Export (Native):**
-    - State -> JSON -> Tauri Command -> Rust Backend.
-    - Rust renders frames -> Pipes to FFmpeg -> Writes MP4.
+1.  **Rust Toolchain**: Install via [rustup.rs](https://rustup.rs).
+2.  **FFmpeg**: Must be installed and available in your system PATH.
+3.  **System Dependencies** (Linux only):
+    ```bash
+    sudo apt install libasound2-dev libglib2.0-dev libgtk-3-dev pkg-config clang lld ninja-build python3
+    ```
 
-### Master/Client Sync
-- **Master:** The main editor window. Handles logic, history (Undo/Redo), and broadcasts state.
-- **Client:** Preview windows. Receive state updates and request changes.
-- **Election:** Implemented in `src/store/useAppStore.js` using `localStorage` and heartbeats.
+### Running the Application
 
-## ⚡ Development Commands
+To run the main GUI editor:
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start Frontend (Browser mode) |
-| `npm run dev:tauri` | Start Desktop App (Tauri mode) |
-| `npm run build:wasm` | **Crucial:** Recompile Rust renderer to WASM |
-| `npm run build` | Build Frontend for production |
-| `npm run tauri:build` | Build Desktop Installer |
+```bash
+cargo run -p klyric-gui
+```
 
-## ⚠️ Guidelines & Best Practices
+### Building for Release
 
-- **WASM Changes:** If you modify `crates/klyric-renderer`, you **MUST** run `npm run build:wasm` to see changes in the preview.
-- **Schema Safety:** The Rust structs in `model.rs` are the source of truth for the KLyric format. Ensure JSON generated by JS matches this.
-- **Performance:** The WASM renderer re-renders the full frame. Avoid unnecessary re-renders in `WasmPreview.jsx`.
-- **Rust Style:** Follow standard Rust idioms. Use `cargo fmt` and `cargo clippy`.
+```bash
+cargo build --release --workspace
+```
+
+The binary will be available at `target/release/klyric`.
+
+## 🧪 Development
+
+### Running Tests
+
+We maintain comprehensive test coverage for the rendering engine.
+
+```bash
+# Run all tests
+cargo test --workspace
+
+# Run renderer tests only
+cargo test -p klyric-renderer
+```
+
+### Key Concepts
+
+- **AppState:** The single source of truth for the UI state, defined in `crates/klyric-gui/src/state.rs`.
+- **Message:** All user actions generate a `Message` enum variant, handled by the `update` function in `app.rs`.
+- **Renderer:** The `klyric-renderer` crate is independent of the GUI and can be used in headless environments.
+
+## ⚠️ Notes
+
+- **Font Discovery:** The application currently relies on embedded fonts or specific system fonts.
+- **WASM Support:** The renderer has a WASM target for potential web-based previews, utilizing `tiny-skia`.
