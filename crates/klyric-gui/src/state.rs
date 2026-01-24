@@ -2,6 +2,7 @@
 
 use klyric_renderer::model::KLyricDocumentV2;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use iced::widget::image;
 
@@ -9,7 +10,7 @@ use iced::widget::image;
 #[derive(Default)]
 pub struct AppState {
     /// Currently loaded document
-    pub document: Option<KLyricDocumentV2>,
+    pub document: Option<Arc<KLyricDocumentV2>>,
     
     /// Path to the currently loaded file
     pub file_path: Option<PathBuf>,
@@ -139,7 +140,7 @@ impl AppState {
                             file_path = Some(path);
                         }
                         
-                        document = Some(doc);
+                        document = Some(Arc::new(doc));
                         break;
                     }
                 }
@@ -206,7 +207,7 @@ impl AppState {
     /// Get mutable reference to current line
     pub fn current_line_mut(&mut self) -> Option<&mut klyric_renderer::model::Line> {
         let idx = self.selected_line?;
-        self.document.as_mut()?.lines.get_mut(idx)
+        Arc::make_mut(self.document.as_mut()?).lines.get_mut(idx)
     }
     
     /// Get mutable reference to current char
