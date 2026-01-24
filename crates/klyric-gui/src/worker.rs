@@ -11,7 +11,7 @@ use tokio::sync::mpsc as tokio_mpsc;
 
 pub enum RenderingRequest {
     Render {
-        doc: Box<KLyricDocumentV2>,
+        doc: Arc<KLyricDocumentV2>,
         time: f64,
         width: u32,
         height: u32,
@@ -29,11 +29,9 @@ pub struct RenderWorker {
 }
 
 impl RenderWorker {
-    pub fn request_frame(&self, doc: &KLyricDocumentV2, time: f64, width: u32, height: u32) {
-        // We box the doc to send it
-        let doc_box = Box::new(doc.clone());
+    pub fn request_frame(&self, doc: Arc<KLyricDocumentV2>, time: f64, width: u32, height: u32) {
         let _ = self.tx.send(RenderingRequest::Render { 
-            doc: doc_box, 
+            doc,
             time, 
             width, 
             height 

@@ -8,6 +8,7 @@ use iced::{
     keyboard,
 };
 use std::time::Duration;
+use std::sync::Arc;
 
 use crate::message::Message;
 use crate::state::AppState;
@@ -178,7 +179,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                  }
             }
 
-            state.document = Some(doc);
+            state.document = Some(Arc::new(doc));
             state.is_dirty = false;
             state.selected_line = Some(0);
             state.selected_char = None;
@@ -239,7 +240,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
         
         Message::AddLine => {
-            if let Some(ref mut doc) = state.document {
+            if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let new_line = klyric_renderer::model::Line::default();
                 doc.lines.push(new_line);
                 state.selected_line = Some(doc.lines.len() - 1);
@@ -248,7 +249,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
         
         Message::DeleteLine(idx) => {
-            if let Some(ref mut doc) = state.document {
+            if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 if idx < doc.lines.len() {
                     doc.lines.remove(idx);
                     state.selected_line = None;
@@ -358,7 +359,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 t.x = Some(v);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let t = style.transform.get_or_insert_with(Default::default);
                     t.x = Some(v);
@@ -374,7 +375,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(t) = line.transform.as_mut() { t.x = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(t) = style.transform.as_mut() { t.x = None; }
                     state.is_dirty = true;
@@ -392,7 +393,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 t.y = Some(v);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let t = style.transform.get_or_insert_with(Default::default);
                     t.y = Some(v);
@@ -408,7 +409,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(t) = line.transform.as_mut() { t.y = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(t) = style.transform.as_mut() { t.y = None; }
                     state.is_dirty = true;
@@ -426,7 +427,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 t.rotation = Some(v);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let t = style.transform.get_or_insert_with(Default::default);
                     t.rotation = Some(v);
@@ -442,7 +443,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(t) = line.transform.as_mut() { t.rotation = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(t) = style.transform.as_mut() { t.rotation = None; }
                     state.is_dirty = true;
@@ -460,7 +461,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 t.scale = Some(v);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let t = style.transform.get_or_insert_with(Default::default);
                     t.scale = Some(v);
@@ -476,7 +477,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(t) = line.transform.as_mut() { t.scale = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(t) = style.transform.as_mut() { t.scale = None; }
                     state.is_dirty = true;
@@ -494,7 +495,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 t.opacity = Some(v);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let t = style.transform.get_or_insert_with(Default::default);
                     t.opacity = Some(v);
@@ -510,7 +511,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(t) = line.transform.as_mut() { t.opacity = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(t) = style.transform.as_mut() { t.opacity = None; }
                     state.is_dirty = true;
@@ -529,7 +530,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 f.family = Some(val);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let f = style.font.get_or_insert_with(Default::default);
                     f.family = Some(val);
@@ -558,7 +559,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                     f.size = Some(num);
                     state.is_dirty = true;
                 } else {
-                    if let Some(doc) = &mut state.document {
+                    if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                         let style = doc.styles.entry("base".to_string()).or_default();
                         let f = style.font.get_or_insert_with(Default::default);
                         f.size = Some(num);
@@ -594,7 +595,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 stroke.color = Some(val);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let s = style.stroke.get_or_insert_with(Default::default);
                     s.color = Some(val);
@@ -610,7 +611,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(s) = line.stroke.as_mut() { s.color = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(s) = style.stroke.as_mut() { s.color = None; }
                     state.is_dirty = true;
@@ -629,7 +630,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                     s.width = Some(num);
                     state.is_dirty = true;
                 } else {
-                     if let Some(doc) = &mut state.document {
+                     if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                         let style = doc.styles.entry("base".to_string()).or_default();
                         let s = style.stroke.get_or_insert_with(Default::default);
                         s.width = Some(num);
@@ -646,7 +647,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(s) = line.stroke.as_mut() { s.width = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(s) = style.stroke.as_mut() { s.width = None; }
                     state.is_dirty = true;
@@ -665,7 +666,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 s.color = Some(val);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let s = style.shadow.get_or_insert_with(Default::default);
                     s.color = Some(val);
@@ -681,7 +682,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(s) = line.shadow.as_mut() { s.color = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(s) = style.shadow.as_mut() { s.color = None; }
                     state.is_dirty = true;
@@ -699,7 +700,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 s.x = Some(val);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let s = style.shadow.get_or_insert_with(Default::default);
                     s.x = Some(val);
@@ -715,7 +716,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(s) = line.shadow.as_mut() { s.x = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(s) = style.shadow.as_mut() { s.x = None; }
                     state.is_dirty = true;
@@ -733,7 +734,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 s.y = Some(val);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let s = style.shadow.get_or_insert_with(Default::default);
                     s.y = Some(val);
@@ -749,7 +750,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(s) = line.shadow.as_mut() { s.y = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(s) = style.shadow.as_mut() { s.y = None; }
                     state.is_dirty = true;
@@ -767,7 +768,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 s.blur = Some(val);
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let s = style.shadow.get_or_insert_with(Default::default);
                     s.blur = Some(val);
@@ -783,7 +784,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 if let Some(s) = line.shadow.as_mut() { s.blur = None; }
                 state.is_dirty = true;
             } else {
-                 if let Some(doc) = &mut state.document {
+                 if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     if let Some(s) = style.shadow.as_mut() { s.blur = None; }
                     state.is_dirty = true;
@@ -873,7 +874,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
 
         Message::SetGlobalFont(family) => {
-            if let Some(doc) = &mut state.document {
+            if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let style = doc.styles.entry("base".to_string()).or_default();
                 let f = style.font.get_or_insert_with(Default::default);
                 f.family = Some(family);
@@ -881,7 +882,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             }
         }
         Message::UnsetGlobalFont => {
-             if let Some(doc) = &mut state.document {
+             if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let style = doc.styles.entry("base".to_string()).or_default();
                 if let Some(f) = style.font.as_mut() { f.family = None; }
                 state.is_dirty = true;
@@ -890,7 +891,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
 
         Message::SetGlobalFontSize(val) => {
             if let Ok(size) = val.parse::<f32>() {
-                if let Some(doc) = &mut state.document {
+                if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                     let style = doc.styles.entry("base".to_string()).or_default();
                     let f = style.font.get_or_insert_with(Default::default);
                     f.size = Some(size);
@@ -899,7 +900,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             }
         }
         Message::UnsetGlobalFontSize => {
-             if let Some(doc) = &mut state.document {
+             if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let style = doc.styles.entry("base".to_string()).or_default();
                 if let Some(f) = style.font.as_mut() { f.size = None; }
                 state.is_dirty = true;
@@ -907,7 +908,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
 
         Message::SetInactiveColor(val) => {
-             if let Some(doc) = &mut state.document {
+             if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let style = doc.styles.entry("base".to_string()).or_default();
                 let c = style.colors.get_or_insert_with(Default::default);
                 let inactive = c.inactive.get_or_insert_with(Default::default);
@@ -916,7 +917,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             }
         }
         Message::UnsetInactiveColor => {
-             if let Some(doc) = &mut state.document {
+             if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let style = doc.styles.entry("base".to_string()).or_default();
                 if let Some(c) = style.colors.as_mut() {
                     if let Some(inactive) = c.inactive.as_mut() {
@@ -928,7 +929,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
 
         Message::SetActiveColor(val) => {
-             if let Some(doc) = &mut state.document {
+             if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let style = doc.styles.entry("base".to_string()).or_default();
                 let c = style.colors.get_or_insert_with(Default::default);
                 let active = c.active.get_or_insert_with(Default::default);
@@ -937,7 +938,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             }
         }
         Message::UnsetActiveColor => {
-            if let Some(doc) = &mut state.document {
+            if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let style = doc.styles.entry("base".to_string()).or_default();
                 if let Some(c) = style.colors.as_mut() {
                     if let Some(active) = c.active.as_mut() {
@@ -960,7 +961,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
 
         Message::SetEffect(_val) => {
-             if let Some(doc) = &mut state.document {
+             if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                 let _style = doc.styles.entry("base".to_string()).or_default();
                 // Effects are complex in V2, usually lists.
                 // Simplified string set:
@@ -972,7 +973,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         Message::UnsetEffect => {
              // Reset effects
              let selected_line_idx = state.selected_line;
-             if let Some(doc) = &mut state.document {
+             if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                  if let Some(idx) = selected_line_idx {
                      if let Some(line) = doc.lines.get_mut(idx) {
                          line.effects.clear();
@@ -988,7 +989,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
 
         Message::AddSampleEffect(effect_type) => {
             let selected_line_idx = state.selected_line;
-            if let Some(doc) = &mut state.document {
+            if let Some(doc) = &mut state.document { let doc = Arc::make_mut(doc);
                  // Generate unique effect name using timestamp
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -1376,7 +1377,7 @@ fn update_preview(state: &mut AppState) {
 
     // Use worker to request frame
     if let Some(conn) = &state.worker_connection {
-        conn.get_worker().request_frame(doc, state.playback.current_time, width, height);
+        conn.get_worker().request_frame(doc.clone(), state.playback.current_time, width, height);
     }
 }
 
