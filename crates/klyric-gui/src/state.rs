@@ -61,7 +61,7 @@ pub struct AppState {
     pub config: crate::config::AppConfig,
     
     /// Available system fonts
-    pub available_fonts: Vec<crate::utils::font_loader::FontInfo>,
+    pub available_fonts: Arc<Vec<crate::utils::font_loader::FontInfo>>,
     
     /// Whether settings modal is open
     pub show_settings: bool,
@@ -185,7 +185,7 @@ impl AppState {
             debug_window: None,
             config: crate::config::AppConfig::load(),
             show_settings: false,
-            available_fonts: Vec::new(),
+            available_fonts: Arc::new(Vec::new()),
             ..Default::default()
         }
     }

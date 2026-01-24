@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use walkdir::WalkDir;
 use ttf_parser::Face;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub struct FontInfo {
     pub name: String,
     pub path: PathBuf,

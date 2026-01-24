@@ -33,7 +33,7 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
 
         Message::FontScanComplete(fonts) => {
             log::info!("Font scan complete. Found {} fonts.", fonts.len());
-            state.available_fonts = fonts;
+            state.available_fonts = Arc::new(fonts);
             state.font_scan_complete = true;
             
             // If we have a configured font, try to load it now that we have paths

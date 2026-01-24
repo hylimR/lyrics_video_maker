@@ -258,14 +258,14 @@ impl Renderer {
             .and_then(|fs| fs.stroke.as_ref())
             .and_then(|s| parse_color(s));
             
-        let stroke_width = resolved_style.stroke.as_ref().map(|s| s.width).unwrap_or(0.0);
+        let stroke_width = resolved_style.stroke.as_ref().and_then(|s| s.width).unwrap_or(0.0);
         let default_stroke_color = resolved_style.stroke.as_ref()
             .and_then(|s| s.color.as_ref())
             .and_then(|s| parse_color(s));
             
         let shadow_opt = resolved_style.shadow.as_ref();
         let shadow_color = shadow_opt.and_then(|s| s.color.as_ref()).and_then(|c| parse_color(c));
-        let shadow_offset = shadow_opt.map(|s| (s.x, s.y)).unwrap_or((0.0, 0.0));
+        let shadow_offset = shadow_opt.map(|s| (s.x.unwrap_or(0.0), s.y.unwrap_or(0.0))).unwrap_or((0.0, 0.0));
 
         for glyph_info in glyphs {
             let char_data = &line.chars[glyph_info.char_index];
@@ -290,18 +290,19 @@ impl Renderer {
                 .or(line.font.as_ref())
                 .or(resolved_style.font.as_ref());
                 
-            let family = font_spec.map(|f| f.family.as_str()).unwrap_or("Noto Sans SC");
-            let size = font_spec.map(|f| f.size).unwrap_or(72.0);
+            let family = font_spec.and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
+            let size = font_spec.and_then(|f| f.size).unwrap_or(72.0);
             
+            // Just verify typeface exists, we don't need the object for draw_glyph_path as currently implemented
             let typeface = self.text_renderer.get_typeface(family)
                 .or_else(|| self.text_renderer.get_default_typeface());
                 
-            if let Some(tf) = typeface {
+            if let Some(_tf) = typeface {
                let render_x = lx + glyph_info.x;
                let render_y = ly + glyph_info.y;
                
                self.draw_glyph_path(
-                   pixmap, &tf, glyph_info.char, size, render_x, render_y,
+                   pixmap, family, glyph_info.char, size, render_x, render_y,
                    fill_color,
                    stroke_color, stroke_width,
                    shadow_color, shadow_offset
