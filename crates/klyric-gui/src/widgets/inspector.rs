@@ -3,13 +3,15 @@
 //! Manages Global > Line > Character hierarchy with inheritance support.
 
 use iced::{
-    widget::{column, container, row, scrollable, text, text_input, button, slider, pick_list, Space},
+    widget::{column, container, row, scrollable, text, text_input, button, slider, pick_list, Space, lazy},
     Element, Length, Alignment,
 };
 use crate::message::Message;
 use crate::state::AppState;
 use crate::theme;
-use klyric_renderer::model::Style;
+use crate::utils::refs::{DocumentRef, FontsRef};
+use crate::utils::font_loader::FontInfo;
+use klyric_renderer::model::{Style, document::KLyricDocumentV2, Line, Char};
 
 // --- Smart Input Component ---
 
@@ -260,23 +262,44 @@ where F: Fn(String) -> Message + 'a
 
 
 pub fn view(state: &AppState) -> Element<'_, Message> {
-    container(
-        column![
-            header(state),
-            Space::with_height(10),
-            scrollable(
-                content(state)
-            )
-        ]
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .padding(0) // Inner padding handled by sections
-    .style(theme::panel_style)
-    .into()
+    if let Some(doc) = &state.document {
+        let doc_ref = DocumentRef(doc.clone());
+        let fonts_ref = FontsRef(state.available_fonts.clone());
+        let selected_line = state.selected_line;
+        let selected_char = state.selected_char;
+
+        lazy(
+            (doc_ref, fonts_ref, selected_line, selected_char),
+            move |(doc_ref, fonts_ref, line_idx, char_idx)| {
+                let doc = &doc_ref.0;
+                let fonts = &fonts_ref.0;
+
+                container(
+                    column![
+                        header(doc, *line_idx, *char_idx),
+                        Space::with_height(10),
+                        scrollable(
+                            content(doc, *line_idx, *char_idx, fonts)
+                        )
+                    ]
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(0) // Inner padding handled by sections
+                .style(theme::panel_style)
+                .into()
+            }
+        ).into()
+    } else {
+        container(text("No document loaded"))
+            .style(theme::panel_style)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
 }
 
-fn header(state: &AppState) -> Element<'_, Message> {
+fn header(doc: &KLyricDocumentV2, line_idx: Option<usize>, char_idx: Option<usize>) -> Element<'_, Message> {
     // Breadcrumb: GLOBAL > LINE 01 > CHAR 05
     let mut parts: Vec<Element<Message>> = vec![];
     
@@ -284,7 +307,7 @@ fn header(state: &AppState) -> Element<'_, Message> {
     // To fix square box issue, avoid using bold font.
     // To make interactive, use buttons.
     
-    let global_active = state.selected_line.is_none();
+    let global_active = line_idx.is_none();
     
     parts.push(
         if global_active { 
@@ -301,11 +324,11 @@ fn header(state: &AppState) -> Element<'_, Message> {
         }
     );
 
-    if let Some(line_idx) = state.selected_line {
+    if let Some(l_idx) = line_idx {
         parts.push(text(" › ").size(11).color(theme::colors::TEXT_MUTED).into());
         
-        let line_active = state.selected_char.is_none();
-        let label = format!("LINE {:02}", line_idx + 1);
+        let line_active = char_idx.is_none();
+        let label = format!("LINE {:02}", l_idx + 1);
         
         parts.push(
             if line_active { 
@@ -315,7 +338,7 @@ fn header(state: &AppState) -> Element<'_, Message> {
                     .into()
             } else { 
                 button(text(label).size(11).color(theme::colors::TEXT_MUTED))
-                    .on_press(Message::SelectLine(line_idx))
+                    .on_press(Message::SelectLine(l_idx))
                     .style(theme::list_item_style)
                     .padding(0)
                     .into()
@@ -323,9 +346,14 @@ fn header(state: &AppState) -> Element<'_, Message> {
         );
     }
     
-    if let Some(_char_idx) = state.selected_char {
+    if let Some(c_idx) = char_idx {
         parts.push(text(" › ").size(11).color(theme::colors::TEXT_MUTED).into());
-        let char_text = state.current_char().map(|c| c.char.clone()).unwrap_or("?".to_string());
+
+        let char_text = if let Some(l_idx) = line_idx {
+            if let Some(line) = doc.lines.get(l_idx) {
+                line.chars.get(c_idx).map(|c| c.char.clone()).unwrap_or("?".to_string())
+            } else { "?".to_string() }
+        } else { "?".to_string() };
         
         // Char is always active if present (it's the leaf)
         parts.push(
@@ -347,15 +375,15 @@ fn header(state: &AppState) -> Element<'_, Message> {
         .into()
 }
 
-fn content(state: &AppState) -> Element<'_, Message> {
+fn content<'a>(doc: &KLyricDocumentV2, line_idx: Option<usize>, char_idx: Option<usize>, fonts: &Vec<FontInfo>) -> Element<'a, Message> {
     column![
-        typography_section(state),
+        typography_section(doc, line_idx, char_idx, fonts),
         Space::with_height(1),
-        shadow_section(state),
+        shadow_section(doc, line_idx, char_idx),
         Space::with_height(1),
-        effect_section(state),
+        effect_section(doc, line_idx, char_idx),
         Space::with_height(1),
-        transform_section(state),
+        transform_section(doc, line_idx, char_idx),
     ].spacing(1).into()
 }
 
@@ -363,31 +391,42 @@ fn content(state: &AppState) -> Element<'_, Message> {
 
 // Returns (local, resolved, inherited)
 fn resolve_float<F1, F2, F3>(
-    state: &AppState, 
+    doc: &KLyricDocumentV2,
+    line_idx: Option<usize>,
+    char_idx: Option<usize>,
     char_map: F1, 
     line_map: F2,
     global_map: F3,
     default: f32
 ) -> (Option<f32>, f32, f32) 
 where 
-    F1: Fn(&klyric_renderer::model::Char) -> Option<f32>,
-    F2: Fn(&klyric_renderer::model::Line) -> Option<f32>,
+    F1: Fn(&Char) -> Option<f32>,
+    F2: Fn(&Line) -> Option<f32>,
     F3: Fn(&Style) -> Option<f32>
 {
-    let doc = state.document.as_ref();
-    let style = doc.and_then(|d| d.styles.get("base"));
+    let style = doc.styles.get("base");
     let global_val = style.and_then(|s| global_map(s));
     let global_resolved = global_val.unwrap_or(default);
 
-    if let Some(ch) = state.current_char() {
-        let line_val = state.current_line().and_then(|l| line_map(l));
+    // Current Line
+    let current_line = line_idx.and_then(|idx| doc.lines.get(idx));
+
+    // Current Char
+    let current_char = if let Some(line) = current_line {
+        char_idx.and_then(|idx| line.chars.get(idx))
+    } else {
+        None
+    };
+
+    if let Some(ch) = current_char {
+        let line_val = current_line.and_then(|l| line_map(l));
         let inherited = line_val.unwrap_or(global_resolved);
         let local = char_map(ch);
         let resolved = local.unwrap_or(inherited);
         return (local, resolved, inherited);
     }
     
-    if let Some(line) = state.current_line() {
+    if let Some(line) = current_line {
         let inherited = global_resolved;
         let local = line_map(line);
         let resolved = local.unwrap_or(inherited);
@@ -399,31 +438,42 @@ where
 }
 
 fn resolve_string<F1, F2, F3>(
-    state: &AppState, 
+    doc: &KLyricDocumentV2,
+    line_idx: Option<usize>,
+    char_idx: Option<usize>,
     char_map: F1, 
     line_map: F2,
     global_map: F3,
     default: &str
 ) -> (Option<String>, String, String) 
 where 
-    F1: Fn(&klyric_renderer::model::Char) -> Option<String>,
-    F2: Fn(&klyric_renderer::model::Line) -> Option<String>,
+    F1: Fn(&Char) -> Option<String>,
+    F2: Fn(&Line) -> Option<String>,
     F3: Fn(&Style) -> Option<String>
 {
-    let doc = state.document.as_ref();
-    let style = doc.and_then(|d| d.styles.get("base"));
+    let style = doc.styles.get("base");
     let global_val = style.and_then(|s| global_map(s));
     let global_resolved = global_val.clone().unwrap_or(default.to_string());
 
-    if let Some(ch) = state.current_char() {
-        let line_val = state.current_line().and_then(|l| line_map(l));
+    // Current Line
+    let current_line = line_idx.and_then(|idx| doc.lines.get(idx));
+
+    // Current Char
+    let current_char = if let Some(line) = current_line {
+        char_idx.and_then(|idx| line.chars.get(idx))
+    } else {
+        None
+    };
+
+    if let Some(ch) = current_char {
+        let line_val = current_line.and_then(|l| line_map(l));
         let inherited = line_val.unwrap_or(global_resolved.clone());
         let local = char_map(ch);
         let resolved = local.clone().unwrap_or(inherited.clone());
         return (local, resolved, inherited);
     }
     
-    if let Some(line) = state.current_line() {
+    if let Some(line) = current_line {
         let inherited = global_resolved.clone();
         let local = line_map(line);
         let resolved = local.clone().unwrap_or(inherited.clone());
@@ -435,9 +485,9 @@ where
 }
 
 
-fn typography_section(state: &AppState) -> Element<'_, Message> {
+fn typography_section(doc: &KLyricDocumentV2, line_idx: Option<usize>, char_idx: Option<usize>, fonts: &Vec<FontInfo>) -> Element<'static, Message> {
     let (fam_loc, fam_res, fam_inh) = resolve_string(
-        state,
+        doc, line_idx, char_idx,
         |c| c.font.as_ref().and_then(|f| f.family.clone()),
         |l| l.font.as_ref().and_then(|f| f.family.clone()),
         |s| s.font.as_ref().and_then(|f| f.family.clone()),
@@ -445,46 +495,22 @@ fn typography_section(state: &AppState) -> Element<'_, Message> {
     );
 
     let (size_loc, size_res, size_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.font.as_ref().and_then(|f| f.size),
         |l| l.font.as_ref().and_then(|f| f.size),
         |s| s.font.as_ref().and_then(|f| f.size),
         72.0
     );
     
-    // Fill Color
-    // Note: Line/Char don't usually have partial fill override in Style struct?
-    // They have StyleOverride which has Font/Stroke/Shadow, but Colors is state-based in Style.
-    // Need to check Line/Char struct.
-    // Line has `style: Option<String>` (ref).
-    // Char has `style: Option<String>`.
-    // BUT they might not have direct color overrides?
-    // Actually, KLyric V2 `Char` struct has `font`, `stroke`, `shadow`.
-    // Does it have `fill`? No.
-    // The `Font` struct usually contains family/size/weight. Does it have color?
-    // No, `Font` is just metadata. `Style` has `colors`.
-    // Wait, so how do I change color of a specific character?
-    // In `line_renderer.rs`, it uses `style.colors.active.fill`.
-    // If Char doesn't have Color override, then I can't edit it PER CHAR yet?
-    // Let's check `Char` struct in `model/line.rs` again.
-    // It has `style: Option<String>`.
-    
-    // UPDATE: The user asked to access `Font`, `Stroke`, `Shadow`, `Glow`, `Transform`.
-    // `Stroke` has `color`.
-    // `Shadow` has `color`.
-    // What about FILL color?
-    // It seems missing from `Char` overrides in V2 unless `Style` override is used.
-    // I will skip Fill Color per-char for now, or just show Stroke.
-    
     let (stroke_w_loc, stroke_w_res, stroke_w_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.stroke.as_ref().and_then(|s| s.width),
         |l| l.stroke.as_ref().and_then(|s| s.width),
         |s| s.stroke.as_ref().and_then(|s| s.width),
         0.0
     );
 
-    let font_options: Vec<String> = state.available_fonts.iter().map(|f| f.name.clone()).collect();
+    let font_options: Vec<String> = fonts.iter().map(|f| f.name.clone()).collect();
 
     container(
         column![
@@ -501,7 +527,7 @@ fn typography_section(state: &AppState) -> Element<'_, Message> {
               // Stroke Color
              {
                  let (s_col_loc, s_col_res, s_col_inh) = resolve_string(
-                    state,
+                    doc, line_idx, char_idx,
                     |c| c.stroke.as_ref().and_then(|s| s.color.clone()),
                     |l| l.stroke.as_ref().and_then(|s| s.color.clone()),
                     |s| s.stroke.as_ref().and_then(|s| s.color.clone()),
@@ -518,33 +544,33 @@ fn typography_section(state: &AppState) -> Element<'_, Message> {
     .into()
 }
 
-fn transform_section(state: &AppState) -> Element<'_, Message> {
+fn transform_section(doc: &KLyricDocumentV2, line_idx: Option<usize>, char_idx: Option<usize>) -> Element<'static, Message> {
     // Transform is valid for Global/Line/Char
     
     
     let (x_loc, x_res, x_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.transform.as_ref().and_then(|t| t.x),
         |l| l.transform.as_ref().and_then(|t| t.x),
         |s| s.transform.as_ref().and_then(|t| t.x),
         0.0
     );
      let (y_loc, y_res, y_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.transform.as_ref().and_then(|t| t.y),
         |l| l.transform.as_ref().and_then(|t| t.y),
         |s| s.transform.as_ref().and_then(|t| t.y),
         0.0
     );
      let (rot_loc, rot_res, rot_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.transform.as_ref().and_then(|t| t.rotation),
         |l| l.transform.as_ref().and_then(|t| t.rotation),
         |s| s.transform.as_ref().and_then(|t| t.rotation),
         0.0
     );
      let (scale_loc, scale_res, scale_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.transform.as_ref().and_then(|t| t.scale),
         |l| l.transform.as_ref().and_then(|t| t.scale),
         |s| s.transform.as_ref().and_then(|t| t.scale),
@@ -552,7 +578,7 @@ fn transform_section(state: &AppState) -> Element<'_, Message> {
     );
 
      let (op_loc, op_res, op_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.transform.as_ref().and_then(|t| t.opacity),
         |l| l.transform.as_ref().and_then(|t| t.opacity),
         |s| s.transform.as_ref().and_then(|t| t.opacity),
@@ -577,9 +603,9 @@ fn transform_section(state: &AppState) -> Element<'_, Message> {
     .into()
 }
 
-fn shadow_section(state: &AppState) -> Element<'_, Message> {
+fn shadow_section(doc: &KLyricDocumentV2, line_idx: Option<usize>, char_idx: Option<usize>) -> Element<'static, Message> {
     let (col_loc, col_res, col_inh) = resolve_string(
-        state,
+        doc, line_idx, char_idx,
         |c| c.shadow.as_ref().and_then(|s| s.color.clone()),
         |l| l.shadow.as_ref().and_then(|s| s.color.clone()),
         |s| s.shadow.as_ref().and_then(|s| s.color.clone()),
@@ -587,7 +613,7 @@ fn shadow_section(state: &AppState) -> Element<'_, Message> {
     );
 
     let (x_loc, x_res, x_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.shadow.as_ref().and_then(|s| s.x),
         |l| l.shadow.as_ref().and_then(|s| s.x),
         |s| s.shadow.as_ref().and_then(|s| s.x),
@@ -595,7 +621,7 @@ fn shadow_section(state: &AppState) -> Element<'_, Message> {
     );
     
     let (y_loc, y_res, y_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.shadow.as_ref().and_then(|s| s.y),
         |l| l.shadow.as_ref().and_then(|s| s.y),
         |s| s.shadow.as_ref().and_then(|s| s.y),
@@ -603,7 +629,7 @@ fn shadow_section(state: &AppState) -> Element<'_, Message> {
     );
     
     let (blur_loc, blur_res, blur_inh) = resolve_float(
-        state,
+        doc, line_idx, char_idx,
         |c| c.shadow.as_ref().and_then(|s| s.blur),
         |l| l.shadow.as_ref().and_then(|s| s.blur),
         |s| s.shadow.as_ref().and_then(|s| s.blur),
@@ -626,19 +652,20 @@ fn shadow_section(state: &AppState) -> Element<'_, Message> {
     .width(Length::Fill)
     .into()
 }
-fn effect_section(state: &AppState) -> Element<'_, Message> {
+fn effect_section(doc: &KLyricDocumentV2, line_idx: Option<usize>, _char_idx: Option<usize>) -> Element<'static, Message> {
     // Show current effects count or simple list
     // And provide sample buttons
     
-    let effect_count = if let Some(line) = state.current_line() {
+    // Check line first
+    let current_line = line_idx.and_then(|idx| doc.lines.get(idx));
+
+    let effect_count = if let Some(line) = current_line {
         line.effects.len()
-    } else if let Some(doc) = &state.document {
+    } else {
         doc.styles.get("base")
            .and_then(|s| s.effects.as_ref())
            .map(|v| v.len())
            .unwrap_or(0)
-    } else {
-        0
     };
 
     let sample_effects = vec![
