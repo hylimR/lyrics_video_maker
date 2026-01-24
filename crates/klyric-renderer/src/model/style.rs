@@ -30,11 +30,15 @@ pub struct Style {
     /// Global transform
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transform: Option<Transform>,
+
+    /// Global effects (applied to all lines using this style)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<Vec<String>>,
 }
 
 use super::layout::Transform;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Font {
     /// Font family (comma-separated for fallbacks)
@@ -70,17 +74,7 @@ impl Font {
     pub fn letter_spacing_or_default(&self) -> f32 { self.letter_spacing.unwrap_or(0.0) }
 }
 
-impl Default for Font {
-    fn default() -> Self {
-        Self {
-            family: None,
-            size: None,
-            weight: None,
-            style: None,
-            letter_spacing: None,
-        }
-    }
-}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]

@@ -129,6 +129,7 @@ mod tests {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -166,6 +167,7 @@ mod tests {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         // Child style extends parent with additional stroke
@@ -179,6 +181,7 @@ mod tests {
             }),
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -225,6 +228,7 @@ mod tests {
                 blur: Some(4.0),
             }),
             glow: None,
+            transform: None,
         });
         
         // Middle style B extends C
@@ -241,6 +245,7 @@ mod tests {
             stroke: None,
             shadow: None, // Inherits from C
             glow: None,
+            transform: None,
         });
         
         // Top style A extends B
@@ -254,6 +259,7 @@ mod tests {
             }),
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -297,6 +303,7 @@ mod tests {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         styles.insert("override".to_string(), Style {
@@ -312,6 +319,7 @@ mod tests {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -344,6 +352,7 @@ mod tests {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         styles.insert("child".to_string(), Style {
@@ -357,6 +366,7 @@ mod tests {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -393,6 +403,7 @@ mod tests {
             }),
             shadow: None,
             glow: None,
+            transform: None,
         });
         
         // Child only adds glow, leaves font and stroke as None
@@ -407,6 +418,7 @@ mod tests {
                 blur: Some(10.0),
                 intensity: Some(0.8),
             }),
+            transform: None,
         });
         
         let doc = doc_with_styles(styles);

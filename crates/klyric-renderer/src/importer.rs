@@ -281,6 +281,8 @@ fn parse_srt(content: &str) -> Result<(Vec<ParsedLyric>, HashMap<String, String>
     
     // 00:00:20,000 --> 00:00:24,400
     let timestamp_regex = Regex::new(r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})").unwrap();
+    let html_tag_re = Regex::new(r"<[^>]+>").unwrap();
+    let ass_tag_re = Regex::new(r"\{[^}]+\}").unwrap();
 
     for block in blocks {
         let lines: Vec<&str> = block.lines().collect();
@@ -319,9 +321,9 @@ fn parse_srt(content: &str) -> Result<(Vec<ParsedLyric>, HashMap<String, String>
 
         let raw_text = text_lines.join(" ");
         // Strip HTML tags roughly
-        let text = Regex::new(r"<[^>]+>").unwrap().replace_all(&raw_text, "").to_string();
+        let text = html_tag_re.replace_all(&raw_text, "").to_string();
         // Strip ASS/SSA tags roughly
-        let text = Regex::new(r"\{[^}]+\}").unwrap().replace_all(&text, "").trim().to_string();
+        let text = ass_tag_re.replace_all(&text, "").trim().to_string();
 
         if !text.is_empty() {
             lyrics.push(ParsedLyric {
@@ -342,9 +344,11 @@ fn parse_ass(content: &str) -> Result<(Vec<ParsedLyric>, HashMap<String, String>
     let mut metadata = HashMap::new();
 
     // Script Info
+    let info_key_re = Regex::new(r"^(?i)(Title|Original Script|Original Translation|Script Updated By|Update Details|Artist):(.*)$").unwrap();
+
     if let Some(script_info) = Regex::new(r"(?i)\[Script Info\]([\s\S]*?)(?:\[|$)").unwrap().captures(content) {
         for line in script_info[1].lines() {
-            if let Some(cap) = Regex::new(r"^(?i)(Title|Original Script|Original Translation|Script Updated By|Update Details|Artist):(.*)$").unwrap().captures(line) {
+            if let Some(cap) = info_key_re.captures(line) {
                  metadata.insert(cap[1].to_lowercase().replace(" ", ""), cap[2].trim().to_string());
             }
         }
@@ -371,6 +375,10 @@ fn parse_ass(content: &str) -> Result<(Vec<ParsedLyric>, HashMap<String, String>
     let idx_start = format.iter().position(|r| r == "start").unwrap_or(usize::MAX);
     let idx_end = format.iter().position(|r| r == "end").unwrap_or(usize::MAX);
     let idx_text = format.iter().position(|r| r == "text").unwrap_or(usize::MAX);
+
+    let time_re = Regex::new(r"(\d+):(\d{2}):(\d{2})\.(\d{2})").unwrap();
+    let karaoke_re = Regex::new(r"\{\\[kK]f?\s*\d+\}").unwrap();
+    let strip_tag_re = Regex::new(r"\{[^}]*\}").unwrap();
 
     if idx_start == usize::MAX || idx_end == usize::MAX || idx_text == usize::MAX {
         return Ok((lyrics, metadata)); // Or error?
@@ -399,7 +407,7 @@ fn parse_ass(content: &str) -> Result<(Vec<ParsedLyric>, HashMap<String, String>
 
         // Parse Time: h:mm:ss.cc
         let parse_time = |t: &str| -> f64 {
-            if let Some(cap) = Regex::new(r"(\d+):(\d{2}):(\d{2})\.(\d{2})").unwrap().captures(t) {
+            if let Some(cap) = time_re.captures(t) {
                 let h: f64 = cap[1].parse().unwrap_or(0.0);
                 let m: f64 = cap[2].parse().unwrap_or(0.0);
                 let s: f64 = cap[3].parse().unwrap_or(0.0);
@@ -416,7 +424,7 @@ fn parse_ass(content: &str) -> Result<(Vec<ParsedLyric>, HashMap<String, String>
         if end_time <= start_time { continue; }
 
         let clean_raw = raw_text.replace(r"\N", " ").replace(r"\n", " ");
-        let has_karaoke = Regex::new(r"\{\\[kK]f?\s*\d+\}").unwrap().is_match(&clean_raw);
+        let has_karaoke = karaoke_re.is_match(&clean_raw);
         
         // Remove mut, we can just assign directly
         let text: String;
@@ -429,7 +437,7 @@ fn parse_ass(content: &str) -> Result<(Vec<ParsedLyric>, HashMap<String, String>
             syllables = Some(parsed_syllables);
         } else {
             // Strip tags
-            text = Regex::new(r"\{[^}]*\}").unwrap().replace_all(&clean_raw, "").replace(r"\N", " ").replace(r"\n", " ").trim().to_string();
+            text = strip_tag_re.replace_all(&clean_raw, "").replace(r"\N", " ").replace(r"\n", " ").trim().to_string();
             syllables = None;
         }
 
@@ -462,6 +470,7 @@ fn parse_karaoke_tags(raw_text: &str, _line_start: f64) -> (String, Vec<ParsedSy
     // We iterate through segments of text and tags
     // Regex to find all tags
     let re = Regex::new(r"(\{[^}]*\})?([^\{]*)").unwrap();
+    let k_re = Regex::new(r"\\([kK])f?(\d+)").unwrap();
     
     for cap in re.captures_iter(raw_text) {
         let tag_part = cap.get(1).map(|m| m.as_str()).unwrap_or("");
@@ -471,7 +480,7 @@ fn parse_karaoke_tags(raw_text: &str, _line_start: f64) -> (String, Vec<ParsedSy
         
         if !tag_part.is_empty() {
             // Check for karaoke tag {\k##} or {\K##} or {\kf##}
-            if let Some(k_match) = Regex::new(r"\\([kK])f?(\d+)").unwrap().captures(tag_part) {
+            if let Some(k_match) = k_re.captures(tag_part) {
                 let cs: f64 = k_match[2].parse().unwrap_or(0.0);
                 duration = cs / 100.0;
             }

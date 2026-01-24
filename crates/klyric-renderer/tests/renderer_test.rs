@@ -54,12 +54,10 @@ fn setup_renderer(width: u32, height: u32) -> (Renderer, Option<String>) {
             ("C:\\Windows\\Fonts\\calibri.ttf", "Calibri"),
         ];
         for (path, name) in font_paths {
-            if Path::new(path).exists() {
-                if renderer.text_renderer_mut().load_font(name, path).is_ok() {
-                    font_name = Some(name.to_string());
-                    println!("Loaded font '{}' from: {}", name, path);
-                    break;
-                }
+            if Path::new(path).exists() && renderer.text_renderer_mut().load_font(name, path).is_ok() {
+                font_name = Some(name.to_string());
+                println!("Loaded font '{}' from: {}", name, path);
+                break;
             }
         }
     }

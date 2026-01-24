@@ -44,7 +44,7 @@ pub enum Anchor {
     BottomRight,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Transform {
     /// X offset in pixels
@@ -96,24 +96,7 @@ pub struct Transform {
     pub hue_shift: Option<f32>,
 }
 
-impl Default for Transform {
-    fn default() -> Self {
-        Self {
-            x: None,
-            y: None,
-            rotation: None,
-            scale: None,
-            scale_x: None,
-            scale_y: None,
-            opacity: None,
-            anchor_x: None,
-            anchor_y: None,
-            blur: None,
-            glitch_offset: None,
-            hue_shift: None,
-        }
-    }
-}
+
 
 pub fn default_scale() -> f32 { 1.0 }
 pub fn default_opacity() -> f32 { 1.0 }

@@ -3,7 +3,7 @@
 //! Redesigned with custom dark theme styling
 
 use iced::{
-    widget::{column, container, row, scrollable, text, text_input, pick_list, Space},
+    widget::{button, column, container, row, scrollable, text, text_input, pick_list, Space},
     Element, Length, Alignment,
 };
 
@@ -145,7 +145,29 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                 Message::SetEffect,
             )
             .padding([8, 12]),
-        ]
+            Space::with_height(Length::Fixed(8.0)),
+            text("Sample Effects").size(12).color(theme::colors::TEXT_SECONDARY),
+            row![
+                button(text("Typewriter").size(10))
+                    .on_press(Message::AddSampleEffect("Typewriter".to_string()))
+                    .style(theme::secondary_button_style)
+                    .padding([4, 8]),
+                button(text("Stroke Reveal").size(10))
+                    .on_press(Message::AddSampleEffect("StrokeReveal".to_string()))
+                    .style(theme::secondary_button_style)
+                    .padding([4, 8]),
+            ].spacing(4),
+             row![
+                button(text("Particle Expr").size(10))
+                    .on_press(Message::AddSampleEffect("ParticleOverride".to_string()))
+                    .style(theme::secondary_button_style)
+                    .padding([4, 8]),
+                button(text("Clear Line Effects").size(10))
+                    .on_press(Message::UnsetEffect)
+                    .style(theme::secondary_button_style)
+                    .padding([4, 8]),
+            ].spacing(4),
+        ].spacing(4)
     )
     .style(theme::card_style)
     .padding(12)

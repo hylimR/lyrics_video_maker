@@ -14,9 +14,9 @@ mod tests {
 
     #[test]
     fn test_preset_from_str() {
-        assert_eq!(EffectPreset::from_str("rain"), Some(EffectPreset::Rain));
-        assert_eq!(EffectPreset::from_str("SPARKLE"), Some(EffectPreset::Sparkle));
-        assert_eq!(EffectPreset::from_str("unknown"), None);
+        assert_eq!("rain".parse::<EffectPreset>(), Ok(EffectPreset::Rain));
+        assert_eq!("SPARKLE".parse::<EffectPreset>(), Ok(EffectPreset::Sparkle));
+        assert!("unknown".parse::<EffectPreset>().is_err());
     }
 
     #[test]

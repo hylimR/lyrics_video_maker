@@ -9,6 +9,12 @@ pub struct ParticleRenderSystem {
     pub preset_factory: PresetFactory,
 }
 
+impl Default for ParticleRenderSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ParticleRenderSystem {
     pub fn new() -> Self {
         Self {
@@ -71,20 +77,18 @@ impl ParticleRenderSystem {
                      Some(e)
                  } else {
                      // Fallback: try enum parsing for legacy
-                     if let Some(p) = EffectPreset::from_str(&name) {
+                     if let Ok(p) = name.parse::<EffectPreset>() {
                          Some(self.preset_factory.create_from_enum(p, &bounds, seed))
                      } else {
                          None
                      }
                  }
-             } else if let Some(c) = config {
-                 Some(ParticleEmitter::new(
-                     c.clone(), 
+             } else {
+                 config.clone().map(|c| ParticleEmitter::new(
+                     c, 
                      bounds.spawn_center(), 
                      seed
                  ))
-             } else {
-                 None
              };
              
              if let Some(e) = emitter {

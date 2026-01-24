@@ -59,6 +59,8 @@ pub mod presets;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_renderer;
 
+pub mod expressions;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 

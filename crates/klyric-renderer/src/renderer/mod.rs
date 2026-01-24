@@ -56,7 +56,7 @@ impl Renderer {
         // 2. Find Active Lines and render
         if let Some(line) = doc.get_active_line(time) {
              // We need the line index to create unique keys
-             if let Some(line_idx) = doc.lines.iter().position(|l| l as *const _ == line as *const _) {
+             if let Some(line_idx) = doc.lines.iter().position(|l| std::ptr::eq(l, line)) {
                  let mut line_renderer = LineRenderer {
                      canvas,
                      doc,

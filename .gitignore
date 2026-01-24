@@ -33,10 +33,6 @@ src-tauri/gen/
 crates/*/target/
 **/*.rs.bk
 
-# AI & Agent Tools
-.agent/
-.gemini/
-
 # Video Exports
 *.mp4
 *.mov

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::particle::ParticleConfig;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Effect {
     /// Effect type
@@ -52,6 +52,10 @@ pub struct Effect {
     /// Custom particle configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub particle_config: Option<ParticleConfig>,
+
+    /// Dynamic particle overrides (property -> expression)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub particle_override: Option<HashMap<String, String>>,
     
     // Common
     /// Number of iterations
@@ -61,14 +65,17 @@ pub struct Effect {
 
 fn default_iterations() -> u32 { 1 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum EffectType {
+    #[default]
     Transition,
     Karaoke,
     Keyframe,
     Particle,
     Disintegrate,
+    Typewriter,   
+    StrokeReveal, 
     Custom,
 }
 
@@ -102,12 +109,10 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AnimatedValue {
-    /// Starting value
-    pub from: f64,
-    /// Ending value
-    pub to: f64,
+#[serde(untagged)]
+pub enum AnimatedValue {
+    Range { from: f64, to: f64 },
+    Expression(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

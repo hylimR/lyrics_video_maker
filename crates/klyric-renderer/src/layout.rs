@@ -120,6 +120,7 @@ mod tests {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         }
     }
 

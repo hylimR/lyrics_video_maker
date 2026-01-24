@@ -21,6 +21,7 @@ anyhow = "1"
 log = "0.4"
 regex = "1"
 chrono = "0.4"
+evalexpr = "13.1.0"
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -14,6 +14,11 @@ A professional **Lyric Video Generator** built entirely in Rust. Creates high-qu
 > **CRITICAL: You must run these checks before applying any code change.**
 > 1. **Compilation**: `cargo check --workspace`
 > 2. **Tests**: `cargo test --workspace`
+> 3. **Lints**: `cargo clippy --workspace -- -D warnings`
+>
+> **Post-Coding Review:**
+> You MUST run the `requesting-code-review` skill (or other relevant review skills like `m15-anti-pattern`) after every coding session to verify your work.
+>
 > **Failure to do so is a violation of protocol.**
 
 ## Development Commands

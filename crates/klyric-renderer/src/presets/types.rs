@@ -12,17 +12,19 @@ pub enum EffectPreset {
     GlowPulse,
 }
 
-impl EffectPreset {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl std::str::FromStr for EffectPreset {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "rain" => Some(Self::Rain),
-            "sparkle" => Some(Self::Sparkle),
-            "hearts" => Some(Self::Hearts),
-            "confetti" => Some(Self::Confetti),
-            "disintegrate" => Some(Self::Disintegrate),
-            "fire" => Some(Self::Fire),
-            "glow" | "glowpulse" | "glow_pulse" => Some(Self::GlowPulse),
-            _ => None,
+            "rain" => Ok(Self::Rain),
+            "sparkle" => Ok(Self::Sparkle),
+            "hearts" => Ok(Self::Hearts),
+            "confetti" => Ok(Self::Confetti),
+            "disintegrate" => Ok(Self::Disintegrate),
+            "fire" => Ok(Self::Fire),
+            "glow" | "glowpulse" | "glow_pulse" => Ok(Self::GlowPulse),
+            _ => Err(()),
         }
     }
 }

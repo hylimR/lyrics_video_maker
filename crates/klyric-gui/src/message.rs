@@ -87,6 +87,7 @@ pub enum Message {
     UnsetCompleteColor,
     SetEffect(String),
     UnsetEffect,
+    AddSampleEffect(String),
     
     // Line-level style edits
     SetLineStrokeWidth(String),

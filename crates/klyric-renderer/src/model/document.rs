@@ -91,4 +91,9 @@ fn merge_style(target: &mut Style, source: &Style) {
     if source.glow.is_some() {
         target.glow = source.glow.clone();
     }
+    if let Some(effects) = &source.effects {
+        // Effects override or append?
+        // Usually style inheritance overrides completely if present
+        target.effects = Some(effects.clone());
+    }
 }

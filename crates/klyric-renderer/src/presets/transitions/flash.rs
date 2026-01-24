@@ -29,5 +29,6 @@ pub fn flash_in(duration: f64) -> Effect {
         preset: None,
         particle_config: None,
         iterations: 1,
+        particle_override: None,
     }
 }

@@ -971,10 +971,112 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
         Message::UnsetEffect => {
              // Reset effects
+             let selected_line_idx = state.selected_line;
              if let Some(doc) = &mut state.document {
-                 let _style = doc.styles.entry("base".to_string()).or_default();
-                 // style.effects = None; // Field name?
+                 if let Some(idx) = selected_line_idx {
+                     if let Some(line) = doc.lines.get_mut(idx) {
+                         line.effects.clear();
+                     }
+                 } else {
+                     // Global
+                     let style = doc.styles.entry("base".to_string()).or_default();
+                     style.effects = None;
+                 }
+                 state.is_dirty = true;
              }
+        }
+
+        Message::AddSampleEffect(effect_type) => {
+            let selected_line_idx = state.selected_line;
+            if let Some(doc) = &mut state.document {
+                 // Generate unique effect name using timestamp
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis();
+                let unique_suffix = timestamp;
+                
+                let effect_name = match effect_type.as_str() {
+                    "Typewriter" => format!("typewriter_{}", unique_suffix),
+                    "StrokeReveal" => format!("stroke_reveal_{}", unique_suffix),
+                    "ParticleOverride" => format!("particle_{}", unique_suffix),
+                    _ => format!("unknown_{}", unique_suffix),
+                };
+
+                let effect = match effect_type.as_str() {
+                    "Typewriter" => klyric_renderer::model::Effect {
+                         effect_type: klyric_renderer::model::EffectType::Typewriter,
+                         trigger: klyric_renderer::model::EffectTrigger::Active,
+                         preset: None,
+                         duration: None, // Line duration
+                         easing: klyric_renderer::model::Easing::Linear,
+                         delay: 0.0,
+                         properties: std::collections::HashMap::from([
+                            ("opacity".to_string(), klyric_renderer::model::AnimatedValue::Range {
+                                from: 0.0, 
+                                to: 1.0
+                            }),
+                         ]),
+                         ..Default::default()
+                    },
+                    "StrokeReveal" => klyric_renderer::model::Effect {
+                        effect_type: klyric_renderer::model::EffectType::StrokeReveal,
+                        trigger: klyric_renderer::model::EffectTrigger::Active,
+                        preset: None,
+                        duration: None,
+                        easing: klyric_renderer::model::Easing::EaseInOutCubic,
+                        delay: 0.0,
+                         properties: std::collections::HashMap::from([
+                            ("progress".to_string(), klyric_renderer::model::AnimatedValue::Range {
+                                from: 0.0,
+                                to: 1.0
+                            }),
+                            ("opacity".to_string(), klyric_renderer::model::AnimatedValue::Range {
+                                from: 1.0, 
+                                to: 1.0
+                            }),
+                         ]),
+                        ..Default::default()
+                    },
+                    "ParticleOverride" => klyric_renderer::model::Effect {
+                        effect_type: klyric_renderer::model::EffectType::Particle,
+                        trigger: klyric_renderer::model::EffectTrigger::Active,
+                        preset: Some("sparkle".to_string()),
+                        duration: None,
+                        easing: klyric_renderer::model::Easing::Linear,
+                        delay: 0.0,
+                        properties: std::collections::HashMap::new(),
+                        particle_config: None,
+                        particle_override: Some(std::collections::HashMap::from([
+                            ("spawn_rate".to_string(), "$index * 2.0 + 10.0".to_string()),
+                            ("color".to_string(), "'#00FF00'".to_string()),
+                        ])),
+                        ..Default::default()
+                    },
+                    _ => Default::default(),
+                };
+                
+                // Add definition
+                doc.effects.insert(effect_name.clone(), effect);
+                
+                // Add to selected line OR key style (Global)
+                if let Some(idx) = selected_line_idx {
+                    if let Some(line) = doc.lines.get_mut(idx) {
+                        if !line.effects.contains(&effect_name) {
+                            line.effects.push(effect_name);
+                        }
+                    }
+                } else {
+                    // Global scope (base style)
+                    let style = doc.styles.entry("base".to_string()).or_default();
+                    let effects = style.effects.get_or_insert_with(Vec::new);
+                    if !effects.contains(&effect_name) {
+                        effects.push(effect_name);
+                    }
+                }
+                
+                state.is_dirty = true;
+            }
         }
         
         // Line-level style edits

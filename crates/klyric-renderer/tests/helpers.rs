@@ -37,6 +37,7 @@ pub fn get_pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> (u8, u8, u8, u8) 
 ///
 /// # Returns
 /// `true` if pixel matches within tolerance
+#[allow(clippy::too_many_arguments)]
 pub fn pixel_matches(
     pixels: &[u8],
     width: u32,
@@ -185,6 +186,7 @@ pub fn doc_with_line(text: &str, start: f64, end: f64) -> KLyricDocumentV2 {
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         },
     );
 
@@ -290,6 +292,7 @@ pub fn doc_with_multiple_lines(lines_data: &[(&str, f64, f64)]) -> KLyricDocumen
             stroke: None,
             shadow: None,
             glow: None,
+            transform: None,
         },
     );
 

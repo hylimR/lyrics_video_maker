@@ -1,5 +1,6 @@
-use super::model::{Easing, Effect, EffectType, Transform};
+use super::model::{Easing, Effect, AnimatedValue, EffectType, Transform};
 use std::f64::consts::PI;
+use crate::expressions::{ExpressionEvaluator, EvaluationContext};
 
 /// Engine for applying effects and calculating animations
 pub struct EffectEngine;
@@ -95,9 +96,72 @@ impl EffectEngine {
             
             match effect.effect_type {
                 EffectType::Transition => {
+                    // Create evaluation context for this frame
+                    let eval_ctx = EvaluationContext {
+                        t: current_time,
+                        progress: eased_progress,
+                        index: trigger_context.char_index,
+                        count: trigger_context.char_count,
+                        ..Default::default()
+                    };
+
                     for (prop, value) in &effect.properties {
-                        let current_val = Self::lerp(value.from, value.to, eased_progress);
-                        apply_property(&mut final_transform, prop, current_val);
+                        let val = match value {
+                            AnimatedValue::Range { from, to } => {
+                                Self::lerp(*from, *to, eased_progress)
+                            },
+                            AnimatedValue::Expression(expr) => {
+                                match ExpressionEvaluator::evaluate(expr, &eval_ctx) {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        log::warn!("Expression error in {}: {}", prop, e);
+                                        continue; 
+                                    }
+                                }
+                            }
+                        };
+                        apply_property(&mut final_transform, prop, val);
+                    }
+                },
+                EffectType::Typewriter => {
+                    // Hardcoded typewriter effect: 
+                    // Characters reveal one by one based on `delay` and `duration`
+                    // total_duration is effect.duration
+                    // char_delay = duration / count
+                    if let (Some(idx), Some(_count)) = (trigger_context.char_index, trigger_context.char_count) {
+                        // Use eased progress (0 to 1) to determine how many chars to show
+                        // If progress = 0.5, show first 50%
+                        // Actually, typewriter usually means discrete steps
+                        // We map progress 0..1 to index 0..count
+                        
+                        // We use the raw progress (linear) for the "cursor" position mostly, 
+                        // but allowing easing is nice too.
+                        let _visible_ratio = eased_progress;
+                        
+                        // If we are "in" the typewriter sequence
+                        // Let's assume we reveal from 0 to count
+                        // Threshold for this char = index / count
+                        // If visible_opacity < 1.0, we might fade in?
+                        // For classic typewriter, it's instant.
+                        
+                        // However, let's allow a small fade window if we wanted, but for now simple check:
+                         // Simple logic:
+                         // total chars = count
+                         // current visible count = progress * count
+                         // if index < visible_count, show.
+                         
+                         // But we also need to handle total duration.
+                        let total_chars = trigger_context.char_count.unwrap_or(1) as f64;
+                        let visible_limit = eased_progress * total_chars;
+                        
+                        // If index is 5, and visible_limit is 5.1 -> show
+                        // If index is 5, and visible_limit is 4.9 -> hide
+                        
+                        if (idx as f64) < visible_limit {
+                             apply_property(&mut final_transform, "opacity", 1.0);
+                        } else {
+                             apply_property(&mut final_transform, "opacity", 0.0);
+                        }
                     }
                 },
                 EffectType::Keyframe => {
@@ -208,6 +272,21 @@ pub struct TriggerContext {
     pub end_time: f64,
     pub current_time: f64,
     pub active: bool,
+    pub char_index: Option<usize>,
+    pub char_count: Option<usize>,
+}
+
+impl Default for TriggerContext {
+    fn default() -> Self {
+        Self {
+            start_time: 0.0,
+            end_time: 1.0,
+            current_time: 0.0,
+            active: false,
+            char_index: None,
+            char_count: None,
+        }
+    }
 }
 
 fn apply_property(transform: &mut Transform, prop: &str, value: f64) {
@@ -456,6 +535,7 @@ mod tests {
             preset: None,
             particle_config: None,
             iterations: 1,
+            particle_override: None,
         }
     }
 
@@ -465,6 +545,8 @@ mod tests {
             end_time: end,
             current_time: start,
             active: true,
+            char_index: None,
+            char_count: None,
         }
     }
 
@@ -554,7 +636,7 @@ mod tests {
         let ctx = make_context(0.0, 10.0);
         
         let mut props = HashMap::new();
-        props.insert("opacity".to_string(), AnimatedValue { from: 0.0, to: 1.0 });
+        props.insert("opacity".to_string(), AnimatedValue::Range { from: 0.0, to: 1.0 });
         
         let effect = Effect {
             effect_type: EffectType::Transition,
@@ -569,6 +651,7 @@ mod tests {
             preset: None,
             particle_config: None,
             iterations: 1,
+            particle_override: None,
         };
         
         // At t=1.0, progress is 0.5, so opacity should be 0.5

@@ -353,6 +353,8 @@ fn content(state: &AppState) -> Element<'_, Message> {
         Space::with_height(1),
         shadow_section(state),
         Space::with_height(1),
+        effect_section(state),
+        Space::with_height(1),
         transform_section(state),
     ].spacing(1).into()
 }
@@ -616,6 +618,61 @@ fn shadow_section(state: &AppState) -> Element<'_, Message> {
             smart_slider("Offset X", x_loc, x_res, x_inh, -20.0..=20.0, 0.5, Message::SetShadowOffsetX, Message::UnsetShadowOffsetX),
             smart_slider("Offset Y", y_loc, y_res, y_inh, -20.0..=20.0, 0.5, Message::SetShadowOffsetY, Message::UnsetShadowOffsetY),
             smart_slider("Blur", blur_loc, blur_res, blur_inh, 0.0..=20.0, 0.5, Message::SetShadowBlur, Message::UnsetShadowBlur),
+        ]
+        .spacing(4)
+    )
+    .style(theme::card_style)
+    .padding(12)
+    .width(Length::Fill)
+    .into()
+}
+fn effect_section(state: &AppState) -> Element<'_, Message> {
+    // Show current effects count or simple list
+    // And provide sample buttons
+    
+    let effect_count = if let Some(line) = state.current_line() {
+        line.effects.len()
+    } else if let Some(doc) = &state.document {
+        doc.styles.get("base")
+           .and_then(|s| s.effects.as_ref())
+           .map(|v| v.len())
+           .unwrap_or(0)
+    } else {
+        0
+    };
+
+    let sample_effects = vec![
+        "Typewriter".to_string(), 
+        "StrokeReveal".to_string(), 
+        "ParticleOverride".to_string()
+    ];
+
+    let content: Element<'_, Message> = row![
+        pick_list(
+            sample_effects,
+            None::<String>,
+            Message::AddSampleEffect
+        )
+        .placeholder("Add Effect...")
+        .text_size(12)
+        .padding([4, 8])
+        .width(Length::Fill),
+        
+        button(text("Clear").size(12))
+            .on_press(Message::UnsetEffect)
+            .style(theme::secondary_button_style)
+            .padding([4, 10]),
+    ].spacing(4).into();
+
+    container(
+        column![
+             row![
+                text("EFFECTS").size(11).color(theme::colors::TEXT_SECONDARY),
+                Space::with_width(Length::Fill),
+                text(format!("Count: {}", effect_count)).size(10).color(theme::colors::TEXT_MUTED),
+            ],
+            Space::with_height(10),
+            content,
         ]
         .spacing(4)
     )

@@ -45,7 +45,7 @@ impl<'a> LineRenderer<'a> {
         let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
         
         // Loop:
-        for (_idx, glyph) in glyphs.iter().enumerate() {
+        for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
              let char_absolute_y = base_y + glyph.y;
              
@@ -118,9 +118,20 @@ impl<'a> LineRenderer<'a> {
                          hue_shift: Some(line_transform.hue_shift_val() + char_transform.hue_shift_val()),
                      };
                      
-                     // ... Effect Resolution Logic (Same as before) ...
+                     // ... Effect Resolution Logic ...
                      let mut active_effects = Vec::new();
-                     for effect_name in &line.effects {
+                     
+                     // Collect all effect names: Style effects first (base), then Line effects (override/stack)
+                     // Note: We are just stacking them. If the user wants "Override", they might not want base effects?
+                     // But typically "Global > Line" means Global applies, then Line applies on top.
+                     let empty_vec = Vec::new();
+                     let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
+                     let line_effects = &line.effects;
+                     
+                     // Helper chain iterator
+                     let all_effects = style_effects.iter().chain(line_effects.iter());
+
+                     for effect_name in all_effects {
                         if let Some(effect) = self.doc.effects.get(effect_name) {
                             if let Some(preset_name) = &effect.preset {
                                 if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
@@ -143,6 +154,8 @@ impl<'a> LineRenderer<'a> {
                          end_time: line.end,
                          current_time: self.time,
                          active: true,
+                         char_index: Some(glyph.char_index),
+                         char_count: Some(glyphs.len()),
                      };
                      
                      let mut transform_effects = Vec::new();
@@ -169,7 +182,7 @@ impl<'a> LineRenderer<'a> {
                      if let Some((_name, effect)) = disintegrate_effects.first() {
                          if EffectEngine::should_trigger(effect, &ctx) {
                              disintegration_progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                             disintegration_progress = disintegration_progress.max(0.0).min(1.0);
+                             disintegration_progress = disintegration_progress.clamp(0.0, 1.0);
                          }
                      }
 
@@ -193,6 +206,16 @@ impl<'a> LineRenderer<'a> {
                      
                      self.canvas.save();
                      
+                     // Check for StrokeReveal
+                     let mut stroke_reveal_progress = None;
+                     for effect in &transform_effects {
+                         if effect.effect_type == EffectType::StrokeReveal && EffectEngine::should_trigger(effect, &ctx) {
+                             let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                             stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
+                             break; // Only one stroke reveal supported
+                         }
+                     }
+
                      // Apply Transforms
                      self.canvas.translate((draw_x + final_transform.x_val(), draw_y + final_transform.y_val()));
                      
@@ -203,6 +226,21 @@ impl<'a> LineRenderer<'a> {
                      self.canvas.rotate(final_transform.rotation_val(), None);
                      self.canvas.scale((final_transform.scale_val() * final_transform.scale_x_val(), final_transform.scale_val() * final_transform.scale_y_val()));
                      self.canvas.translate((-path_center_x, -path_center_y));
+                     
+                     // Modify path if StrokeReveal is active
+                     let draw_path = if let Some(progress) = stroke_reveal_progress {
+                         let mut measure = skia_safe::PathMeasure::new(&path, false, None);
+                         let length = measure.length();
+                         if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
+                             partial_path
+                         } else {
+                             path.clone()
+                         }
+                     } else {
+                         path.clone() // Clone for drawing to avoid borrow issues? path is local
+                     };
+                     let path = &draw_path; // Re-bind path to modified version if needed
+
                      
                      // --- 1. SHADOW ---
                      let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) { Some(c) } 
@@ -225,7 +263,7 @@ impl<'a> LineRenderer<'a> {
                                  
                                  self.canvas.save();
                                  self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
-                                 self.canvas.draw_path(&path, &shadow_paint);
+                                 self.canvas.draw_path(path, &shadow_paint);
                                  self.canvas.restore();
                              }
                          }
@@ -251,7 +289,7 @@ impl<'a> LineRenderer<'a> {
                                          stroke_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
                                      }
 
-                                     self.canvas.draw_path(&path, &stroke_paint);
+                                     self.canvas.draw_path(path, &stroke_paint);
                                  }
                              }
                          }
@@ -280,20 +318,20 @@ impl<'a> LineRenderer<'a> {
 
                              self.canvas.save();
                              self.canvas.translate((-offset, -offset));
-                             self.canvas.draw_path(&path, &r_paint);
+                             self.canvas.draw_path(path, &r_paint);
                              self.canvas.restore();
 
                              self.canvas.save();
                              self.canvas.translate((offset, -offset)); // Different offset for G? Or just offset?
                              // Standard Chromatic Aberration: R: -off, B: +off, G: 0
-                             self.canvas.draw_path(&path, &g_paint); // Maybe G is at 0?
+                             self.canvas.draw_path(path, &g_paint); // Maybe G is at 0?
                              // Actually let's do: R at -offset, B at +offset, G at 0.
                              // But let's try to match glitch logic: jittery offsets.
                              self.canvas.restore();
 
                              self.canvas.save();
                              self.canvas.translate((offset, offset));
-                             self.canvas.draw_path(&path, &b_paint);
+                             self.canvas.draw_path(path, &b_paint);
                              self.canvas.restore();
 
                              // Re-draw original white core? No, RGB additive makes white.
@@ -303,7 +341,7 @@ impl<'a> LineRenderer<'a> {
 
                          } else {
                              // Normal Draw
-                             self.canvas.draw_path(&path, &paint);
+                             self.canvas.draw_path(path, &paint);
                          }
                      }
                      
@@ -314,7 +352,7 @@ impl<'a> LineRenderer<'a> {
                          if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
 
                          let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
-                         if progress < 0.0 || progress > 1.0 { continue; }
+                         if !(0.0..=1.0).contains(&progress) { continue; }
 
                          let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
                          self.active_keys.insert(key.clone());
@@ -373,7 +411,7 @@ impl<'a> LineRenderer<'a> {
                              let mut cap_paint = Paint::default();
                              cap_paint.set_color(Color::WHITE);
                              cap_paint.set_anti_alias(true);
-                             c.draw_path(&path, &cap_paint);
+                             c.draw_path(path, &cap_paint);
                              
                              let image = surface.image_snapshot();
 
@@ -398,60 +436,22 @@ impl<'a> LineRenderer<'a> {
                      }
                      
                      // --- PARTICLE SPAWNING ---
-                     // INJECT DEFAULT SPARKLE EFFECT (User Request)
-                     let default_sparkle = crate::model::Effect {
-                         // Removed 'id' and 'params' as they don't exist in Effect struct
-                         effect_type: crate::model::EffectType::Particle,
-                         trigger: crate::model::EffectTrigger::Always, 
-                         preset: None, // Use custom config instead
-                         particle_config: Some(crate::particle::ParticleConfig {
-                             count: 50, // Capacity hint
-                             spawn_rate: 30.0, // Continuous emission!
-                             lifetime: crate::particle::RangeValue::Range(0.5, 1.2),
-                             speed: crate::particle::RangeValue::Range(30.0, 80.0),
-                             direction: crate::particle::RangeValue::Range(0.0, 360.0),
-                             spread: 0.0,
-                             start_size: crate::particle::RangeValue::Range(3.0, 6.0),
-                             end_size: crate::particle::RangeValue::Single(0.0),
-                             rotation_speed: crate::particle::RangeValue::Range(-180.0, 180.0),
-                             color: "#FFFF88".to_string(),
-                             shape: crate::particle::ParticleShape::Circle,
-                             physics: crate::particle::ParticlePhysics {
-                                 gravity: -20.0, // Slight float up
-                                 drag: 0.5,
-                                 wind_x: 0.0,
-                                 wind_y: 0.0,
-                             },
-                             blend_mode: crate::particle::BlendMode::Additive,
-                         }),
-                         duration: None,
-                         easing: crate::model::Easing::Linear,
-                         delay: 0.0,
-                         properties: std::collections::HashMap::new(),
-                         mode: None,
-                         direction: None,
-                         keyframes: Vec::new(),
-                         iterations: 1,
-                     };
-                     
-                     // Helper context for default effect
-                     let default_ctx = ctx.clone(); 
-                     
-                     // Helper: We need to adapt the name type.
-                     // The existing loop `for (name, effect) in particle_effects` iterates over `&String` keys.
-                     // We can't mix `&String` and `&str` in the same Vec.
-                     // IMPORTANT: We need to see how particle_effects is defined above.
-                     // It comes from `active_effects`.
-                     // Let's defer adding it to the SAME vector. We can just iterate it separately!
-                     // Much safer rust-wise.
-
-                     // 1. Process standard particle effects
+                     // Process standard particle effects
                      for (name, effect) in particle_effects {
                          if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
                          
                          let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
-                         if progress < 0.0 || progress > 1.0 { continue; }
+                         if !(0.0..=1.0).contains(&progress) { continue; }
                          
+                         // Evaluation Context for Particles
+                         let eval_ctx = crate::expressions::EvaluationContext {
+                             t: self.time,
+                             progress,
+                             index: Some(glyph.char_index),
+                             count: Some(glyphs.len()),
+                             ..Default::default()
+                         };
+
                          let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
                          self.active_keys.insert(key.clone());
                          
@@ -464,49 +464,19 @@ impl<'a> LineRenderer<'a> {
                          
                          let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
                          
+                         // Clone config and apply overrides
+                         let mut p_config = effect.particle_config.clone();
+                         if let (Some(config), Some(overrides)) = (&mut p_config, &effect.particle_override) {
+                             crate::particle::config::apply_particle_overrides(config, overrides, &eval_ctx);
+                         }
+
                          self.particle_system.ensure_emitter(
                              key, 
                              effect.preset.clone(), 
-                             effect.particle_config.clone(), 
+                             p_config, 
                              bounds_rect, 
                              seed
                          );
-                     }
-
-                     // 2. Process our injected default (separately to avoid type hell)
-                     {
-                         let effect = &default_sparkle;
-                         // Always trigger (or check Trigger if configured)
-                         // We set Trigger::Always so should_trigger is likely true, but calculate_progress needs calling.
-                         // But for Always/Active, progress might just be 0-1 based on line time?
-                         // Actually `EffectEngine::should_trigger` handles Always.
-                         if EffectEngine::should_trigger(effect, &default_ctx) {
-                             // Progress? For particle emitters, progress usually determines chaos/lifetime? 
-                             // Or just "is it active".
-                             // Let's assume active.
-                             
-                             let name = "global_sparkle";
-                             let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
-                             self.active_keys.insert(key.clone());
-                             
-                             let bounds_rect = CharBounds {
-                                 x: draw_x + final_transform.x_val() + bounds.left, 
-                                 y: draw_y + final_transform.y_val() + bounds.top, 
-                                 width: w * final_transform.scale_val(), 
-                                 height: h * final_transform.scale_val(),
-                             };
-                             
-                             // Offset seed slightly so it doesn't match other effects exactly
-                             let seed = (line_idx * 1000 + glyph.char_index * 100 + 9999) as u64;
-                             
-                             self.particle_system.ensure_emitter(
-                                 key, 
-                                 effect.preset.clone(), 
-                                 effect.particle_config.clone(), 
-                                 bounds_rect, 
-                                 seed
-                             );
-                         }
                      }
                  }
              }

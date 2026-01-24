@@ -13,7 +13,7 @@ impl Rng {
         Self { state: seed }
     }
 
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         // LCG parameters from Numerical Recipes
         self.state = self.state.wrapping_mul(6364136223846793005).wrapping_add(1);
         self.state
@@ -21,7 +21,7 @@ impl Rng {
 
     /// Random f32 in [0, 1)
     pub fn next_f32(&mut self) -> f32 {
-        (self.next() >> 40) as f32 / (1u64 << 24) as f32
+        (self.next_u64() >> 40) as f32 / (1u64 << 24) as f32
     }
 
     /// Random f32 in [min, max)
@@ -51,7 +51,7 @@ mod tests {
         let mut rng2 = Rng::new(12345);
         
         for _ in 0..100 {
-            assert_eq!(rng1.next(), rng2.next());
+            assert_eq!(rng1.next_u64(), rng2.next_u64());
         }
     }
 
@@ -60,7 +60,7 @@ mod tests {
         let mut rng = Rng::new(42);
         for _ in 0..100 {
             let val = rng.range(0.0, 100.0);
-            assert!(val >= 0.0 && val < 100.0);
+            assert!((0.0..100.0).contains(&val));
         }
     }
 }

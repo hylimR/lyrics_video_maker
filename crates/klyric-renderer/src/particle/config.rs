@@ -139,6 +139,44 @@ impl SpawnPattern {
     }
 }
 
+/// Apply expression overrides to particle configuration
+pub fn apply_particle_overrides(
+    config: &mut ParticleConfig, 
+    overrides: &std::collections::HashMap<String, String>,
+    ctx: &crate::expressions::EvaluationContext
+) {
+    use crate::expressions::ExpressionEvaluator;
+
+    for (key, expr_str) in overrides {
+        if let Ok(val) = ExpressionEvaluator::evaluate(expr_str, ctx) {
+            match key.as_str() {
+                "count" => config.count = val as u32,
+                "spawn_rate" | "rate" => config.spawn_rate = val as f32,
+                "spread" => config.spread = val as f32,
+                
+                // Ranges (set as Single or specific min/max)
+                "speed" => config.speed = RangeValue::Single(val as f32),
+                "speed.min" => match &mut config.speed { RangeValue::Range(min, _) | RangeValue::Single(min) => *min = val as f32, },
+                "speed.max" => if let RangeValue::Range(_, max) = &mut config.speed { *max = val as f32; } else { config.speed = RangeValue::Range(val as f32, val as f32); },
+                
+                "lifetime" => config.lifetime = RangeValue::Single(val as f32),
+                "direction" => config.direction = RangeValue::Single(val as f32),
+                "size" | "start_size" => config.start_size = RangeValue::Single(val as f32),
+                "end_size" => config.end_size = RangeValue::Single(val as f32),
+                "rotation_speed" => config.rotation_speed = RangeValue::Single(val as f32),
+                
+                // Physics
+                "gravity" => config.physics.gravity = val as f32,
+                "drag" => config.physics.drag = val as f32,
+                "wind_x" => config.physics.wind_x = val as f32,
+                "wind_y" => config.physics.wind_y = val as f32,
+                
+                _ => {}
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,7 +197,7 @@ mod tests {
         let mut rng = Rng::new(42);
         for _ in 0..10 {
             let (x, y) = pattern.sample(&mut rng);
-            assert!(x >= 0.0 && x <= 100.0);
+            assert!((0.0..=100.0).contains(&x));
             assert_eq!(y, 0.0);
         }
     }
@@ -173,6 +211,6 @@ mod tests {
         
         let range = RangeValue::Range(0.0, 100.0);
         let val = range.sample(&mut rng);
-        assert!(val >= 0.0 && val <= 100.0);
+        assert!((0.0..=100.0).contains(&val));
     }
 }

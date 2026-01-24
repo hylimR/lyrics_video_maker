@@ -16,6 +16,12 @@ pub struct TextRenderer {
     default_typeface: Option<Typeface>,
 }
 
+impl Default for TextRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TextRenderer {
     pub fn new() -> Self {
         Self {
@@ -85,7 +91,7 @@ impl TextRenderer {
         
         // width
         let _glyph_id = font.unichar_to_glyph(ch as i32);
-        let width = font.measure_text(&ch.to_string(), None).0; // simple measure
+        let width = font.measure_text(ch.to_string(), None).0; // simple measure
         
         // height? 
         let metrics = font.metrics().1;
@@ -236,7 +242,7 @@ mod tests {
         // We don't assert because font availability varies
         if let Some(typeface) = result {
             // Verify we got a valid typeface
-            assert!(typeface.family_name().len() > 0);
+            assert!(!typeface.family_name().is_empty());
         }
     }
 

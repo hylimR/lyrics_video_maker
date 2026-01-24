@@ -11,9 +11,9 @@ pub fn slide(duration: f64, direction: Direction) -> Effect {
     };
 
     let mut properties = HashMap::new();
-    properties.insert("x".to_string(), AnimatedValue { from: start_x, to: 0.0 });
-    properties.insert("y".to_string(), AnimatedValue { from: start_y, to: 0.0 });
-    properties.insert("opacity".to_string(), AnimatedValue { from: 0.0, to: 1.0 });
+    properties.insert("x".to_string(), AnimatedValue::Range { from: start_x, to: 0.0 });
+    properties.insert("y".to_string(), AnimatedValue::Range { from: start_y, to: 0.0 });
+    properties.insert("opacity".to_string(), AnimatedValue::Range { from: 0.0, to: 1.0 });
 
     Effect {
         effect_type: EffectType::Transition,
@@ -28,5 +28,6 @@ pub fn slide(duration: f64, direction: Direction) -> Effect {
         preset: None,
         particle_config: None,
         iterations: 1,
+        particle_override: None,
     }
 }
