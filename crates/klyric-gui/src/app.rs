@@ -302,13 +302,16 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                     match conn.try_recv() {
                         Ok(crate::worker::RenderingResponse::FrameRendered(handle)) => {
                             state.preview_handle = Some(handle);
+                            state.pending_frame = false;
                         }
-                        Ok(crate::worker::RenderingResponse::Error(_e)) => {
-                             // Limit error logs to avoid spam
+                        Ok(crate::worker::RenderingResponse::Error(e)) => {
+                             log::error!("Preview error: {}", e);
+                             state.pending_frame = false;
                         }
                         Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
                         Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                              log::error!("Preview worker disconnected unexpectedly");
+                             state.pending_frame = false;
                              break;
                         }
                     }
@@ -325,8 +328,11 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
                 update_preview(state);
             } else if state.is_dirty && state.show_preview {
                 // Real-time update for property changes when paused
-                update_preview(state);
-                state.is_dirty = false;
+                // Only reset dirty flag if we actually sent a request (or worker is free)
+                if !state.pending_frame {
+                    update_preview(state);
+                    state.is_dirty = false;
+                }
             }
         }
         
@@ -1154,13 +1160,16 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
 
         Message::PreviewRendered(handle) => {
             state.preview_handle = Some(handle);
+            state.pending_frame = false;
         }
 
         Message::PreviewError(e) => {
             log::error!("Worker preview failed: {}", e);
+            state.pending_frame = false;
         }
         Message::WorkerDisconnected => {
             log::error!("Preview worker disconnected unexpectedly");
+            state.pending_frame = false;
         }
     }
     
@@ -1366,6 +1375,7 @@ pub fn subscription(state: &AppState) -> Subscription<Message> {
 
 fn update_preview(state: &mut AppState) {
     if !state.show_preview { return; }
+    if state.pending_frame { return; }
     
     let doc = match &state.document {
         Some(d) => d,
@@ -1378,6 +1388,7 @@ fn update_preview(state: &mut AppState) {
     // Use worker to request frame
     if let Some(conn) = &state.worker_connection {
         conn.get_worker().request_frame(doc.clone(), state.playback.current_time, width, height);
+        state.pending_frame = true;
     }
 }
 

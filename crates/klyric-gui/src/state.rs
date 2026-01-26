@@ -43,6 +43,9 @@ pub struct AppState {
     /// Rendered preview frame
     pub preview_handle: Option<image::Handle>,
     
+    /// Whether a frame render is currently pending (render throttling)
+    pub pending_frame: bool,
+
     /// Currently selected effect name
     pub selected_effect: Option<String>,
     
