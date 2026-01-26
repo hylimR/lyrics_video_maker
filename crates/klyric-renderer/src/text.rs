@@ -71,14 +71,19 @@ impl TextRenderer {
     }
 
     /// Get a typeface by name
-    pub fn get_typeface(&self, name: &str) -> Option<Typeface> {
+    pub fn get_typeface(&mut self, name: &str) -> Option<Typeface> {
         // First check cache
         if let Some(tf) = self.font_cache.get(name) {
             return Some(tf.clone());
         }
         
         // Then try system fonts via FontMgr
-        self.font_mgr.match_family_style(name, FontStyle::normal())
+        if let Some(tf) = self.font_mgr.match_family_style(name, FontStyle::normal()) {
+            self.font_cache.insert(name.to_string(), tf.clone());
+            return Some(tf);
+        }
+
+        None
     }
 
     pub fn get_default_typeface(&self) -> Option<Typeface> {
@@ -214,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_get_typeface_not_cached() {
-        let renderer = TextRenderer::new();
+        let mut renderer = TextRenderer::new();
 
         // Non-existent font returns None (or system font if available)
         let result = renderer.get_typeface("NonExistentFont12345");
@@ -226,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_get_typeface_system_font() {
-        let renderer = TextRenderer::new();
+        let mut renderer = TextRenderer::new();
 
         // Try to get a common system font that should exist on most platforms
         #[cfg(target_os = "windows")]
@@ -261,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_measure_char() {
-        let renderer = TextRenderer::new();
+        let mut renderer = TextRenderer::new();
 
         // Get a system font for measurement
         #[cfg(target_os = "windows")]
@@ -283,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_measure_char_different_sizes() {
-        let renderer = TextRenderer::new();
+        let mut renderer = TextRenderer::new();
 
         #[cfg(target_os = "windows")]
         let font_name = "Arial";
@@ -343,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_get_glyph_path() {
-        let renderer = TextRenderer::new();
+        let mut renderer = TextRenderer::new();
 
         #[cfg(target_os = "windows")]
         let font_name = "Arial";
