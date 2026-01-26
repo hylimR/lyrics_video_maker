@@ -44,6 +44,25 @@ impl<'a> LineRenderer<'a> {
         let style_family = style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
         let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
         
+        // Pre-resolve colors to avoid parsing per-glyph
+        let inactive_hex = style.colors.as_ref()
+            .and_then(|c| c.inactive.as_ref())
+            .and_then(|fs| fs.fill.as_deref())
+            .unwrap_or(DEFAULT_INACTIVE_COLOR);
+        let inactive_color = parse_color(inactive_hex).unwrap_or(Color::WHITE);
+
+        let active_hex = style.colors.as_ref()
+            .and_then(|c| c.active.as_ref())
+            .and_then(|fs| fs.fill.as_deref())
+            .unwrap_or(DEFAULT_ACTIVE_COLOR);
+        let active_color = parse_color(active_hex).unwrap_or(Color::WHITE);
+
+        let complete_hex = style.colors.as_ref()
+            .and_then(|c| c.complete.as_ref())
+            .and_then(|fs| fs.fill.as_deref())
+            .unwrap_or(DEFAULT_COMPLETE_COLOR);
+        let complete_color = parse_color(complete_hex).unwrap_or(Color::WHITE);
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -80,24 +99,13 @@ impl<'a> LineRenderer<'a> {
                      let is_active = char_data.map(|c| self.time >= c.start && self.time <= c.end).unwrap_or(false);
                      let is_past = char_data.map(|c| self.time > c.end).unwrap_or(false);
                      
-                     let color_hex = if is_past {
-                         style.colors.as_ref()
-                             .and_then(|c| c.complete.as_ref())
-                             .and_then(|fs| fs.fill.as_deref())
-                             .unwrap_or(DEFAULT_COMPLETE_COLOR)
+                     let text_color = if is_past {
+                         complete_color
                      } else if is_active {
-                         style.colors.as_ref()
-                             .and_then(|c| c.active.as_ref())
-                             .and_then(|fs| fs.fill.as_deref())
-                             .unwrap_or(DEFAULT_ACTIVE_COLOR)
+                         active_color
                      } else {
-                         style.colors.as_ref()
-                             .and_then(|c| c.inactive.as_ref())
-                             .and_then(|fs| fs.fill.as_deref())
-                             .unwrap_or(DEFAULT_INACTIVE_COLOR)
+                         inactive_color
                      };
-                     
-                     let text_color = parse_color(color_hex).unwrap_or(Color::WHITE);
 
                      // Compute Transform (Base + Effects)
                      let line_transform = line.transform.clone().unwrap_or_default();
