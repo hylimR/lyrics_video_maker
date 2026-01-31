@@ -7,6 +7,9 @@ use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
+/// Resolved font wrapper for optimized measurement
+pub struct ResolvedFont(pub(crate) Font);
+
 /// Text renderer with font caching using Skia
 pub struct TextRenderer {
     font_mgr: FontMgr,
@@ -90,9 +93,14 @@ impl TextRenderer {
         self.default_typeface.clone()
     }
 
-    /// Measure single character
-    pub fn measure_char(&self, typeface: &Typeface, ch: char, size: f32) -> (f32, f32) {
-        let font = Font::from_typeface(typeface, size);
+    /// Create a resolved font for optimized measurement
+    pub fn create_font(&self, typeface: &Typeface, size: f32) -> ResolvedFont {
+        ResolvedFont(Font::from_typeface(typeface, size))
+    }
+
+    /// Measure single character using a resolved font
+    pub fn measure_char_with_font(&self, resolved_font: &ResolvedFont, ch: char) -> (f32, f32) {
+        let font = &resolved_font.0;
         
         // width
         let _glyph_id = font.unichar_to_glyph(ch as i32);
@@ -103,6 +111,12 @@ impl TextRenderer {
         let height = metrics.descent - metrics.ascent; // approximate height
         
         (width, height)
+    }
+
+    /// Measure single character
+    pub fn measure_char(&self, typeface: &Typeface, ch: char, size: f32) -> (f32, f32) {
+        let resolved_font = self.create_font(typeface, size);
+        self.measure_char_with_font(&resolved_font, ch)
     }
 
     /// Get the vector path for a character
