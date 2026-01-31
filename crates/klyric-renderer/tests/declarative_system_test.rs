@@ -48,7 +48,7 @@ fn test_expression_transform() {
 
     let base = Transform::default();
     let effects = vec![effect.clone()];
-    let final_transform = EffectEngine::compute_transform(0.5, base, &effects, ctx);
+    let final_transform = EffectEngine::compute_transform(0.5, base, &effects, &ctx);
 
     // At t=0.5, y should be 50.0
     assert_eq!(final_transform.y_val(), 50.0);
@@ -90,7 +90,7 @@ fn test_typewriter_opacity() {
 
     let base = Transform::default();
     let effects_start = vec![effect.clone()];
-    let result = EffectEngine::compute_transform(0.05, base.clone(), &effects_start, ctx_start);
+    let result = EffectEngine::compute_transform(0.05, base.clone(), &effects_start, &ctx_start);
     // limit = 0.5. index 0 <= 0.5? Yes. Opacity 1.0?
     // Wait, usually it's floor? Or strictly less?
     // If limit is 0.5, half of char 0 is shown? No, opacity is 0 or 1 usually for typewriter.
@@ -109,7 +109,7 @@ fn test_typewriter_opacity() {
         char_count: Some(10),
     };
     let effects_vec = vec![effect.clone()];
-    let result_mid = EffectEngine::compute_transform(0.5, base, &effects_vec, ctx_mid);
+    let result_mid = EffectEngine::compute_transform(0.5, base, &effects_vec, &ctx_mid);
     // Limit = 5.0. Index 9 > 5.0. Should be hidden.
     assert_eq!(result_mid.opacity_val(), 0.0);
 }

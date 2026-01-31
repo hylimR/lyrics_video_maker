@@ -27,3 +27,8 @@ Action: Added `path_cache` to `TextRenderer` keyed by `(typeface_id, size_bits, 
 Learning: `LineRenderer::render_line` was iterating over a mixed list of effects inside the hot glyph loop to find specific types (like `StrokeReveal`).
 Insight: Pre-filtering effects into specific vectors (e.g., `stroke_reveal_effects`) outside the loop allows the inner loop to iterate only over relevant items (often zero), avoiding O(N) checks per glyph.
 Action: Always hoist effect categorization outside of per-glyph or per-particle loops. Separate "Transform" effects from "Render" effects early.
+
+## 2025-05-20 - TriggerContext Allocation and Vector Reuse
+Learning: `LineRenderer::render_line` allocated multiple vectors and cloned `TriggerContext` for every glyph, creating significant allocator pressure per frame.
+Insight: Vectors for effects can be populated directly from a single loop over effect names using `Cow<Effect>`, avoiding intermediate allocations. `TriggerContext` can be hoisted outside the glyph loop and passed by reference to `EffectEngine`.
+Action: Optimized `render_line` to use a single resolution loop and reuse `TriggerContext`. Updated `EffectEngine::compute_transform` to accept `&TriggerContext` and `Borrow<Effect>`. This reduces allocations and memory traffic in the render loop.

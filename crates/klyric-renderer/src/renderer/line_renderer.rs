@@ -78,8 +78,14 @@ impl<'a> LineRenderer<'a> {
             .unwrap_or(DEFAULT_COMPLETE_COLOR);
         let complete_color = parse_color(complete_hex).unwrap_or(Color::WHITE);
 
-        // --- OPTIMIZATION: Hoist Effect Resolution ---
-        let mut line_active_effects: Vec<(&str, Cow<Effect>)> = Vec::new();
+        // --- OPTIMIZATION: Hoist Effect Resolution & Categorization ---
+        // We resolve and categorize in a single pass to avoid intermediate allocations.
+        // We use Cow<Effect> directly in specialized vectors.
+        let mut transform_effects_base: Vec<Cow<Effect>> = Vec::new();
+        let mut particle_effects_base: Vec<(&str, Cow<Effect>)> = Vec::new();
+        let mut disintegrate_effects_base: Vec<(&str, Cow<Effect>)> = Vec::new();
+        let mut stroke_reveal_effects: Vec<Cow<Effect>> = Vec::new();
+
         let empty_vec = Vec::new();
         let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
         let line_effects = &line.effects;
@@ -88,7 +94,7 @@ impl<'a> LineRenderer<'a> {
         let all_effects_names = style_effects.iter().chain(line_effects.iter());
 
         for effect_name in all_effects_names {
-            if let Some(effect) = self.doc.effects.get(effect_name) {
+            let effect_cow = if let Some(effect) = self.doc.effects.get(effect_name) {
                 if let Some(preset_name) = &effect.preset {
                     if let Some(mut generated) =
                         crate::presets::transitions::get_transition(preset_name)
@@ -99,34 +105,28 @@ impl<'a> LineRenderer<'a> {
                         if effect.easing != Easing::Linear {
                             generated.easing = effect.easing.clone();
                         }
-                        line_active_effects.push((effect_name.as_str(), Cow::Owned(generated)));
+                        Cow::Owned(generated)
                     } else {
-                        line_active_effects.push((effect_name.as_str(), Cow::Borrowed(effect)));
+                        Cow::Borrowed(effect)
                     }
                 } else {
-                    line_active_effects.push((effect_name.as_str(), Cow::Borrowed(effect)));
+                    Cow::Borrowed(effect)
                 }
             } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
-                line_active_effects.push((effect_name.as_str(), Cow::Owned(preset)));
-            }
-        }
+                Cow::Owned(preset)
+            } else {
+                continue;
+            };
 
-        // --- OPTIMIZATION: Hoist Effect Categorization ---
-        let mut transform_effects_base: Vec<&Effect> =
-            Vec::with_capacity(line_active_effects.len());
-        let mut particle_effects_base: Vec<(&str, &Effect)> =
-            Vec::with_capacity(line_active_effects.len());
-        let mut disintegrate_effects_base: Vec<(&str, &Effect)> =
-            Vec::with_capacity(line_active_effects.len());
-        let mut stroke_reveal_effects: Vec<&Effect> =
-            Vec::with_capacity(line_active_effects.len());
-
-        for (name, effect) in &line_active_effects {
-            match effect.effect_type {
-                EffectType::Particle => particle_effects_base.push((name, &**effect)),
-                EffectType::Disintegrate => disintegrate_effects_base.push((name, &**effect)),
-                EffectType::StrokeReveal => stroke_reveal_effects.push(&**effect),
-                _ => transform_effects_base.push(&**effect),
+            match effect_cow.effect_type {
+                EffectType::Particle => {
+                    particle_effects_base.push((effect_name.as_str(), effect_cow))
+                }
+                EffectType::Disintegrate => {
+                    disintegrate_effects_base.push((effect_name.as_str(), effect_cow))
+                }
+                EffectType::StrokeReveal => stroke_reveal_effects.push(effect_cow),
+                _ => transform_effects_base.push(effect_cow),
             }
         }
 
@@ -175,14 +175,28 @@ impl<'a> LineRenderer<'a> {
                 self.time,
                 Transform::default(),
                 &transform_effects_base,
-                ctx,
+                &ctx,
             ))
         } else {
             None
         };
 
+        // --- OPTIMIZATION: Hoist Context Creation ---
+        // Reuse context to avoid allocation and cloning
+        let mut ctx = TriggerContext {
+            start_time: line.start,
+            end_time: line.end,
+            current_time: self.time,
+            active: true,
+            char_index: None,
+            char_count: Some(glyphs.len()),
+        };
+
         // Loop:
         for glyph in glyphs.iter() {
+            // Update context
+            ctx.char_index = Some(glyph.char_index);
+
             let char_absolute_x = base_x + glyph.x;
             let char_absolute_y = base_y + glyph.y;
 
@@ -275,15 +289,6 @@ impl<'a> LineRenderer<'a> {
                         ),
                     };
 
-                    let ctx = TriggerContext {
-                        start_time: line.start,
-                        end_time: line.end,
-                        current_time: self.time,
-                        active: true,
-                        char_index: Some(glyph.char_index),
-                        char_count: Some(glyphs.len()),
-                    };
-
                     let mut final_transform = base_transform;
                     if let Some(delta) = &precomputed_delta {
                         merge_transform(&mut final_transform, delta);
@@ -292,7 +297,7 @@ impl<'a> LineRenderer<'a> {
                             self.time,
                             final_transform,
                             &transform_effects_base,
-                            ctx.clone(),
+                            &ctx,
                         );
                     }
 
@@ -514,12 +519,12 @@ impl<'a> LineRenderer<'a> {
                     self.canvas.restore(); // Restore transform for next glyph/effects
 
                     // --- DISINTEGRATION EFFECT ---
-                    for (name, effect) in disintegrate_effects_base.iter().cloned() {
-                        if !EffectEngine::should_trigger(&effect, &ctx) {
+                    for (name, effect) in &disintegrate_effects_base {
+                        if !EffectEngine::should_trigger(effect, &ctx) {
                             continue;
                         }
 
-                        let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
+                        let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
                         if !(0.0..=1.0).contains(&progress) {
                             continue;
                         }
@@ -611,12 +616,12 @@ impl<'a> LineRenderer<'a> {
 
                     // --- PARTICLE SPAWNING ---
                     // Process standard particle effects
-                    for (name, effect) in particle_effects_base.iter().cloned() {
-                        if !EffectEngine::should_trigger(&effect, &ctx) {
+                    for (name, effect) in &particle_effects_base {
+                        if !EffectEngine::should_trigger(effect, &ctx) {
                             continue;
                         }
 
-                        let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
+                        let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
                         if !(0.0..=1.0).contains(&progress) {
                             continue;
                         }
