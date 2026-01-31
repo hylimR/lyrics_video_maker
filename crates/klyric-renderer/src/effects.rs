@@ -1,4 +1,4 @@
-use super::model::{AnimatedValue, Easing, Effect, EffectType, Transform};
+use super::model::{AnimatedValue, Easing, Effect, EffectType, Transform, RenderTransform};
 use crate::expressions::{EvaluationContext, ExpressionEvaluator};
 use std::f64::consts::PI;
 
@@ -303,6 +303,172 @@ impl EffectEngine {
 
         final_transform
     }
+
+    /// Optimized version of compute_transform for RenderTransform (dense struct)
+    pub fn apply_to_render_transform<T: std::borrow::Borrow<Effect>>(
+        current_time: f64,
+        mut transform: RenderTransform,
+        effects: &[T],
+        trigger_context: &TriggerContext,
+    ) -> RenderTransform {
+        for effect_wrapper in effects {
+            let effect = effect_wrapper.borrow();
+            if !Self::should_trigger(effect, trigger_context) {
+                continue;
+            }
+
+            let progress = Self::calculate_progress(current_time, effect, trigger_context);
+            if !(0.0..=1.0).contains(&progress) {
+                continue;
+            }
+
+            let eased_progress = Self::ease(progress, &effect.easing);
+
+            match effect.effect_type {
+                EffectType::Transition => {
+                    let eval_ctx = EvaluationContext {
+                        t: current_time,
+                        progress: eased_progress,
+                        index: trigger_context.char_index,
+                        count: trigger_context.char_count,
+                        ..Default::default()
+                    };
+
+                    for (prop, value) in &effect.properties {
+                        let val = match value {
+                            AnimatedValue::Range { from, to } => {
+                                Self::lerp(*from, *to, eased_progress)
+                            }
+                            AnimatedValue::Expression(expr) => {
+                                match ExpressionEvaluator::evaluate(expr, &eval_ctx) {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        log::warn!("Expression error in {}: {}", prop, e);
+                                        continue;
+                                    }
+                                }
+                            }
+                        };
+                        apply_property_to_render(&mut transform, prop, val);
+                    }
+                }
+                EffectType::Typewriter => {
+                    if let (Some(idx), Some(_count)) =
+                        (trigger_context.char_index, trigger_context.char_count)
+                    {
+                        let total_chars = trigger_context.char_count.unwrap_or(1) as f64;
+                        let visible_limit = eased_progress * total_chars;
+
+                        if (idx as f64) < visible_limit {
+                            apply_property_to_render(&mut transform, "opacity", 1.0);
+                        } else {
+                            apply_property_to_render(&mut transform, "opacity", 0.0);
+                        }
+                    }
+                }
+                EffectType::Keyframe => {
+                    if effect.keyframes.is_empty() {
+                        continue;
+                    }
+                    let mut start_kf = &effect.keyframes[0];
+                    let mut end_kf = &effect.keyframes[0];
+                    let mut found = false;
+
+                    for kf in &effect.keyframes {
+                        if kf.time >= eased_progress {
+                            end_kf = kf;
+                            found = true;
+                            break;
+                        }
+                        start_kf = kf;
+                    }
+
+                    if !found {
+                        start_kf = effect.keyframes.last().unwrap();
+                        end_kf = start_kf;
+                    }
+
+                    let segment_duration = end_kf.time - start_kf.time;
+                    let t = if segment_duration <= 0.0 {
+                        if eased_progress >= end_kf.time {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        (eased_progress - start_kf.time) / segment_duration
+                    };
+
+                    let segment_eased = if let Some(e) = &start_kf.easing {
+                        Self::ease(t, e)
+                    } else {
+                        t
+                    };
+
+                    if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "opacity",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale, end_kf.scale) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "scale",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
+                        transform.scale_x =
+                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
+                        transform.scale_y =
+                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "rotation",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.x, end_kf.x) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "x",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "y",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.blur, end_kf.blur) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "blur",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.glitch_offset, end_kf.glitch_offset) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "glitch_offset",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        transform
+    }
+
     /// Check if an effect should trigger based on context
     pub fn should_trigger(_effect: &Effect, _ctx: &TriggerContext) -> bool {
         // Basic trigger logic
@@ -363,6 +529,24 @@ fn apply_property(transform: &mut Transform, prop: &str, value: f64) {
         "rotation" => transform.rotation = Some(value as f32),
         "blur" => transform.blur = Some(value as f32),
         "glitch_offset" | "glitch" => transform.glitch_offset = Some(value as f32),
+        _ => {}
+    }
+}
+
+fn apply_property_to_render(transform: &mut RenderTransform, prop: &str, value: f64) {
+    match prop {
+        "opacity" => transform.opacity = value as f32,
+        "scale" => transform.scale = value as f32,
+        "scale_x" => transform.scale_x = value as f32,
+        "scale_y" => transform.scale_y = value as f32,
+        "x" => transform.x = value as f32,
+        "y" => transform.y = value as f32,
+        "rotation" => transform.rotation = value as f32,
+        "blur" => transform.blur = value as f32,
+        "glitch_offset" | "glitch" => transform.glitch_offset = value as f32,
+        "anchor_x" => transform.anchor_x = value as f32,
+        "anchor_y" => transform.anchor_y = value as f32,
+        "hue_shift" => transform.hue_shift = value as f32,
         _ => {}
     }
 }

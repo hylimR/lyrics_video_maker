@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use crate::model::{
     AnimatedValue, Easing, Effect, EffectType, KLyricDocumentV2, Line, PositionValue, Style,
-    Transform,
+    Transform, RenderTransform,
 };
 // use crate::style::StyleResolver; // Removed
 use crate::effects::{EffectEngine, TriggerContext};
@@ -259,46 +259,18 @@ impl<'a> LineRenderer<'a> {
                         .and_then(|c| c.transform.as_ref())
                         .unwrap_or(&char_transform_default);
 
-                    let base_transform = Transform {
-                        x: Some(line_transform_ref.x_val() + char_transform_ref.x_val()),
-                        y: Some(line_transform_ref.y_val() + char_transform_ref.y_val()),
-                        rotation: Some(
-                            line_transform_ref.rotation_val() + char_transform_ref.rotation_val(),
-                        ),
-                        scale: Some(
-                            line_transform_ref.scale_val() * char_transform_ref.scale_val(),
-                        ),
-                        scale_x: Some(
-                            line_transform_ref.scale_x_val() * char_transform_ref.scale_x_val(),
-                        ),
-                        scale_y: Some(
-                            line_transform_ref.scale_y_val() * char_transform_ref.scale_y_val(),
-                        ),
-                        opacity: Some(
-                            line_transform_ref.opacity_val() * char_transform_ref.opacity_val(),
-                        ),
-                        anchor_x: Some(char_transform_ref.anchor_x_val()),
-                        anchor_y: Some(char_transform_ref.anchor_y_val()), // Anchor is not additive usually, char overrides line
-                        blur: Some(line_transform_ref.blur_val() + char_transform_ref.blur_val()),
-                        glitch_offset: Some(
-                            line_transform_ref.glitch_offset_val()
-                                + char_transform_ref.glitch_offset_val(),
-                        ),
-                        hue_shift: Some(
-                            line_transform_ref.hue_shift_val() + char_transform_ref.hue_shift_val(),
-                        ),
-                    };
-
-                    let mut final_transform = base_transform;
+                    // Use optimized RenderTransform (dense)
+                    let mut final_transform =
+                        RenderTransform::new(line_transform_ref, char_transform_ref);
 
                     // Apply precomputed independent effects
                     if let Some(delta) = &prefix_delta {
-                        merge_transform(&mut final_transform, delta);
+                        final_transform.apply_delta(delta);
                     }
 
                     // Apply remaining dependent effects (if any)
                     if split_idx < transform_effects_base.len() {
-                        final_transform = EffectEngine::compute_transform(
+                        final_transform = EffectEngine::apply_to_render_transform(
                             self.time,
                             final_transform,
                             &transform_effects_base[split_idx..],
@@ -321,14 +293,14 @@ impl<'a> LineRenderer<'a> {
                     // paint.set_anti_alias(true); // Already set
 
                     let final_opacity =
-                        final_transform.opacity_val() * (1.0 - disintegration_progress as f32);
+                        final_transform.opacity * (1.0 - disintegration_progress as f32);
                     paint.set_alpha_f(final_opacity);
 
                     // Apply Blur
-                    if final_transform.blur_val() > 0.0 {
+                    if final_transform.blur > 0.0 {
                         paint.set_mask_filter(MaskFilter::blur(
                             BlurStyle::Normal,
-                            final_transform.blur_val(),
+                            final_transform.blur,
                             false,
                         ));
                     } else {
@@ -354,18 +326,18 @@ impl<'a> LineRenderer<'a> {
 
                     // Apply Transforms
                     self.canvas.translate((
-                        draw_x + final_transform.x_val(),
-                        draw_y + final_transform.y_val(),
+                        draw_x + final_transform.x,
+                        draw_y + final_transform.y,
                     ));
 
                     let path_center_x = bounds.center_x();
                     let path_center_y = bounds.center_y();
 
                     self.canvas.translate((path_center_x, path_center_y));
-                    self.canvas.rotate(final_transform.rotation_val(), None);
+                    self.canvas.rotate(final_transform.rotation, None);
                     self.canvas.scale((
-                        final_transform.scale_val() * final_transform.scale_x_val(),
-                        final_transform.scale_val() * final_transform.scale_y_val(),
+                        final_transform.scale * final_transform.scale_x,
+                        final_transform.scale * final_transform.scale_y,
                     ));
                     self.canvas.translate((-path_center_x, -path_center_y));
 
@@ -404,10 +376,10 @@ impl<'a> LineRenderer<'a> {
 
                                 // Apply blur to shadow if needed (or inherit from transform?)
                                 // For now, if there's global blur, apply it to shadow too
-                                if final_transform.blur_val() > 0.0 {
+                                if final_transform.blur > 0.0 {
                                     shadow_paint.set_mask_filter(MaskFilter::blur(
                                         BlurStyle::Normal,
-                                        final_transform.blur_val(),
+                                        final_transform.blur,
                                         false,
                                     ));
                                 } else {
@@ -442,10 +414,10 @@ impl<'a> LineRenderer<'a> {
                                     stroke_paint.set_alpha_f(final_opacity);
                                     // stroke_paint.set_anti_alias(true); // Already set
 
-                                    if final_transform.blur_val() > 0.0 {
+                                    if final_transform.blur > 0.0 {
                                         stroke_paint.set_mask_filter(MaskFilter::blur(
                                             BlurStyle::Normal,
-                                            final_transform.blur_val(),
+                                            final_transform.blur,
                                             false,
                                         ));
                                     } else {
@@ -460,9 +432,9 @@ impl<'a> LineRenderer<'a> {
 
                     // --- 3. MAIN TEXT (With Glitch Logic) ---
                     if paint.alpha_f() > 0.001 {
-                        if final_transform.glitch_offset_val().abs() > 0.01 {
+                        if final_transform.glitch_offset.abs() > 0.01 {
                             // Glitch Effect: Draw channels separately
-                            let offset = final_transform.glitch_offset_val();
+                            let offset = final_transform.glitch_offset;
 
                             // Red Channel
                             let mut r_paint = paint.clone();
@@ -602,10 +574,10 @@ impl<'a> LineRenderer<'a> {
 
                             // Calculate screen bounds for the emitter
                             let bounds_rect = CharBounds {
-                                x: draw_x + final_transform.x_val() + bounds_left - 10.0, // Adjust back
-                                y: draw_y + final_transform.y_val() + bounds_top - 10.0,
-                                width: capture_w as f32 * final_transform.scale_val(),
-                                height: capture_h as f32 * final_transform.scale_val(),
+                                x: draw_x + final_transform.x + bounds_left - 10.0, // Adjust back
+                                y: draw_y + final_transform.y + bounds_top - 10.0,
+                                width: capture_w as f32 * final_transform.scale,
+                                height: capture_h as f32 * final_transform.scale,
                             };
 
                             let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
@@ -645,10 +617,10 @@ impl<'a> LineRenderer<'a> {
                         self.active_keys.insert(key.clone());
 
                         let bounds_rect = CharBounds {
-                            x: draw_x + final_transform.x_val() + bounds.left,
-                            y: draw_y + final_transform.y_val() + bounds.top,
-                            width: w * final_transform.scale_val(),
-                            height: h * final_transform.scale_val(),
+                            x: draw_x + final_transform.x + bounds.left,
+                            y: draw_y + final_transform.y + bounds.top,
+                            width: w * final_transform.scale,
+                            height: h * final_transform.scale,
                         };
 
                         let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
@@ -717,43 +689,3 @@ fn is_char_dependent(effect: &Effect) -> bool {
     }
 }
 
-/// Merge fields from delta transform into base transform.
-/// Only fields that are Some in delta will overwrite base.
-fn merge_transform(base: &mut Transform, delta: &Transform) {
-    if let Some(v) = delta.x {
-        base.x = Some(v);
-    }
-    if let Some(v) = delta.y {
-        base.y = Some(v);
-    }
-    if let Some(v) = delta.rotation {
-        base.rotation = Some(v);
-    }
-    if let Some(v) = delta.scale {
-        base.scale = Some(v);
-    }
-    if let Some(v) = delta.scale_x {
-        base.scale_x = Some(v);
-    }
-    if let Some(v) = delta.scale_y {
-        base.scale_y = Some(v);
-    }
-    if let Some(v) = delta.opacity {
-        base.opacity = Some(v);
-    }
-    if let Some(v) = delta.anchor_x {
-        base.anchor_x = Some(v);
-    }
-    if let Some(v) = delta.anchor_y {
-        base.anchor_y = Some(v);
-    }
-    if let Some(v) = delta.blur {
-        base.blur = Some(v);
-    }
-    if let Some(v) = delta.glitch_offset {
-        base.glitch_offset = Some(v);
-    }
-    if let Some(v) = delta.hue_shift {
-        base.hue_shift = Some(v);
-    }
-}
