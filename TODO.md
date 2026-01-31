@@ -3,7 +3,7 @@
 This file tracks the pending tasks and improvements for the Lyric Video Maker project.
 
 ## 🛠️ High Priority
-- [ ] **Project Save/Load**: Implement JSON export/import for the entire project state (AppState).
+- [x] **Project Save/Load**: Implement JSON export/import for the entire project state (AppState).
 - [ ] **Robust Font Discovery**: Replace hardcoded font paths in `pipeline.rs` with a proper system font discovery mechanism (e.g., using `font-kit`).
 - [ ] **FFmpeg Path Consistency**: Ensure `muxer.rs` uses the same FFmpeg discovery logic as `encoder.rs`.
 - [ ] **Error Handling**: Improve error reporting in the video export pipeline, especially for FFmpeg-related failures.

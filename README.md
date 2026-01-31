@@ -17,7 +17,7 @@ A professional **Lyric Video Generator** built entirely in **Rust**. This tool a
 |-----------|------------|-------------|
 | **GUI** | Iced 0.13 | Native, Elm-inspired GUI framework |
 | **Language** | Rust | Core logic, safety, and performance |
-| **Rendering** | Skia (via `skia-safe`) | Industry-standard 2D graphics engine |
+| **Rendering** | Skia / Tiny-Skia | `skia-safe` for Native, `tiny-skia` for WASM |
 | **Audio** | Rodio | Audio playback and synchronization |
 | **Video** | FFmpeg | Video encoding pipeline |
 | **Format** | KLyric v2.0 | Custom JSON format for rich lyrics styling |
@@ -85,6 +85,15 @@ cargo test -p klyric-renderer
 - **AppState:** The single source of truth for the UI state, defined in `crates/klyric-gui/src/state.rs`.
 - **Message:** All user actions generate a `Message` enum variant, handled by the `update` function in `app.rs`.
 - **Renderer:** The `klyric-renderer` crate is independent of the GUI and can be used in headless environments.
+
+## 🔧 Troubleshooting
+
+### Windows File Locks
+If you encounter errors like `Access is denied` or `file in use` when compiling `skia-bindings` on Windows, it is often due to `rust-analyzer` holding a lock on the file.
+**Solution:** Stop the rust-analyzer server in your editor or run `cargo clean -p skia-bindings`.
+
+### Linux Dependency Conflicts
+If you see errors related to `AppID` not being implemented for `zbus` types, you may be facing a conflict between `ashpd` and `zbus` versions. Ensure you are using the versions specified in `Cargo.toml`.
 
 ## ⚠️ Notes
 
