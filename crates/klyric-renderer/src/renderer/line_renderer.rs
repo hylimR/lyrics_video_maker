@@ -10,7 +10,7 @@ use crate::model::{
 };
 // use crate::style::StyleResolver; // Removed
 use crate::effects::{EffectEngine, TriggerContext};
-use crate::layout::LayoutEngine;
+use crate::layout::GlyphInfo;
 use crate::presets::CharBounds;
 use crate::text::TextRenderer;
 
@@ -34,10 +34,13 @@ pub struct LineRenderer<'a> {
 }
 
 impl<'a> LineRenderer<'a> {
-    pub fn render_line(&mut self, line: &Line, line_idx: usize, style: &Style) -> Result<()> {
-        // Layout Text
-        let glyphs = LayoutEngine::layout_line(line, style, self.text_renderer);
-
+    pub fn render_line(
+        &mut self,
+        line: &Line,
+        line_idx: usize,
+        style: &Style,
+        glyphs: &[GlyphInfo],
+    ) -> Result<()> {
         // Compute Line Position
         let (base_x, base_y) = self.compute_line_position(line);
 

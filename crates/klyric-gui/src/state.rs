@@ -11,44 +11,44 @@ use iced::widget::image;
 pub struct AppState {
     /// Currently loaded document
     pub document: Option<Arc<KLyricDocumentV2>>,
-    
+
     /// Path to the currently loaded file
     pub file_path: Option<PathBuf>,
-    
+
     /// Whether document has unsaved changes
     pub is_dirty: bool,
-    
+
     /// Currently selected line index
     pub selected_line: Option<usize>,
-    
+
     /// Currently selected character index (within line)
     pub selected_char: Option<usize>,
-    
+
     /// Playback state
     pub playback: PlaybackState,
-    
+
     /// Preview panel visibility
     pub show_preview: bool,
-    
+
     /// Export panel visibility
     pub show_export: bool,
-    
+
     /// Export progress (0.0 - 1.0)
     pub export_progress: Option<f32>,
-    
+
     /// Window dimensions
     pub window_width: u32,
     pub window_height: u32,
 
     /// Rendered preview frame
     pub preview_handle: Option<image::Handle>,
-    
+
     /// Whether a frame render is currently pending (render throttling)
     pub pending_frame: bool,
 
     /// Currently selected effect name
     pub selected_effect: Option<String>,
-    
+
     /// Connection to render worker
     pub worker_connection: Option<crate::worker::WorkerConnection>,
 
@@ -62,13 +62,13 @@ pub struct AppState {
 
     /// App Configuration
     pub config: crate::config::AppConfig,
-    
+
     /// Available system fonts
     pub available_fonts: Arc<Vec<crate::utils::font_loader::FontInfo>>,
-    
+
     /// Whether settings modal is open
     pub show_settings: bool,
-    
+
     /// Whether initial font scan is done
     pub font_scan_complete: bool,
 }
@@ -90,10 +90,10 @@ impl std::fmt::Debug for AppState {
 pub struct PlaybackState {
     /// Current playback time in seconds
     pub current_time: f64,
-    
+
     /// Whether playback is active
     pub is_playing: bool,
-    
+
     /// Total duration in seconds
     pub duration: f64,
 }
@@ -118,13 +118,13 @@ impl AppState {
                 if let Ok(content) = std::fs::read_to_string(&path) {
                     if let Ok(mut doc) = serde_json::from_str::<KLyricDocumentV2>(&content) {
                         log::info!("Loaded sample project from {:?}", path);
-                        
+
                         // Check for sample.wav in the same directory
                         if let Some(parent) = path.parent() {
                             let wav_path = parent.join("sample.wav");
                             if wav_path.exists() {
                                 if let Ok(abs_wav) = std::fs::canonicalize(&wav_path) {
-                                     doc.project.audio = Some(abs_wav.to_string_lossy().to_string());
+                                    doc.project.audio = Some(abs_wav.to_string_lossy().to_string());
                                 }
                             }
                         }
@@ -142,7 +142,7 @@ impl AppState {
                         } else {
                             file_path = Some(path);
                         }
-                        
+
                         document = Some(Arc::new(doc));
                         break;
                     }
@@ -192,27 +192,27 @@ impl AppState {
             ..Default::default()
         }
     }
-    
+
     /// Get the currently selected line
     pub fn current_line(&self) -> Option<&klyric_renderer::model::Line> {
         let doc = self.document.as_ref()?;
         let idx = self.selected_line?;
         doc.lines.get(idx)
     }
-    
+
     /// Get the currently selected character
     pub fn current_char(&self) -> Option<&klyric_renderer::model::Char> {
         let line = self.current_line()?;
         let idx = self.selected_char?;
         line.chars.get(idx)
     }
-    
+
     /// Get mutable reference to current line
     pub fn current_line_mut(&mut self) -> Option<&mut klyric_renderer::model::Line> {
         let idx = self.selected_line?;
         Arc::make_mut(self.document.as_mut()?).lines.get_mut(idx)
     }
-    
+
     /// Get mutable reference to current char
     pub fn current_char_mut(&mut self) -> Option<&mut klyric_renderer::model::Char> {
         let idx = self.selected_char?;

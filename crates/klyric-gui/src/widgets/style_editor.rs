@@ -3,8 +3,8 @@
 //! Redesigned with custom dark theme styling
 
 use iced::{
-    widget::{button, column, container, row, scrollable, text, text_input, pick_list, Space},
-    Element, Length, Alignment,
+    widget::{button, column, container, pick_list, row, scrollable, text, text_input, Space},
+    Alignment, Element, Length,
 };
 
 use crate::message::Message;
@@ -17,14 +17,12 @@ const EFFECTS: [&str; 6] = ["None", "fadeIn", "slideUp", "scaleIn", "glow", "bou
 /// View for the style editor panel
 pub fn view(state: &AppState) -> Element<'_, Message> {
     let doc = state.document.as_ref();
-    
+
     // Header
-    let header = container(
-        theme::icon_sized("🎨 Style Editor", 14.0)
-    )
-    .style(theme::section_header_style)
-    .padding([8, 12])
-    .width(Length::Fill);
+    let header = container(theme::icon_sized("🎨 Style Editor", 14.0))
+        .style(theme::section_header_style)
+        .padding([8, 12])
+        .width(Length::Fill);
 
     // Global styles section
     let global_section = if let Some(doc) = doc {
@@ -55,9 +53,10 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 
         container(
             column![
-                text("Global Styles").size(12).color(theme::colors::TEXT_SECONDARY),
+                text("Global Styles")
+                    .size(12)
+                    .color(theme::colors::TEXT_SECONDARY),
                 Space::with_height(Length::Fixed(8.0)),
-                
                 // Font settings
                 row![
                     text("Font:").size(11).width(Length::Fixed(50.0)),
@@ -67,8 +66,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .size(11)
                         .padding([6, 8])
                         .width(Length::Fill),
-                ].spacing(8).align_y(Alignment::Center),
-                
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
                 row![
                     text("Size:").size(11).width(Length::Fixed(50.0)),
                     text_input("72", &format!("{}", font_size))
@@ -78,12 +78,12 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .padding([6, 8])
                         .width(Length::Fixed(60.0)),
                     text("px").size(11).color(theme::colors::TEXT_MUTED),
-                ].spacing(8).align_y(Alignment::Center),
-                
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
                 Space::with_height(Length::Fixed(12.0)),
                 text("Colors").size(12).color(theme::colors::TEXT_SECONDARY),
                 Space::with_height(Length::Fixed(4.0)),
-                
                 // Color settings
                 row![
                     text("Inactive:").size(11).width(Length::Fixed(60.0)),
@@ -93,8 +93,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .size(11)
                         .padding([6, 8])
                         .width(Length::Fill),
-                ].spacing(8).align_y(Alignment::Center),
-                
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
                 row![
                     text("Active:").size(11).width(Length::Fixed(60.0)),
                     text_input("#FFD700", &active_color)
@@ -103,8 +104,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .size(11)
                         .padding([6, 8])
                         .width(Length::Fill),
-                ].spacing(8).align_y(Alignment::Center),
-                
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
                 row![
                     text("Complete:").size(11).width(Length::Fixed(60.0)),
                     text_input("#00FF00", &complete_color)
@@ -113,9 +115,11 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .size(11)
                         .padding([6, 8])
                         .width(Length::Fill),
-                ].spacing(8).align_y(Alignment::Center),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
             ]
-            .spacing(4)
+            .spacing(4),
         )
         .style(theme::card_style)
         .padding(12)
@@ -124,7 +128,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         container(
             text("Load a document to edit styles")
                 .size(12)
-                .color(theme::colors::TEXT_MUTED)
+                .color(theme::colors::TEXT_MUTED),
         )
         .style(theme::card_style)
         .padding(16)
@@ -133,20 +137,20 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 
     // Effect picker section
     let effects: Vec<String> = EFFECTS.iter().map(|s| s.to_string()).collect();
-    let selected_effect = state.selected_effect.clone().unwrap_or_else(|| "None".to_string());
-    
+    let selected_effect = state
+        .selected_effect
+        .clone()
+        .unwrap_or_else(|| "None".to_string());
+
     let effect_section = container(
         column![
             text("Effect").size(12).color(theme::colors::TEXT_SECONDARY),
             Space::with_height(Length::Fixed(8.0)),
-            pick_list(
-                effects,
-                Some(selected_effect),
-                Message::SetEffect,
-            )
-            .padding([8, 12]),
+            pick_list(effects, Some(selected_effect), Message::SetEffect,).padding([8, 12]),
             Space::with_height(Length::Fixed(8.0)),
-            text("Sample Effects").size(12).color(theme::colors::TEXT_SECONDARY),
+            text("Sample Effects")
+                .size(12)
+                .color(theme::colors::TEXT_SECONDARY),
             row![
                 button(text("Typewriter").size(10))
                     .on_press(Message::AddSampleEffect("Typewriter".to_string()))
@@ -156,8 +160,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                     .on_press(Message::AddSampleEffect("StrokeReveal".to_string()))
                     .style(theme::secondary_button_style)
                     .padding([4, 8]),
-            ].spacing(4),
-             row![
+            ]
+            .spacing(4),
+            row![
                 button(text("Particle Expr").size(10))
                     .on_press(Message::AddSampleEffect("ParticleOverride".to_string()))
                     .style(theme::secondary_button_style)
@@ -166,8 +171,10 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                     .on_press(Message::UnsetEffect)
                     .style(theme::secondary_button_style)
                     .padding([4, 8]),
-            ].spacing(4),
-        ].spacing(4)
+            ]
+            .spacing(4),
+        ]
+        .spacing(4),
     )
     .style(theme::card_style)
     .padding(12)
@@ -175,20 +182,32 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 
     // Line-level styles
     let line_section = if let Some(line) = state.current_line() {
-        let stroke_width = line.stroke.as_ref().map(|s| s.width_or_default()).unwrap_or(0.0);
-        let stroke_color = line.stroke.as_ref().map(|s| s.color_or_default()).unwrap_or_default();
-        
+        let stroke_width = line
+            .stroke
+            .as_ref()
+            .map(|s| s.width_or_default())
+            .unwrap_or(0.0);
+        let stroke_color = line
+            .stroke
+            .as_ref()
+            .map(|s| s.color_or_default())
+            .unwrap_or_default();
+
         container(
             column![
                 row![
-                    text("Line Styles").size(12).color(theme::colors::TEXT_SECONDARY),
+                    text("Line Styles")
+                        .size(12)
+                        .color(theme::colors::TEXT_SECONDARY),
                     Space::with_width(Length::Fill),
-                    text(format!("Line {}", state.selected_line.map(|i| i + 1).unwrap_or(0)))
-                        .size(10)
-                        .color(theme::colors::TEXT_MUTED),
+                    text(format!(
+                        "Line {}",
+                        state.selected_line.map(|i| i + 1).unwrap_or(0)
+                    ))
+                    .size(10)
+                    .color(theme::colors::TEXT_MUTED),
                 ],
                 Space::with_height(Length::Fixed(8.0)),
-                
                 row![
                     text("Stroke:").size(11).width(Length::Fixed(50.0)),
                     text_input("0", &format!("{}", stroke_width))
@@ -198,8 +217,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .padding([6, 8])
                         .width(Length::Fixed(50.0)),
                     text("px").size(11).color(theme::colors::TEXT_MUTED),
-                ].spacing(8).align_y(Alignment::Center),
-                
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
                 row![
                     text("Color:").size(11).width(Length::Fixed(50.0)),
                     text_input("#000000", &stroke_color)
@@ -208,9 +228,11 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .size(11)
                         .padding([6, 8])
                         .width(Length::Fill),
-                ].spacing(8).align_y(Alignment::Center),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
             ]
-            .spacing(4)
+            .spacing(4),
         )
         .style(theme::card_style)
         .padding(12)
@@ -219,7 +241,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         container(
             text("Select a line to edit its styles")
                 .size(12)
-                .color(theme::colors::TEXT_MUTED)
+                .color(theme::colors::TEXT_MUTED),
         )
         .style(theme::card_style)
         .padding(12)
@@ -227,21 +249,17 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     };
 
     // Main layout
-    scrollable(
-        column![
-            header,
-            container(
-                column![
-                    global_section,
-                    Space::with_height(Length::Fixed(8.0)),
-                    effect_section,
-                    Space::with_height(Length::Fixed(8.0)),
-                    line_section,
-                ]
-            )
-            .padding(12),
-        ]
-    )
+    scrollable(column![
+        header,
+        container(column![
+            global_section,
+            Space::with_height(Length::Fixed(8.0)),
+            effect_section,
+            Space::with_height(Length::Fixed(8.0)),
+            line_section,
+        ])
+        .padding(12),
+    ])
     .style(theme::scrollable_style)
     .width(Length::Fill)
     .height(Length::Fill)

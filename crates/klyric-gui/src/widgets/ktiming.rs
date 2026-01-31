@@ -2,8 +2,8 @@
 //! Redesigned with custom dark theme styling
 
 use iced::{
-    widget::{button, column, container, row, scrollable, text, Space, lazy},
-    Element, Length, Alignment,
+    widget::{button, column, container, lazy, row, scrollable, text, Space},
+    Alignment, Element, Length,
 };
 
 use crate::message::Message;
@@ -18,15 +18,15 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         row![
             theme::icon_sized("⌨️ K-Timing Editor", 14.0),
             Space::with_width(Length::Fixed(24.0)),
-            container(
-                row![
-                    text("Space").size(10).color(theme::colors::ACCENT),
-                    text(" mark").size(10).color(theme::colors::TEXT_SECONDARY),
-                    Space::with_width(Length::Fixed(12.0)),
-                    theme::icon_sized("←→", 10.0).color(theme::colors::ACCENT),
-                    text(" navigate").size(10).color(theme::colors::TEXT_SECONDARY),
-                ]
-            )
+            container(row![
+                text("Space").size(10).color(theme::colors::ACCENT),
+                text(" mark").size(10).color(theme::colors::TEXT_SECONDARY),
+                Space::with_width(Length::Fixed(12.0)),
+                theme::icon_sized("←→", 10.0).color(theme::colors::ACCENT),
+                text(" navigate")
+                    .size(10)
+                    .color(theme::colors::TEXT_SECONDARY),
+            ])
             .style(theme::card_style)
             .padding([4, 8]),
             Space::with_width(Length::Fill),
@@ -35,7 +35,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                 .padding([4, 10])
                 .on_press(Message::ResetLineTiming),
         ]
-        .align_y(Alignment::Center)
+        .align_y(Alignment::Center),
     )
     .style(theme::section_header_style)
     .padding([8, 12])
@@ -75,13 +75,11 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                                     let duration = end - start;
 
                                     let box_content = column![
-                                        text(char_text)
-                                            .size(20)
-                                            .color(if is_selected {
-                                                theme::colors::ACCENT
-                                            } else {
-                                                theme::colors::TEXT_PRIMARY
-                                            }),
+                                        text(char_text).size(20).color(if is_selected {
+                                            theme::colors::ACCENT
+                                        } else {
+                                            theme::colors::TEXT_PRIMARY
+                                        }),
                                         text(format!("{:.2}s", duration))
                                             .size(9)
                                             .color(theme::colors::TEXT_MUTED),
@@ -92,7 +90,8 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                                     let btn = button(box_content)
                                         .style(if is_selected {
                                             |theme: &iced::Theme, status| {
-                                                let mut style = theme::char_box_style(theme, status);
+                                                let mut style =
+                                                    theme::char_box_style(theme, status);
                                                 style.background = Some(iced::Background::Color(
                                                     theme::colors::SELECTED,
                                                 ));
@@ -115,28 +114,23 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 
                     column![
                         // Line info
-                        container(
-                            row![
-                                text(line.text.as_deref().unwrap_or("Untitled"))
-                                    .size(13)
-                                    .color(theme::colors::TEXT_PRIMARY),
-                                Space::with_width(Length::Fill),
-                                text(format!("{:.2}s → {:.2}s", line.start, line.end))
-                                    .size(11)
-                                    .color(theme::colors::TEXT_SECONDARY),
-                            ]
-                        )
+                        container(row![
+                            text(line.text.as_deref().unwrap_or("Untitled"))
+                                .size(13)
+                                .color(theme::colors::TEXT_PRIMARY),
+                            Space::with_width(Length::Fill),
+                            text(format!("{:.2}s → {:.2}s", line.start, line.end))
+                                .size(11)
+                                .color(theme::colors::TEXT_SECONDARY),
+                        ])
                         .padding([8, 12]),
-
                         // Character boxes
-                        scrollable(
-                            row(char_boxes).spacing(6)
-                        )
-                        .direction(scrollable::Direction::Horizontal(
-                            scrollable::Scrollbar::default()
-                        ))
-                        .style(theme::scrollable_style)
-                        .width(Length::Fill),
+                        scrollable(row(char_boxes).spacing(6))
+                            .direction(scrollable::Direction::Horizontal(
+                                scrollable::Scrollbar::default()
+                            ))
+                            .style(theme::scrollable_style)
+                            .width(Length::Fill),
                     ]
                     .spacing(4)
                     .into()
@@ -149,7 +143,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                                 .size(13)
                                 .color(theme::colors::TEXT_SECONDARY),
                         ]
-                        .align_x(Alignment::Center)
+                        .align_x(Alignment::Center),
                     )
                     .width(Length::Fill)
                     .height(Length::Fill)
@@ -157,8 +151,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                     .center_y(Length::Fill)
                     .into()
                 }
-            }
-        ).into()
+            },
+        )
+        .into()
     } else {
         container(
             column![
@@ -168,7 +163,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                     .size(13)
                     .color(theme::colors::TEXT_SECONDARY),
             ]
-            .align_x(Alignment::Center)
+            .align_x(Alignment::Center),
         )
         .width(Length::Fill)
         .height(Length::Fill)

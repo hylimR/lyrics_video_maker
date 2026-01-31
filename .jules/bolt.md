@@ -2,3 +2,8 @@
 Learning: Recreating `skia_safe::Font` objects in a loop (e.g., for every character in layout) is expensive because it involves C++ object construction and potentially locking/lookup in Skia.
 Insight: Even if the `Typeface` and size are the same, `Font::from_typeface` creates a new object.
 Action: Use a simple cache keyed by `(typeface.unique_id(), size_bits)` to reuse `Font` instances across iterations when rendering or measuring text. This is especially important in `layout_line` and `render_line`.
+
+## 2024-05-24 - Text Layout Re-calculation
+Learning: `LineRenderer::render_line` calls `LayoutEngine::layout_line` every frame (via `Renderer::render_to_canvas`), causing expensive text measurement and font lookups (even with caching) to repeat ~60 times per second for static text.
+Insight: Text layout for a line is deterministic based on the `Line` and `Style`. Since `Renderer` is persistent (unlike `LineRenderer`), it can cache the layout result (`Vec<GlyphInfo>`).
+Action: Hoist `layout_line` out of `render_line` and cache the result in `Renderer` keyed by line index (or ID). Pass the cached glyphs to `render_line`. This eliminates per-frame layout overhead.
