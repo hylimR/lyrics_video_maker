@@ -1,4 +1,4 @@
-use crate::model::{Effect, EffectType, EffectTrigger, Easing, Keyframe};
+use crate::model::{Easing, Effect, EffectTrigger, EffectType, Keyframe};
 use std::collections::HashMap;
 
 /// Creates a Blur Dissolve transition
@@ -27,7 +27,7 @@ pub fn blur_dissolve(duration: f64) -> Effect {
                 scale: Some(1.0),
                 blur: Some(0.0), // End with no blur
                 ..Default::default()
-            }
+            },
         ],
         preset: None,
         particle_config: None,

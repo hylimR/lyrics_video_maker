@@ -1,4 +1,4 @@
-use crate::model::{Effect, EffectType, EffectTrigger, Easing, Keyframe};
+use crate::model::{Easing, Effect, EffectTrigger, EffectType, Keyframe};
 use std::collections::HashMap;
 
 /// Creates a Dip to Color (Fade to Black/Color) transition
@@ -24,7 +24,7 @@ pub fn flash_in(duration: f64) -> Effect {
                 opacity: Some(1.0),
                 scale: Some(1.0),
                 ..Default::default()
-            }
+            },
         ],
         preset: None,
         particle_config: None,

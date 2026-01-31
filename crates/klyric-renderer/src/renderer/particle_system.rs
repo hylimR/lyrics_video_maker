@@ -1,7 +1,10 @@
-use std::collections::{HashMap, HashSet};
-use skia_safe::{Canvas, Color, Paint, Rect, Point, Image, BlendMode as SkBlendMode};
-use crate::particle::{Particle, ParticleEmitter, ParticleShape, BlendMode, color_to_rgba, ParticleConfig, SpawnPattern, RangeValue, ParticlePhysics};
+use crate::particle::{
+    color_to_rgba, BlendMode, Particle, ParticleConfig, ParticleEmitter, ParticlePhysics,
+    ParticleShape, RangeValue, SpawnPattern,
+};
 use crate::presets::{CharBounds, EffectPreset, PresetFactory};
+use skia_safe::{BlendMode as SkBlendMode, Canvas, Color, Image, Paint, Point, Rect};
+use std::collections::{HashMap, HashSet};
 
 pub struct ParticleRenderSystem {
     /// Active particle emitters keyed by "{line_index}_{char_index}_{effect_name}"
@@ -26,19 +29,19 @@ impl ParticleRenderSystem {
     pub fn update(&mut self, dt: f32, active_keys: &HashSet<String>) {
         // Remove emitters that are not active this frame AND are empty
         // Or if they are burst effects (start with burst_), keep them until empty
-        
+
         self.particle_emitters.retain(|key, emitter| {
             let is_manual_or_burst = key.starts_with("manual_") || key.starts_with("burst_");
             let is_active_frame = active_keys.contains(key);
-            
+
             // If it's a frame-based emitter and not active this frame, stop spawning
             if !is_manual_or_burst {
                 emitter.active = is_active_frame;
             }
-            
+
             // Update the emitter
             emitter.update(dt);
-            
+
             // Keep if it has particles or (it's active/manual/burst)
             !emitter.is_empty() || emitter.active
         });
@@ -65,62 +68,67 @@ impl ParticleRenderSystem {
         emitter.burst();
         // Burst effects are self-managed (they die when empty)
         // We use a random key to store them
-        let key = format!("burst_{}_{}", seed, bounds.x); 
+        let key = format!("burst_{}_{}", seed, bounds.x);
         self.particle_emitters.insert(key, emitter);
     }
-    
-    pub fn ensure_emitter(&mut self, key: String, preset_name: Option<String>, config: Option<crate::particle::ParticleConfig>, bounds: CharBounds, seed: u64) {
-         if !self.particle_emitters.contains_key(&key) {
-             let emitter = if let Some(name) = preset_name {
-                 // Try to load by name first
-                 if let Some(e) = self.preset_factory.create(&name, &bounds, seed) {
-                     Some(e)
-                 } else {
-                     // Fallback: try enum parsing for legacy
-                     if let Ok(p) = name.parse::<EffectPreset>() {
-                         Some(self.preset_factory.create_from_enum(p, &bounds, seed))
-                     } else {
-                         None
-                     }
-                 }
-             } else {
-                 config.clone().map(|c| ParticleEmitter::new(
-                     c, 
-                     bounds.spawn_center(), 
-                     seed
-                 ))
-             };
-             
-             if let Some(e) = emitter {
-                 self.particle_emitters.insert(key, e);
-             }
-         } else {
-             // Update existing emitter bounds
-             if let Some(emitter) = self.particle_emitters.get_mut(&key) {
-                 emitter.active = true;
-                 
-                 // Update spawn pattern based on new bounds
-                 match &mut emitter.spawn_pattern {
-                     crate::particle::SpawnPattern::Point { x, y } => {
-                         *x = bounds.x + bounds.width / 2.0;
-                         *y = bounds.y + bounds.height / 2.0;
-                     }
-                     crate::particle::SpawnPattern::Rect { x, y, w, h } => {
-                         *x = bounds.x;
-                         *y = bounds.y;
-                         *w = bounds.width;
-                         *h = bounds.height;
-                     }
-                     crate::particle::SpawnPattern::Line { x1, y1, x2, y2 } => {
-                         let _width_diff = bounds.width - (*x2 - *x1);
-                         *x1 = bounds.x;
-                         *x2 = bounds.x + bounds.width;
-                         *y1 = bounds.y - 50.0;
-                         *y2 = bounds.y - 50.0;
-                     }
-                 }
-             }
-         }
+
+    pub fn ensure_emitter(
+        &mut self,
+        key: String,
+        preset_name: Option<String>,
+        config: Option<crate::particle::ParticleConfig>,
+        bounds: CharBounds,
+        seed: u64,
+    ) {
+        if !self.particle_emitters.contains_key(&key) {
+            let emitter = if let Some(name) = preset_name {
+                // Try to load by name first
+                if let Some(e) = self.preset_factory.create(&name, &bounds, seed) {
+                    Some(e)
+                } else {
+                    // Fallback: try enum parsing for legacy
+                    if let Ok(p) = name.parse::<EffectPreset>() {
+                        Some(self.preset_factory.create_from_enum(p, &bounds, seed))
+                    } else {
+                        None
+                    }
+                }
+            } else {
+                config
+                    .clone()
+                    .map(|c| ParticleEmitter::new(c, bounds.spawn_center(), seed))
+            };
+
+            if let Some(e) = emitter {
+                self.particle_emitters.insert(key, e);
+            }
+        } else {
+            // Update existing emitter bounds
+            if let Some(emitter) = self.particle_emitters.get_mut(&key) {
+                emitter.active = true;
+
+                // Update spawn pattern based on new bounds
+                match &mut emitter.spawn_pattern {
+                    crate::particle::SpawnPattern::Point { x, y } => {
+                        *x = bounds.x + bounds.width / 2.0;
+                        *y = bounds.y + bounds.height / 2.0;
+                    }
+                    crate::particle::SpawnPattern::Rect { x, y, w, h } => {
+                        *x = bounds.x;
+                        *y = bounds.y;
+                        *w = bounds.width;
+                        *h = bounds.height;
+                    }
+                    crate::particle::SpawnPattern::Line { x1, y1, x2, y2 } => {
+                        let _width_diff = bounds.width - (*x2 - *x1);
+                        *x1 = bounds.x;
+                        *x2 = bounds.x + bounds.width;
+                        *y1 = bounds.y - 50.0;
+                        *y2 = bounds.y - 50.0;
+                    }
+                }
+            }
+        }
     }
 
     /// Create and register a one-shot disintegration emitter from an image
@@ -133,10 +141,10 @@ impl ParticleRenderSystem {
         config: Option<ParticleConfig>,
     ) {
         if self.particle_emitters.contains_key(&key) {
-             if let Some(emitter) = self.particle_emitters.get_mut(&key) {
+            if let Some(emitter) = self.particle_emitters.get_mut(&key) {
                 // Ensure it stays alive while needed, though usually this is a one-shot burst
                 emitter.active = true;
-             }
+            }
             return;
         }
 
@@ -195,72 +203,79 @@ impl ParticleRenderSystem {
             // Assuming N32 format (4 bytes per pixel)
             // skia uses row_bytes()
             let row_bytes = pixmap.row_bytes();
-            
+
             if let Some(data) = pixmap.bytes() {
                 // Check color type...
-            
+
                 for y in (0..height).step_by(step) {
                     for x in (0..width).step_by(step) {
                         let offset = y as usize * row_bytes + x as usize * 4;
-                        if offset + 3 >= data.len() { break; }
-                    
-                    // Skia usually stores premultiplied coords. 
-                    // Let's grab u32 to be safe if we want full color, 
-                    // but we need to know byte order for R, G, B.
-                    // For "Disintegration" often white particles are fine or we guess.
-                    // Let's assume byte 3 is Alpha (if RGBA or BGRA).
-                    // Actually, if it's BGRA, A is 3. If RGBA, A is 3.
-                    // So data[offset+3] is likely Alpha.
-                    
-                    let a = data[offset + 3];
+                        if offset + 3 >= data.len() {
+                            break;
+                        }
 
-                    if a > 10 { // Threshold alpha
-                        // Approximate color - we might get R/B swapped but usually OK for particles
-                        let r = data[offset];
-                        let g = data[offset + 1];
-                        let b = data[offset + 2];
+                        // Skia usually stores premultiplied coords.
+                        // Let's grab u32 to be safe if we want full color,
+                        // but we need to know byte order for R, G, B.
+                        // For "Disintegration" often white particles are fine or we guess.
+                        // Let's assume byte 3 is Alpha (if RGBA or BGRA).
+                        // Actually, if it's BGRA, A is 3. If RGBA, A is 3.
+                        // So data[offset+3] is likely Alpha.
 
-                        // Create particle
-                        let px = bounds.x + (x as f32 / pm_w) * bounds.width;
-                        let py = bounds.y + (y as f32 / pm_h) * bounds.height;
+                        let a = data[offset + 3];
 
-                        let color: u32 = ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32);
+                        if a > 10 {
+                            // Threshold alpha
+                            // Approximate color - we might get R/B swapped but usually OK for particles
+                            let r = data[offset];
+                            let g = data[offset + 1];
+                            let b = data[offset + 2];
 
-                        // Manual spawn logic from emitter
-                        // Calculate velocity from direction + spread
-                        let base_dir = base_config.direction.sample(&mut rng);
-                        let spread_offset = rng.range(-base_config.spread / 2.0, base_config.spread / 2.0);
-                        let dir_rad = (base_dir + spread_offset).to_radians();
+                            // Create particle
+                            let px = bounds.x + (x as f32 / pm_w) * bounds.width;
+                            let py = bounds.y + (y as f32 / pm_h) * bounds.height;
 
-                        let speed = base_config.speed.sample(&mut rng);
-                        let vx = dir_rad.cos() * speed;
-                        let vy = dir_rad.sin() * speed;
+                            let color: u32 = ((r as u32) << 24)
+                                | ((g as u32) << 16)
+                                | ((b as u32) << 8)
+                                | (a as u32);
 
-                        // Add some random jitter to position so grid isn't obvious
-                        let jx = rng.range(-1.0, 1.0);
-                        let jy = rng.range(-1.0, 1.0);
+                            // Manual spawn logic from emitter
+                            // Calculate velocity from direction + spread
+                            let base_dir = base_config.direction.sample(&mut rng);
+                            let spread_offset =
+                                rng.range(-base_config.spread / 2.0, base_config.spread / 2.0);
+                            let dir_rad = (base_dir + spread_offset).to_radians();
 
-                        let particle = Particle {
-                            x: px + jx,
-                            y: py + jy,
-                            vx,
-                            vy,
-                            life: 0.0,
-                            max_life: base_config.lifetime.sample(&mut rng),
-                            size: base_config.start_size.sample(&mut rng),
-                            start_size: base_config.start_size.sample(&mut rng),
-                            end_size: base_config.end_size.sample(&mut rng),
-                            rotation: rng.range(0.0, 360.0),
-                            rotation_speed: base_config.rotation_speed.sample(&mut rng),
-                            color,
-                            opacity: 1.0,
-                            shape: base_config.shape.clone(),
-                        };
+                            let speed = base_config.speed.sample(&mut rng);
+                            let vx = dir_rad.cos() * speed;
+                            let vy = dir_rad.sin() * speed;
 
-                        emitter.particles.push(particle);
+                            // Add some random jitter to position so grid isn't obvious
+                            let jx = rng.range(-1.0, 1.0);
+                            let jy = rng.range(-1.0, 1.0);
+
+                            let particle = Particle {
+                                x: px + jx,
+                                y: py + jy,
+                                vx,
+                                vy,
+                                life: 0.0,
+                                max_life: base_config.lifetime.sample(&mut rng),
+                                size: base_config.start_size.sample(&mut rng),
+                                start_size: base_config.start_size.sample(&mut rng),
+                                end_size: base_config.end_size.sample(&mut rng),
+                                rotation: rng.range(0.0, 360.0),
+                                rotation_speed: base_config.rotation_speed.sample(&mut rng),
+                                color,
+                                opacity: 1.0,
+                                shape: base_config.shape.clone(),
+                            };
+
+                            emitter.particles.push(particle);
+                        }
                     }
                 }
-            }
             }
         }
 
@@ -274,33 +289,33 @@ impl ParticleRenderSystem {
     fn draw_particle(&self, canvas: &Canvas, particle: &Particle, blend_mode: &BlendMode) {
         let (r, g, b, _a) = color_to_rgba(particle.color);
         let alpha = (particle.opacity * 255.0) as u8;
-        
+
         // Skia colors
         let color = Color::from_argb(alpha, r, g, b);
-        
+
         let mut paint = Paint::default();
         paint.set_color(color);
         paint.set_anti_alias(true);
-        
+
         // Apply blend mode
         match blend_mode {
             BlendMode::Additive => {
                 paint.set_blend_mode(SkBlendMode::Plus);
             }
             BlendMode::Multiply => {
-                 paint.set_blend_mode(SkBlendMode::Multiply);
+                paint.set_blend_mode(SkBlendMode::Multiply);
             }
             BlendMode::Normal => {
-                 paint.set_blend_mode(SkBlendMode::SrcOver);
+                paint.set_blend_mode(SkBlendMode::SrcOver);
             }
         }
-        
+
         canvas.save();
-        
+
         // Translate to particle position
         canvas.translate((particle.x, particle.y));
         canvas.rotate(particle.rotation, None);
-        
+
         match &particle.shape {
             ParticleShape::Circle => {
                 let radius = particle.size / 2.0;
@@ -321,7 +336,7 @@ impl ParticleRenderSystem {
                 canvas.draw_circle(Point::new(0.0, 0.0), radius, &paint);
             }
         }
-        
+
         canvas.restore();
     }
 }
@@ -378,7 +393,10 @@ mod tests {
             .particle_emitters
             .keys()
             .any(|k| k.starts_with("burst_"));
-        assert!(has_burst, "Burst effect should create emitter with burst_ prefix");
+        assert!(
+            has_burst,
+            "Burst effect should create emitter with burst_ prefix"
+        );
     }
 
     #[test]
@@ -597,13 +615,7 @@ mod tests {
             blend_mode: BlendMode::Normal,
         };
 
-        system.ensure_emitter(
-            "config_test".to_string(),
-            None,
-            Some(config),
-            bounds,
-            42,
-        );
+        system.ensure_emitter("config_test".to_string(), None, Some(config), bounds, 42);
 
         assert!(
             system.particle_emitters.contains_key("config_test"),
@@ -662,13 +674,11 @@ mod tests {
             blend_mode: BlendMode::Normal,
         };
 
-        let emitter = ParticleEmitter::new(
-            config,
-            SpawnPattern::Point { x: 0.0, y: 0.0 },
-            42,
-        );
+        let emitter = ParticleEmitter::new(config, SpawnPattern::Point { x: 0.0, y: 0.0 }, 42);
 
-        system.particle_emitters.insert("disintegration_test".to_string(), emitter);
+        system
+            .particle_emitters
+            .insert("disintegration_test".to_string(), emitter);
 
         let count_before = system.particle_emitters.len();
 
@@ -683,4 +693,3 @@ mod tests {
         );
     }
 }
-

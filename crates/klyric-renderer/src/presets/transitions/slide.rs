@@ -1,4 +1,4 @@
-use crate::model::{Effect, EffectType, EffectTrigger, AnimatedValue, Easing, Direction};
+use crate::model::{AnimatedValue, Direction, Easing, Effect, EffectTrigger, EffectType};
 use std::collections::HashMap;
 
 /// Creates a Slide (Push) transition
@@ -11,9 +11,24 @@ pub fn slide(duration: f64, direction: Direction) -> Effect {
     };
 
     let mut properties = HashMap::new();
-    properties.insert("x".to_string(), AnimatedValue::Range { from: start_x, to: 0.0 });
-    properties.insert("y".to_string(), AnimatedValue::Range { from: start_y, to: 0.0 });
-    properties.insert("opacity".to_string(), AnimatedValue::Range { from: 0.0, to: 1.0 });
+    properties.insert(
+        "x".to_string(),
+        AnimatedValue::Range {
+            from: start_x,
+            to: 0.0,
+        },
+    );
+    properties.insert(
+        "y".to_string(),
+        AnimatedValue::Range {
+            from: start_y,
+            to: 0.0,
+        },
+    );
+    properties.insert(
+        "opacity".to_string(),
+        AnimatedValue::Range { from: 0.0, to: 1.0 },
+    );
 
     Effect {
         effect_type: EffectType::Transition,

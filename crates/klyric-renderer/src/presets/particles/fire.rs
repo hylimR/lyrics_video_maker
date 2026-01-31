@@ -1,9 +1,9 @@
+use super::super::traits::ParticlePreset;
+use super::super::types::CharBounds;
 use crate::particle::{
     BlendMode, ParticleConfig, ParticleEmitter, ParticlePhysics, ParticleShape, RangeValue,
     SpawnPattern,
 };
-use super::super::types::CharBounds;
-use super::super::traits::ParticlePreset;
 
 /// 🔥 Fire effect - flames rising
 pub struct FirePreset;

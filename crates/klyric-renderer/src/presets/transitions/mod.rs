@@ -1,12 +1,12 @@
+pub mod blur;
 pub mod cross_dissolve;
 pub mod flash;
-pub mod blur;
 pub mod glitch;
+pub mod shake;
 pub mod slide;
 pub mod zoom;
-pub mod shake;
 
-use crate::model::{Effect, Direction};
+use crate::model::{Direction, Effect};
 
 pub fn get_transition(name: &str) -> Option<Effect> {
     match name {

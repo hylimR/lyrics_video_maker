@@ -1,4 +1,4 @@
-use super::model::{Line, Style, Align};
+use super::model::{Align, Line, Style};
 use crate::text::TextRenderer;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -23,16 +23,24 @@ impl LayoutEngine {
     pub fn layout_line(
         line: &Line,
         resolved_style: &Style,
-        renderer: &mut TextRenderer
+        renderer: &mut TextRenderer,
     ) -> Vec<GlyphInfo> {
         // Base (Style) Defaults
-        let style_family = resolved_style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
-        let style_size = resolved_style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
+        let style_family = resolved_style
+            .font
+            .as_ref()
+            .and_then(|f| f.family.as_deref())
+            .unwrap_or("Noto Sans SC");
+        let style_size = resolved_style
+            .font
+            .as_ref()
+            .and_then(|f| f.size)
+            .unwrap_or(72.0);
 
         let mut glyphs = Vec::new();
         let mut cursor_x = 0.0;
         let gap = line.layout.as_ref().map(|l| l.gap).unwrap_or(0.0);
-        
+
         // 1. Resolve Line-level fallback family
         let line_family_def = line
             .font
@@ -44,6 +52,12 @@ impl LayoutEngine {
         let line_typeface = renderer
             .get_typeface(line_family_def)
             .or_else(|| renderer.get_default_typeface());
+
+        // Cache for ResolvedFont to avoid recreation overhead
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut cached_font: Option<ResolvedFont> = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut cached_font_key: Option<(u32, u32)> = None;
 
         // Iterate over character objects in the line
         for (i, char_data) in line.chars.iter().enumerate() {
@@ -69,7 +83,29 @@ impl LayoutEngine {
                 .unwrap_or(style_size);
 
             #[cfg(not(target_arch = "wasm32"))]
-            let resolved_font = font_ref.as_ref().map(|tf| renderer.create_font(tf, size));
+            {
+                if let Some(tf) = font_ref.as_ref() {
+                    let tf_id: u32 = tf.unique_id().into();
+                    let size_bits = size.to_bits();
+
+                    let can_reuse = if let Some((last_id, last_size)) = cached_font_key {
+                        last_id == tf_id && last_size == size_bits
+                    } else {
+                        false
+                    };
+
+                    if !can_reuse {
+                        cached_font = Some(renderer.create_font(tf, size));
+                        cached_font_key = Some((tf_id, size_bits));
+                    }
+                } else {
+                    cached_font = None;
+                    cached_font_key = None;
+                }
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            let resolved_font_ref = cached_font.as_ref();
 
             // For each character in the string
             for ch in ch_str.chars() {
@@ -77,7 +113,7 @@ impl LayoutEngine {
                 if font_ref.is_some() {
                     // Measure character using renderer
                     #[cfg(not(target_arch = "wasm32"))]
-                    let (advance, height) = if let Some(font) = &resolved_font {
+                    let (advance, height) = if let Some(font) = resolved_font_ref {
                         renderer.measure_char_with_font(font, ch)
                     } else {
                         (0.0, 0.0)
@@ -89,27 +125,27 @@ impl LayoutEngine {
                     } else {
                         (0.0, 0.0)
                     };
-                    
-                    let width = advance; 
-                    
+
+                    let width = advance;
+
                     glyphs.push(GlyphInfo {
                         char: ch,
                         x: cursor_x,
-                        y: 0.0, 
+                        y: 0.0,
                         width,
                         height,
                         advance,
-                        char_index: i
+                        char_index: i,
                     });
-                    
+
                     cursor_x += advance;
                 } else {
-                     // Log warning only once?
-                     // For now just skip or add zero width space
-                     cursor_x += size * 0.5; // Fallback advance
+                    // Log warning only once?
+                    // For now just skip or add zero width space
+                    cursor_x += size * 0.5; // Fallback advance
                 }
             }
-            
+
             // Add gap after each KLyric char unit
             cursor_x += gap;
         }
@@ -118,16 +154,18 @@ impl LayoutEngine {
         let total_width = if cursor_x > gap { cursor_x - gap } else { 0.0 };
 
         // Handle Alignment
-        let align = line.layout.as_ref()
+        let align = line
+            .layout
+            .as_ref()
             .map(|l| l.align.clone())
             .unwrap_or(Align::Center);
-            
+
         let align_offset = match align {
             Align::Center => -total_width / 2.0,
             Align::Right => -total_width,
             Align::Left => 0.0,
         };
-        
+
         // Apply alignment offset
         for glyph in &mut glyphs {
             glyph.x += align_offset;
@@ -220,11 +258,7 @@ mod tests {
         let mut renderer = TextRenderer::new();
 
         let glyphs = LayoutEngine::layout_line(&line, &style, &mut renderer);
-        assert_eq!(
-            glyphs.len(),
-            1,
-            "Single char line should produce one glyph"
-        );
+        assert_eq!(glyphs.len(), 1, "Single char line should produce one glyph");
         assert_eq!(glyphs[0].char, 'A');
         assert_eq!(glyphs[0].char_index, 0);
     }

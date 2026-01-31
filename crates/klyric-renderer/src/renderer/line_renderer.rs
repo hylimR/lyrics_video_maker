@@ -1,22 +1,26 @@
 use anyhow::Result;
-use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces, Font, Typeface};
-use std::collections::HashSet;
+use skia_safe::{
+    surfaces, BlendMode, BlurStyle, Canvas, Color, Font, MaskFilter, Paint, PaintStyle, Typeface,
+};
 use std::borrow::Cow;
+use std::collections::HashSet;
 
-use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, Style, Effect};
+use crate::model::{
+    Easing, Effect, EffectType, KLyricDocumentV2, Line, PositionValue, Style, Transform,
+};
 // use crate::style::StyleResolver; // Removed
-use crate::layout::LayoutEngine;
-use crate::text::TextRenderer;
 use crate::effects::{EffectEngine, TriggerContext};
+use crate::layout::LayoutEngine;
 use crate::presets::CharBounds;
+use crate::text::TextRenderer;
 
 use super::particle_system::ParticleRenderSystem;
 use super::utils::{parse_color, parse_percentage};
 
 /// Default colors for karaoke states when not specified in style
-const DEFAULT_INACTIVE_COLOR: &str = "#888888";  // Dimmed gray
-const DEFAULT_ACTIVE_COLOR: &str = "#FFFF00";    // Bright yellow
-const DEFAULT_COMPLETE_COLOR: &str = "#FFFFFF";  // White
+const DEFAULT_INACTIVE_COLOR: &str = "#888888"; // Dimmed gray
+const DEFAULT_ACTIVE_COLOR: &str = "#FFFF00"; // Bright yellow
+const DEFAULT_COMPLETE_COLOR: &str = "#FFFFFF"; // White
 
 pub struct LineRenderer<'a> {
     pub canvas: &'a Canvas,
@@ -38,23 +42,33 @@ impl<'a> LineRenderer<'a> {
         let (base_x, base_y) = self.compute_line_position(line);
 
         // Resolve font size for rasterization (Base)
-        let style_family = style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
+        let style_family = style
+            .font
+            .as_ref()
+            .and_then(|f| f.family.as_deref())
+            .unwrap_or("Noto Sans SC");
         let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
-        
+
         // Pre-resolve colors to avoid parsing per-glyph
-        let inactive_hex = style.colors.as_ref()
+        let inactive_hex = style
+            .colors
+            .as_ref()
             .and_then(|c| c.inactive.as_ref())
             .and_then(|fs| fs.fill.as_deref())
             .unwrap_or(DEFAULT_INACTIVE_COLOR);
         let inactive_color = parse_color(inactive_hex).unwrap_or(Color::WHITE);
 
-        let active_hex = style.colors.as_ref()
+        let active_hex = style
+            .colors
+            .as_ref()
             .and_then(|c| c.active.as_ref())
             .and_then(|fs| fs.fill.as_deref())
             .unwrap_or(DEFAULT_ACTIVE_COLOR);
         let active_color = parse_color(active_hex).unwrap_or(Color::WHITE);
 
-        let complete_hex = style.colors.as_ref()
+        let complete_hex = style
+            .colors
+            .as_ref()
             .and_then(|c| c.complete.as_ref())
             .and_then(|fs| fs.fill.as_deref())
             .unwrap_or(DEFAULT_COMPLETE_COLOR);
@@ -72,9 +86,15 @@ impl<'a> LineRenderer<'a> {
         for effect_name in all_effects_names {
             if let Some(effect) = self.doc.effects.get(effect_name) {
                 if let Some(preset_name) = &effect.preset {
-                    if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
-                        if let Some(d) = effect.duration { generated.duration = Some(d); }
-                        if effect.easing != Easing::Linear { generated.easing = effect.easing.clone(); }
+                    if let Some(mut generated) =
+                        crate::presets::transitions::get_transition(preset_name)
+                    {
+                        if let Some(d) = effect.duration {
+                            generated.duration = Some(d);
+                        }
+                        if effect.easing != Easing::Linear {
+                            generated.easing = effect.easing.clone();
+                        }
                         line_active_effects.push((effect_name.as_str(), Cow::Owned(generated)));
                     } else {
                         line_active_effects.push((effect_name.as_str(), Cow::Borrowed(effect)));
@@ -88,9 +108,12 @@ impl<'a> LineRenderer<'a> {
         }
 
         // --- OPTIMIZATION: Hoist Effect Categorization ---
-        let mut transform_effects_base: Vec<&Effect> = Vec::with_capacity(line_active_effects.len());
-        let mut particle_effects_base: Vec<(&str, &Effect)> = Vec::with_capacity(line_active_effects.len());
-        let mut disintegrate_effects_base: Vec<(&str, &Effect)> = Vec::with_capacity(line_active_effects.len());
+        let mut transform_effects_base: Vec<&Effect> =
+            Vec::with_capacity(line_active_effects.len());
+        let mut particle_effects_base: Vec<(&str, &Effect)> =
+            Vec::with_capacity(line_active_effects.len());
+        let mut disintegrate_effects_base: Vec<(&str, &Effect)> =
+            Vec::with_capacity(line_active_effects.len());
 
         for (name, effect) in &line_active_effects {
             match effect.effect_type {
@@ -112,9 +135,15 @@ impl<'a> LineRenderer<'a> {
         stroke_paint.set_anti_alias(true);
 
         // --- OPTIMIZATION: Hoist Default Typeface ---
-        let line_family_def = line.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or(style_family);
-        let default_typeface = self.text_renderer.get_typeface(line_family_def)
-             .or_else(|| self.text_renderer.get_default_typeface());
+        let line_family_def = line
+            .font
+            .as_ref()
+            .and_then(|f| f.family.as_deref())
+            .unwrap_or(style_family);
+        let default_typeface = self
+            .text_renderer
+            .get_typeface(line_family_def)
+            .or_else(|| self.text_renderer.get_default_typeface());
 
         // --- OPTIMIZATION: Font Cache ---
         // Reuse SkFont instances to avoid expensive reconstruction
@@ -128,424 +157,508 @@ impl<'a> LineRenderer<'a> {
 
         // Loop:
         for glyph in glyphs.iter() {
-             let char_absolute_x = base_x + glyph.x;
-             let char_absolute_y = base_y + glyph.y;
-             
-             // Resolve Font for THIS glyph (matches layout logic)
-             let char_data = line.chars.get(glyph.char_index);
-             
-             // Check if we have overrides
-             let family_override = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.family.as_deref()));
+            let char_absolute_x = base_x + glyph.x;
+            let char_absolute_y = base_y + glyph.y;
 
-             let size = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.size))
+            // Resolve Font for THIS glyph (matches layout logic)
+            let char_data = line.chars.get(glyph.char_index);
+
+            // Check if we have overrides
+            let family_override =
+                char_data.and_then(|c| c.font.as_ref().and_then(|f| f.family.as_deref()));
+
+            let size = char_data
+                .and_then(|c| c.font.as_ref().and_then(|f| f.size))
                 .or_else(|| line.font.as_ref().and_then(|f| f.size))
                 .unwrap_or(style_size);
 
-             // Get typeface (avoid cloning default)
-             let override_typeface = if let Some(fam) = family_override {
-                 self.text_renderer.get_typeface(fam)
-                     .or_else(|| self.text_renderer.get_default_typeface())
-             } else {
-                 None
-             };
-             
-             let typeface_ref = override_typeface.as_ref().or(default_typeface.as_ref());
+            // Get typeface (avoid cloning default)
+            let override_typeface = if let Some(fam) = family_override {
+                self.text_renderer
+                    .get_typeface(fam)
+                    .or_else(|| self.text_renderer.get_default_typeface())
+            } else {
+                None
+            };
 
-             if let Some(typeface) = typeface_ref {
-                 // Resolve Font (Cached)
-                 let tf_id: u32 = typeface.unique_id().into();
-                 let size_bits = size.to_bits();
+            let typeface_ref = override_typeface.as_ref().or(default_typeface.as_ref());
 
-                 let font = if let Some((last_id, last_size)) = cached_font_key {
-                     if last_id == tf_id && last_size == size_bits {
-                         cached_font.as_ref().unwrap()
-                     } else {
-                         let f = Font::from_typeface(typeface.clone(), size);
-                         cached_font = Some(f);
-                         cached_font_key = Some((tf_id, size_bits));
-                         cached_font.as_ref().unwrap()
-                     }
-                 } else {
-                     let f = Font::from_typeface(typeface.clone(), size);
-                     cached_font = Some(f);
-                     cached_font_key = Some((tf_id, size_bits));
-                     cached_font.as_ref().unwrap()
-                  };
+            if let Some(typeface) = typeface_ref {
+                // Resolve Font (Cached)
+                let tf_id: u32 = typeface.unique_id().into();
+                let size_bits = size.to_bits();
 
-                 // Get path
-                 let glyph_id = font.unichar_to_glyph(glyph.char as i32);
-                 if let Some(path) = font.get_path(glyph_id) {
-                     // Dimensions for effects
-                     // Skia path bounds
-                     let bounds = path.bounds();
-                     let w = bounds.width();
-                     let h = bounds.height();
-                     // Helper midpoint
-                     let cx = w / 2.0;
-                     let cy = h / 2.0;
+                let font = if let Some((last_id, last_size)) = cached_font_key {
+                    if last_id == tf_id && last_size == size_bits {
+                        cached_font.as_ref().unwrap()
+                    } else {
+                        let f = Font::from_typeface(typeface.clone(), size);
+                        cached_font = Some(f);
+                        cached_font_key = Some((tf_id, size_bits));
+                        cached_font.as_ref().unwrap()
+                    }
+                } else {
+                    let f = Font::from_typeface(typeface.clone(), size);
+                    cached_font = Some(f);
+                    cached_font_key = Some((tf_id, size_bits));
+                    cached_font.as_ref().unwrap()
+                };
 
-                     // Resolve color
-                     let is_active = char_data.map(|c| self.time >= c.start && self.time <= c.end).unwrap_or(false);
-                     let is_past = char_data.map(|c| self.time > c.end).unwrap_or(false);
-                     
-                     let text_color = if is_past {
-                         complete_color
-                     } else if is_active {
-                         active_color
-                     } else {
-                         inactive_color
-                     };
+                // Get path
+                let glyph_id = font.unichar_to_glyph(glyph.char as i32);
+                if let Some(path) = font.get_path(glyph_id) {
+                    // Dimensions for effects
+                    // Skia path bounds
+                    let bounds = path.bounds();
+                    let w = bounds.width();
+                    let h = bounds.height();
+                    // Helper midpoint
+                    let cx = w / 2.0;
+                    let cy = h / 2.0;
 
-                     // Compute Transform (Base + Effects)
-                     let char_transform_default = Transform::default();
-                     let char_transform_ref = char_data.and_then(|c| c.transform.as_ref()).unwrap_or(&char_transform_default);
-                     
-                     let base_transform = Transform {
-                         x: Some(line_transform_ref.x_val() + char_transform_ref.x_val()),
-                         y: Some(line_transform_ref.y_val() + char_transform_ref.y_val()),
-                         rotation: Some(line_transform_ref.rotation_val() + char_transform_ref.rotation_val()),
-                         scale: Some(line_transform_ref.scale_val() * char_transform_ref.scale_val()),
-                         scale_x: Some(line_transform_ref.scale_x_val() * char_transform_ref.scale_x_val()),
-                         scale_y: Some(line_transform_ref.scale_y_val() * char_transform_ref.scale_y_val()),
-                         opacity: Some(line_transform_ref.opacity_val() * char_transform_ref.opacity_val()),
-                         anchor_x: Some(char_transform_ref.anchor_x_val()),
-                         anchor_y: Some(char_transform_ref.anchor_y_val()), // Anchor is not additive usually, char overrides line
-                         blur: Some(line_transform_ref.blur_val() + char_transform_ref.blur_val()),
-                         glitch_offset: Some(line_transform_ref.glitch_offset_val() + char_transform_ref.glitch_offset_val()),
-                         hue_shift: Some(line_transform_ref.hue_shift_val() + char_transform_ref.hue_shift_val()),
-                     };
-                     
-                     let ctx = TriggerContext {
-                         start_time: line.start,
-                         end_time: line.end,
-                         current_time: self.time,
-                         active: true,
-                         char_index: Some(glyph.char_index),
-                         char_count: Some(glyphs.len()),
-                     };
-                     
-                     let final_transform = EffectEngine::compute_transform(
-                         self.time,
-                         base_transform,
-                         &transform_effects_base,
-                         ctx.clone()
-                     );
+                    // Resolve color
+                    let is_active = char_data
+                        .map(|c| self.time >= c.start && self.time <= c.end)
+                        .unwrap_or(false);
+                    let is_past = char_data.map(|c| self.time > c.end).unwrap_or(false);
 
-                     // Disintegrate Effect Progress
-                     let mut disintegration_progress = 0.0;
-                     if let Some((_name, effect)) = disintegrate_effects_base.first() {
-                         if EffectEngine::should_trigger(effect, &ctx) {
-                             disintegration_progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                             disintegration_progress = disintegration_progress.clamp(0.0, 1.0);
-                         }
-                     }
+                    let text_color = if is_past {
+                        complete_color
+                    } else if is_active {
+                        active_color
+                    } else {
+                        inactive_color
+                    };
 
-                     // Setup Paint
-                     paint.set_color(text_color);
-                     // paint.set_anti_alias(true); // Already set
-                     
-                     let final_opacity = final_transform.opacity_val() * (1.0 - disintegration_progress as f32);
-                     paint.set_alpha_f(final_opacity);
+                    // Compute Transform (Base + Effects)
+                    let char_transform_default = Transform::default();
+                    let char_transform_ref = char_data
+                        .and_then(|c| c.transform.as_ref())
+                        .unwrap_or(&char_transform_default);
 
-                     // Apply Blur
-                     if final_transform.blur_val() > 0.0 {
-                         paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
-                     } else {
-                         paint.set_mask_filter(None);
-                     }
+                    let base_transform = Transform {
+                        x: Some(line_transform_ref.x_val() + char_transform_ref.x_val()),
+                        y: Some(line_transform_ref.y_val() + char_transform_ref.y_val()),
+                        rotation: Some(
+                            line_transform_ref.rotation_val() + char_transform_ref.rotation_val(),
+                        ),
+                        scale: Some(
+                            line_transform_ref.scale_val() * char_transform_ref.scale_val(),
+                        ),
+                        scale_x: Some(
+                            line_transform_ref.scale_x_val() * char_transform_ref.scale_x_val(),
+                        ),
+                        scale_y: Some(
+                            line_transform_ref.scale_y_val() * char_transform_ref.scale_y_val(),
+                        ),
+                        opacity: Some(
+                            line_transform_ref.opacity_val() * char_transform_ref.opacity_val(),
+                        ),
+                        anchor_x: Some(char_transform_ref.anchor_x_val()),
+                        anchor_y: Some(char_transform_ref.anchor_y_val()), // Anchor is not additive usually, char overrides line
+                        blur: Some(line_transform_ref.blur_val() + char_transform_ref.blur_val()),
+                        glitch_offset: Some(
+                            line_transform_ref.glitch_offset_val()
+                                + char_transform_ref.glitch_offset_val(),
+                        ),
+                        hue_shift: Some(
+                            line_transform_ref.hue_shift_val() + char_transform_ref.hue_shift_val(),
+                        ),
+                    };
 
-                     // --- DRAWING ---
-                     // Calculate position context
-                     let draw_x = char_absolute_x;
-                     let draw_y = char_absolute_y;
-                     
-                     self.canvas.save();
-                     
-                     // Check for StrokeReveal
-                     let mut stroke_reveal_progress = None;
-                     for effect in &transform_effects_base {
-                         if effect.effect_type == EffectType::StrokeReveal && EffectEngine::should_trigger(effect, &ctx) {
-                             let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                             stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
-                             break; // Only one stroke reveal supported
-                         }
-                     }
+                    let ctx = TriggerContext {
+                        start_time: line.start,
+                        end_time: line.end,
+                        current_time: self.time,
+                        active: true,
+                        char_index: Some(glyph.char_index),
+                        char_count: Some(glyphs.len()),
+                    };
 
-                     // Apply Transforms
-                     self.canvas.translate((draw_x + final_transform.x_val(), draw_y + final_transform.y_val()));
-                     
-                     let path_center_x = bounds.center_x();
-                     let path_center_y = bounds.center_y();
-                     
-                     self.canvas.translate((path_center_x, path_center_y));
-                     self.canvas.rotate(final_transform.rotation_val(), None);
-                     self.canvas.scale((final_transform.scale_val() * final_transform.scale_x_val(), final_transform.scale_val() * final_transform.scale_y_val()));
-                     self.canvas.translate((-path_center_x, -path_center_y));
-                     
-                     // Modify path if StrokeReveal is active
-                     let draw_path = if let Some(progress) = stroke_reveal_progress {
-                         let mut measure = skia_safe::PathMeasure::new(&path, false, None);
-                         let length = measure.length();
-                         if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
-                             partial_path
-                         } else {
-                             path.clone()
-                         }
-                     } else {
-                         path.clone() // Clone for drawing to avoid borrow issues? path is local
-                     };
-                     let path = &draw_path; // Re-bind path to modified version if needed
+                    let final_transform = EffectEngine::compute_transform(
+                        self.time,
+                        base_transform,
+                        &transform_effects_base,
+                        ctx.clone(),
+                    );
 
-                     
-                     // --- 1. SHADOW ---
-                     let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) { Some(c) } 
-                                       else if let Some(l) = &line.shadow { Some(l) } 
-                                       else { style.shadow.as_ref() };
+                    // Disintegrate Effect Progress
+                    let mut disintegration_progress = 0.0;
+                    if let Some((_name, effect)) = disintegrate_effects_base.first() {
+                        if EffectEngine::should_trigger(effect, &ctx) {
+                            disintegration_progress =
+                                EffectEngine::calculate_progress(self.time, effect, &ctx);
+                            disintegration_progress = disintegration_progress.clamp(0.0, 1.0);
+                        }
+                    }
 
-                     if let Some(shadow) = shadow_opts {
-                         if let Some(color_hex) = &shadow.color {
-                             if let Some(shadow_color) = parse_color(color_hex) {
-                                 shadow_paint.set_color(shadow_color);
-                                 shadow_paint.set_alpha_f(final_opacity);
-                                 // shadow_paint.set_anti_alias(true); // Already set
-                                 
-                                 // Apply blur to shadow if needed (or inherit from transform?)
-                                 // For now, if there's global blur, apply it to shadow too
-                                 if final_transform.blur_val() > 0.0 {
-                                     shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
-                                 } else {
-                                     shadow_paint.set_mask_filter(None);
-                                 }
-                                 
-                                 self.canvas.save();
-                                 self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
-                                 self.canvas.draw_path(path, &shadow_paint);
-                                 self.canvas.restore();
-                             }
-                         }
-                     }
+                    // Setup Paint
+                    paint.set_color(text_color);
+                    // paint.set_anti_alias(true); // Already set
 
-                     // --- 2. STROKE ---
-                     let stroke_opts = if let Some(c) = char_data.and_then(|c| c.stroke.as_ref()) { Some(c) } 
-                                       else if let Some(l) = &line.stroke { Some(l) } 
-                                       else { style.stroke.as_ref() };
+                    let final_opacity =
+                        final_transform.opacity_val() * (1.0 - disintegration_progress as f32);
+                    paint.set_alpha_f(final_opacity);
 
-                     if let Some(stroke) = stroke_opts {
-                         if stroke.width_or_default() > 0.0 {
-                             if let Some(color_hex) = &stroke.color {
-                                 if let Some(stroke_color) = parse_color(color_hex) {
-                                     // stroke_paint.set_style(PaintStyle::Stroke); // Already set
-                                     stroke_paint.set_stroke_width(stroke.width_or_default());
-                                     stroke_paint.set_color(stroke_color);
-                                     stroke_paint.set_alpha_f(final_opacity);
-                                     // stroke_paint.set_anti_alias(true); // Already set
-                                     
-                                     if final_transform.blur_val() > 0.0 {
-                                         stroke_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
-                                     } else {
-                                         stroke_paint.set_mask_filter(None);
-                                     }
+                    // Apply Blur
+                    if final_transform.blur_val() > 0.0 {
+                        paint.set_mask_filter(MaskFilter::blur(
+                            BlurStyle::Normal,
+                            final_transform.blur_val(),
+                            false,
+                        ));
+                    } else {
+                        paint.set_mask_filter(None);
+                    }
 
-                                     self.canvas.draw_path(path, &stroke_paint);
-                                 }
-                             }
-                         }
-                     }
+                    // --- DRAWING ---
+                    // Calculate position context
+                    let draw_x = char_absolute_x;
+                    let draw_y = char_absolute_y;
 
-                     // --- 3. MAIN TEXT (With Glitch Logic) ---
-                     if paint.alpha_f() > 0.001 {
-                         if final_transform.glitch_offset_val().abs() > 0.01 {
-                             // Glitch Effect: Draw channels separately
-                             let offset = final_transform.glitch_offset_val();
+                    self.canvas.save();
 
-                             // Red Channel
-                             let mut r_paint = paint.clone();
-                             r_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 255, 0, 0));
-                             r_paint.set_blend_mode(BlendMode::Plus); // Additive blending for RGB separation
+                    // Check for StrokeReveal
+                    let mut stroke_reveal_progress = None;
+                    for effect in &transform_effects_base {
+                        if effect.effect_type == EffectType::StrokeReveal
+                            && EffectEngine::should_trigger(effect, &ctx)
+                        {
+                            let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                            stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
+                            break; // Only one stroke reveal supported
+                        }
+                    }
 
-                             // Green Channel
-                             let mut g_paint = paint.clone();
-                             g_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 0, 255, 0));
-                             g_paint.set_blend_mode(BlendMode::Plus);
+                    // Apply Transforms
+                    self.canvas.translate((
+                        draw_x + final_transform.x_val(),
+                        draw_y + final_transform.y_val(),
+                    ));
 
-                             // Blue Channel
-                             let mut b_paint = paint.clone();
-                             b_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 0, 0, 255));
-                             b_paint.set_blend_mode(BlendMode::Plus);
+                    let path_center_x = bounds.center_x();
+                    let path_center_y = bounds.center_y();
 
-                             self.canvas.save();
-                             self.canvas.translate((-offset, -offset));
-                             self.canvas.draw_path(path, &r_paint);
-                             self.canvas.restore();
+                    self.canvas.translate((path_center_x, path_center_y));
+                    self.canvas.rotate(final_transform.rotation_val(), None);
+                    self.canvas.scale((
+                        final_transform.scale_val() * final_transform.scale_x_val(),
+                        final_transform.scale_val() * final_transform.scale_y_val(),
+                    ));
+                    self.canvas.translate((-path_center_x, -path_center_y));
 
-                             self.canvas.save();
-                             self.canvas.translate((offset, -offset)); // Different offset for G? Or just offset?
-                             // Standard Chromatic Aberration: R: -off, B: +off, G: 0
-                             self.canvas.draw_path(path, &g_paint); // Maybe G is at 0?
-                             // Actually let's do: R at -offset, B at +offset, G at 0.
-                             // But let's try to match glitch logic: jittery offsets.
-                             self.canvas.restore();
+                    // Modify path if StrokeReveal is active
+                    let draw_path = if let Some(progress) = stroke_reveal_progress {
+                        let mut measure = skia_safe::PathMeasure::new(&path, false, None);
+                        let length = measure.length();
+                        if let Some(partial_path) =
+                            measure.segment(0.0, length * progress as f32, true)
+                        {
+                            partial_path
+                        } else {
+                            path.clone()
+                        }
+                    } else {
+                        path.clone() // Clone for drawing to avoid borrow issues? path is local
+                    };
+                    let path = &draw_path; // Re-bind path to modified version if needed
 
-                             self.canvas.save();
-                             self.canvas.translate((offset, offset));
-                             self.canvas.draw_path(path, &b_paint);
-                             self.canvas.restore();
+                    // --- 1. SHADOW ---
+                    let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) {
+                        Some(c)
+                    } else if let Some(l) = &line.shadow {
+                        Some(l)
+                    } else {
+                        style.shadow.as_ref()
+                    };
 
-                             // Re-draw original white core? No, RGB additive makes white.
-                             // But we need to handle non-white colors properly.
-                             // If text is NOT white, splitting RGB is complex.
-                             // For now assuming white text for glitch effect or simple displacement.
+                    if let Some(shadow) = shadow_opts {
+                        if let Some(color_hex) = &shadow.color {
+                            if let Some(shadow_color) = parse_color(color_hex) {
+                                shadow_paint.set_color(shadow_color);
+                                shadow_paint.set_alpha_f(final_opacity);
+                                // shadow_paint.set_anti_alias(true); // Already set
 
-                         } else {
-                             // Normal Draw
-                             self.canvas.draw_path(path, &paint);
-                         }
-                     }
-                     
-                     self.canvas.restore(); // Restore transform for next glyph/effects
+                                // Apply blur to shadow if needed (or inherit from transform?)
+                                // For now, if there's global blur, apply it to shadow too
+                                if final_transform.blur_val() > 0.0 {
+                                    shadow_paint.set_mask_filter(MaskFilter::blur(
+                                        BlurStyle::Normal,
+                                        final_transform.blur_val(),
+                                        false,
+                                    ));
+                                } else {
+                                    shadow_paint.set_mask_filter(None);
+                                }
 
-                     // --- DISINTEGRATION EFFECT ---
-                     for (name, effect) in disintegrate_effects_base.iter().cloned() {
-                         if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
+                                self.canvas.save();
+                                self.canvas
+                                    .translate((shadow.x_or_default(), shadow.y_or_default()));
+                                self.canvas.draw_path(path, &shadow_paint);
+                                self.canvas.restore();
+                            }
+                        }
+                    }
 
-                         let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
-                         if !(0.0..=1.0).contains(&progress) { continue; }
+                    // --- 2. STROKE ---
+                    let stroke_opts = if let Some(c) = char_data.and_then(|c| c.stroke.as_ref()) {
+                        Some(c)
+                    } else if let Some(l) = &line.stroke {
+                        Some(l)
+                    } else {
+                        style.stroke.as_ref()
+                    };
 
-                         let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
-                         self.active_keys.insert(key.clone());
+                    if let Some(stroke) = stroke_opts {
+                        if stroke.width_or_default() > 0.0 {
+                            if let Some(color_hex) = &stroke.color {
+                                if let Some(stroke_color) = parse_color(color_hex) {
+                                    // stroke_paint.set_style(PaintStyle::Stroke); // Already set
+                                    stroke_paint.set_stroke_width(stroke.width_or_default());
+                                    stroke_paint.set_color(stroke_color);
+                                    stroke_paint.set_alpha_f(final_opacity);
+                                    // stroke_paint.set_anti_alias(true); // Already set
 
-                         // We need to capture the glyph as an image for the emitter
-                         // Create small surface
-                         // Bounds might be slightly larger due to stroke/shadow, but let's stick to path bounds for particles
-                         let capture_w = w.ceil() as i32 + 20; // Padding
-                         let capture_h = h.ceil() as i32 + 20;
-                         if capture_w <= 0 || capture_h <= 0 { continue; }
-                         
-                         // Create offscreen surface
-                         // Note: creating surfaces every frame is expensive. 
-                         // But disintegration usually only triggers ONCE per char.
-                         // Optimization: Check if emitter exists already? 
-                         // ParticleSystem does checks, but we shouldn't create surface if not needed.
-                         // But we can't easily check particle system state from here without mutable borrow conflict?
-                         // Actually active_keys insertion handles liveness.
-                         // We should only generate if self.time is close to start?
-                         // EffectEngine handles trigger/progress.
-                         
-                         // "ensure_disintegration_emitter" checks existence.
-                         // But ideally we don't construct the Image if it exists.
-                         // Let's rely on loose check or just pay the cost (it's fine for export).
-                         
-                         if self.particle_system.particle_emitters.contains_key(&key) {
-                             // Just update active
-                             // But we can't access it here easily because self.particle_system is borrowed?
-                             // No, we have &mut self in render_line.
-                             // Actually we have separate borrows in Mod.rs.
-                             // LineRenderer struct holds &mut separate fields.
-                             // So yes we can check.
-                             if let Some(e) = self.particle_system.particle_emitters.get_mut(&key) {
-                                 e.active = true;
-                                 continue; 
-                             }
-                         }
+                                    if final_transform.blur_val() > 0.0 {
+                                        stroke_paint.set_mask_filter(MaskFilter::blur(
+                                            BlurStyle::Normal,
+                                            final_transform.blur_val(),
+                                            false,
+                                        ));
+                                    } else {
+                                        stroke_paint.set_mask_filter(None);
+                                    }
 
-                         if let Some(mut surface) = surfaces::raster_n32_premul((capture_w, capture_h)) {
-                             let c = surface.canvas();
-                             // Center the path in the capture
-                             let _tx = (capture_w as f32 / 2.0) - cx;
-                             let _ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
-                             // path bounds .top might be negative.
-                             // bounds.y is usually negative (ascender).
-                             // If bounds y is -50, height 70.
-                             // We want to translate such that top-left of bounds is at (0,0)?
-                             // Or center.
-                             
-                             let bounds_left = bounds.left;
-                             let bounds_top = bounds.top;
-                             
-                             c.translate((-bounds_left + 10.0, -bounds_top + 10.0));
-                             
-                             // Draw path filled white
-                             let mut cap_paint = Paint::default();
-                             cap_paint.set_color(Color::WHITE);
-                             cap_paint.set_anti_alias(true);
-                             c.draw_path(path, &cap_paint);
-                             
-                             let image = surface.image_snapshot();
+                                    self.canvas.draw_path(path, &stroke_paint);
+                                }
+                            }
+                        }
+                    }
 
-                             // Calculate screen bounds for the emitter
-                             let bounds_rect = CharBounds {
-                                 x: draw_x + final_transform.x_val() + bounds_left - 10.0, // Adjust back
-                                 y: draw_y + final_transform.y_val() + bounds_top - 10.0,
-                                 width: capture_w as f32 * final_transform.scale_val(),
-                                 height: capture_h as f32 * final_transform.scale_val(),
-                             };
+                    // --- 3. MAIN TEXT (With Glitch Logic) ---
+                    if paint.alpha_f() > 0.001 {
+                        if final_transform.glitch_offset_val().abs() > 0.01 {
+                            // Glitch Effect: Draw channels separately
+                            let offset = final_transform.glitch_offset_val();
 
-                             let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+                            // Red Channel
+                            let mut r_paint = paint.clone();
+                            r_paint.set_color(Color::from_argb(
+                                (final_opacity * 255.0) as u8,
+                                255,
+                                0,
+                                0,
+                            ));
+                            r_paint.set_blend_mode(BlendMode::Plus); // Additive blending for RGB separation
 
-                             self.particle_system.ensure_disintegration_emitter(
-                                 key,
-                                 &image,
-                                 bounds_rect,
-                                 seed,
-                                 effect.particle_config.clone()
-                             );
-                         }
-                     }
-                     
-                     // --- PARTICLE SPAWNING ---
-                     // Process standard particle effects
-                     for (name, effect) in particle_effects_base.iter().cloned() {
-                         if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
-                         
-                         let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
-                         if !(0.0..=1.0).contains(&progress) { continue; }
-                         
-                         // Evaluation Context for Particles
-                         let eval_ctx = crate::expressions::EvaluationContext {
-                             t: self.time,
-                             progress,
-                             index: Some(glyph.char_index),
-                             count: Some(glyphs.len()),
-                             ..Default::default()
-                         };
+                            // Green Channel
+                            let mut g_paint = paint.clone();
+                            g_paint.set_color(Color::from_argb(
+                                (final_opacity * 255.0) as u8,
+                                0,
+                                255,
+                                0,
+                            ));
+                            g_paint.set_blend_mode(BlendMode::Plus);
 
-                         let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
-                         self.active_keys.insert(key.clone());
-                         
-                         let bounds_rect = CharBounds {
-                             x: draw_x + final_transform.x_val() + bounds.left, 
-                             y: draw_y + final_transform.y_val() + bounds.top, 
-                             width: w * final_transform.scale_val(), 
-                             height: h * final_transform.scale_val(),
-                         };
-                         
-                         let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
-                         
-                         // Clone config and apply overrides
-                         let mut p_config = effect.particle_config.clone();
-                         if let (Some(config), Some(overrides)) = (&mut p_config, &effect.particle_override) {
-                             crate::particle::config::apply_particle_overrides(config, overrides, &eval_ctx);
-                         }
+                            // Blue Channel
+                            let mut b_paint = paint.clone();
+                            b_paint.set_color(Color::from_argb(
+                                (final_opacity * 255.0) as u8,
+                                0,
+                                0,
+                                255,
+                            ));
+                            b_paint.set_blend_mode(BlendMode::Plus);
 
-                         self.particle_system.ensure_emitter(
-                             key, 
-                             effect.preset.clone(), 
-                             p_config, 
-                             bounds_rect, 
-                             seed
-                         );
-                     }
-                 }
-             }
+                            self.canvas.save();
+                            self.canvas.translate((-offset, -offset));
+                            self.canvas.draw_path(path, &r_paint);
+                            self.canvas.restore();
+
+                            self.canvas.save();
+                            self.canvas.translate((offset, -offset)); // Different offset for G? Or just offset?
+                                                                      // Standard Chromatic Aberration: R: -off, B: +off, G: 0
+                            self.canvas.draw_path(path, &g_paint); // Maybe G is at 0?
+                                                                   // Actually let's do: R at -offset, B at +offset, G at 0.
+                                                                   // But let's try to match glitch logic: jittery offsets.
+                            self.canvas.restore();
+
+                            self.canvas.save();
+                            self.canvas.translate((offset, offset));
+                            self.canvas.draw_path(path, &b_paint);
+                            self.canvas.restore();
+
+                            // Re-draw original white core? No, RGB additive makes white.
+                            // But we need to handle non-white colors properly.
+                            // If text is NOT white, splitting RGB is complex.
+                            // For now assuming white text for glitch effect or simple displacement.
+                        } else {
+                            // Normal Draw
+                            self.canvas.draw_path(path, &paint);
+                        }
+                    }
+
+                    self.canvas.restore(); // Restore transform for next glyph/effects
+
+                    // --- DISINTEGRATION EFFECT ---
+                    for (name, effect) in disintegrate_effects_base.iter().cloned() {
+                        if !EffectEngine::should_trigger(&effect, &ctx) {
+                            continue;
+                        }
+
+                        let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
+                        if !(0.0..=1.0).contains(&progress) {
+                            continue;
+                        }
+
+                        let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
+                        self.active_keys.insert(key.clone());
+
+                        // We need to capture the glyph as an image for the emitter
+                        // Create small surface
+                        // Bounds might be slightly larger due to stroke/shadow, but let's stick to path bounds for particles
+                        let capture_w = w.ceil() as i32 + 20; // Padding
+                        let capture_h = h.ceil() as i32 + 20;
+                        if capture_w <= 0 || capture_h <= 0 {
+                            continue;
+                        }
+
+                        // Create offscreen surface
+                        // Note: creating surfaces every frame is expensive.
+                        // But disintegration usually only triggers ONCE per char.
+                        // Optimization: Check if emitter exists already?
+                        // ParticleSystem does checks, but we shouldn't create surface if not needed.
+                        // But we can't easily check particle system state from here without mutable borrow conflict?
+                        // Actually active_keys insertion handles liveness.
+                        // We should only generate if self.time is close to start?
+                        // EffectEngine handles trigger/progress.
+
+                        // "ensure_disintegration_emitter" checks existence.
+                        // But ideally we don't construct the Image if it exists.
+                        // Let's rely on loose check or just pay the cost (it's fine for export).
+
+                        if self.particle_system.particle_emitters.contains_key(&key) {
+                            // Just update active
+                            // But we can't access it here easily because self.particle_system is borrowed?
+                            // No, we have &mut self in render_line.
+                            // Actually we have separate borrows in Mod.rs.
+                            // LineRenderer struct holds &mut separate fields.
+                            // So yes we can check.
+                            if let Some(e) = self.particle_system.particle_emitters.get_mut(&key) {
+                                e.active = true;
+                                continue;
+                            }
+                        }
+
+                        if let Some(mut surface) =
+                            surfaces::raster_n32_premul((capture_w, capture_h))
+                        {
+                            let c = surface.canvas();
+                            // Center the path in the capture
+                            let _tx = (capture_w as f32 / 2.0) - cx;
+                            let _ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
+                                                                     // path bounds .top might be negative.
+                                                                     // bounds.y is usually negative (ascender).
+                                                                     // If bounds y is -50, height 70.
+                                                                     // We want to translate such that top-left of bounds is at (0,0)?
+                                                                     // Or center.
+
+                            let bounds_left = bounds.left;
+                            let bounds_top = bounds.top;
+
+                            c.translate((-bounds_left + 10.0, -bounds_top + 10.0));
+
+                            // Draw path filled white
+                            let mut cap_paint = Paint::default();
+                            cap_paint.set_color(Color::WHITE);
+                            cap_paint.set_anti_alias(true);
+                            c.draw_path(path, &cap_paint);
+
+                            let image = surface.image_snapshot();
+
+                            // Calculate screen bounds for the emitter
+                            let bounds_rect = CharBounds {
+                                x: draw_x + final_transform.x_val() + bounds_left - 10.0, // Adjust back
+                                y: draw_y + final_transform.y_val() + bounds_top - 10.0,
+                                width: capture_w as f32 * final_transform.scale_val(),
+                                height: capture_h as f32 * final_transform.scale_val(),
+                            };
+
+                            let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+
+                            self.particle_system.ensure_disintegration_emitter(
+                                key,
+                                &image,
+                                bounds_rect,
+                                seed,
+                                effect.particle_config.clone(),
+                            );
+                        }
+                    }
+
+                    // --- PARTICLE SPAWNING ---
+                    // Process standard particle effects
+                    for (name, effect) in particle_effects_base.iter().cloned() {
+                        if !EffectEngine::should_trigger(&effect, &ctx) {
+                            continue;
+                        }
+
+                        let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
+                        if !(0.0..=1.0).contains(&progress) {
+                            continue;
+                        }
+
+                        // Evaluation Context for Particles
+                        let eval_ctx = crate::expressions::EvaluationContext {
+                            t: self.time,
+                            progress,
+                            index: Some(glyph.char_index),
+                            count: Some(glyphs.len()),
+                            ..Default::default()
+                        };
+
+                        let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
+                        self.active_keys.insert(key.clone());
+
+                        let bounds_rect = CharBounds {
+                            x: draw_x + final_transform.x_val() + bounds.left,
+                            y: draw_y + final_transform.y_val() + bounds.top,
+                            width: w * final_transform.scale_val(),
+                            height: h * final_transform.scale_val(),
+                        };
+
+                        let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+
+                        // Clone config and apply overrides
+                        let mut p_config = effect.particle_config.clone();
+                        if let (Some(config), Some(overrides)) =
+                            (&mut p_config, &effect.particle_override)
+                        {
+                            crate::particle::config::apply_particle_overrides(
+                                config, overrides, &eval_ctx,
+                            );
+                        }
+
+                        self.particle_system.ensure_emitter(
+                            key,
+                            effect.preset.clone(),
+                            p_config,
+                            bounds_rect,
+                            seed,
+                        );
+                    }
+                }
+            }
         }
-        
+
         Ok(())
     }
-    
+
     fn compute_line_position(&self, line: &Line) -> (f32, f32) {
         let mut x = self.width as f32 / 2.0;
         let mut y = self.height as f32 / 2.0;
-        
+
         if let Some(pos) = &line.position {
             if let Some(px) = &pos.x {
                 x = match px {
@@ -553,14 +666,14 @@ impl<'a> LineRenderer<'a> {
                     PositionValue::Percentage(s) => parse_percentage(s) * self.width as f32,
                 };
             }
-             if let Some(py) = &pos.y {
+            if let Some(py) = &pos.y {
                 y = match py {
                     PositionValue::Pixels(v) => *v,
                     PositionValue::Percentage(s) => parse_percentage(s) * self.height as f32,
                 };
             }
         }
-        
+
         (x, y)
     }
 }

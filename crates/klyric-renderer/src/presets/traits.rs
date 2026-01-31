@@ -1,8 +1,8 @@
-use crate::particle::ParticleEmitter;
 use super::types::CharBounds;
+use crate::particle::ParticleEmitter;
 
 /// Trait for defining particle effect presets
-/// 
+///
 /// Implementing this trait allows creating custom particle effects
 /// that can be registered with the PresetFactory.
 pub trait ParticlePreset: Send + Sync {

@@ -43,18 +43,18 @@
 //! └─────────────────┘
 //! ```
 
+pub mod effects;
+pub mod importer;
+pub mod layout;
 pub mod model;
 pub mod parser;
-pub mod importer;
-pub mod style;
-pub mod effects;
-pub mod layout;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod renderer;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod text;
 pub mod particle;
 pub mod presets;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod renderer;
+pub mod style;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod text;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_renderer;
@@ -82,6 +82,5 @@ pub use wasm_renderer::Renderer;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_renderer::TextRenderer;
 
-pub use particle::{Particle, ParticleEmitter, ParticleConfig};
+pub use particle::{Particle, ParticleConfig, ParticleEmitter};
 pub use presets::{EffectPreset, PresetFactory};
-

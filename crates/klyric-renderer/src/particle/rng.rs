@@ -49,7 +49,7 @@ mod tests {
     fn test_rng_deterministic() {
         let mut rng1 = Rng::new(12345);
         let mut rng2 = Rng::new(12345);
-        
+
         for _ in 0..100 {
             assert_eq!(rng1.next_u64(), rng2.next_u64());
         }

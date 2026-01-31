@@ -10,15 +10,15 @@
 //! - `emitter` - ParticleEmitter for spawning/managing particles
 //! - `rng` - Deterministic random number generator
 
-pub mod types;
-pub mod physics;
 pub mod config;
 pub mod emitter;
+pub mod physics;
 pub mod rng;
+pub mod types;
 
 // Re-exports for convenience
-pub use types::{Particle, ParticleShape, BlendMode, color_to_rgba, parse_hex_color};
-pub use physics::ParticlePhysics;
 pub use config::{ParticleConfig, RangeValue, SpawnPattern};
 pub use emitter::ParticleEmitter;
+pub use physics::ParticlePhysics;
 pub use rng::Rng;
+pub use types::{color_to_rgba, parse_hex_color, BlendMode, Particle, ParticleShape};
