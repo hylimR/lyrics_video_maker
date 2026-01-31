@@ -9,6 +9,7 @@ use iced::{
 use crate::message::Message;
 use crate::state::AppState;
 use crate::theme;
+use crate::utils::refs::DocumentRef;
 
 /// View for the editor panel
 /// View for the editor panel (now just Line Selector)
@@ -17,70 +18,77 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         let selected_line = state.selected_line;
 
         // Line list with styled items
-        let line_list = scrollable(
-            column(
-                doc.lines
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, line)| {
-                        let is_selected = selected_line == Some(idx);
+        // OPTIMIZATION: Use lazy with DocumentRef (pointer comparison) to avoid rebuilding
+        // the potentially large list of widgets on every Tick (60fps), unless document or selection changes.
+        let line_list = scrollable(lazy(
+            (DocumentRef(doc.clone()), selected_line),
+            move |(doc_ref, selected_line)| {
+                column(
+                    doc_ref
+                        .0
+                        .lines
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, line)| {
+                            let is_selected = selected_line == Some(idx);
 
-                        // Capture only necessary data for the view to optimize caching
-                        let label_opt = line.text.clone();
-                        let start = line.start;
-                        let end = line.end;
+                            // Capture only necessary data for the view to optimize caching
+                            let label_opt = line.text.clone();
+                            let start = line.start;
+                            let end = line.end;
 
-                        lazy(
-                            (idx, is_selected, label_opt, start, end),
-                            move |(idx, is_selected, label, start, end)| {
-                                let fallback = format!("Line {}", idx + 1);
-                                let label_str = label.as_deref().unwrap_or(&fallback);
-                                let label_owned = label_str.to_string();
+                            lazy(
+                                (idx, is_selected, label_opt, start, end),
+                                move |(idx, is_selected, label, start, end)| {
+                                    let fallback = format!("Line {}", idx + 1);
+                                    let label_str = label.as_deref().unwrap_or(&fallback);
+                                    let label_owned = label_str.to_string();
 
-                                let timing = format!("{:.1}s - {:.1}s", start, end);
+                                    let timing = format!("{:.1}s - {:.1}s", start, end);
 
-                                let content = row![
-                                    text(format!("{:02}", idx + 1))
-                                        .size(11)
-                                        .color(theme::colors::TEXT_MUTED)
-                                        .width(Length::Fixed(24.0)),
-                                    column![
-                                        text(label_owned).size(13),
-                                        text(timing)
-                                            .size(10)
-                                            .color(theme::colors::TEXT_SECONDARY),
+                                    let content = row![
+                                        text(format!("{:02}", idx + 1))
+                                            .size(11)
+                                            .color(theme::colors::TEXT_MUTED)
+                                            .width(Length::Fixed(24.0)),
+                                        column![
+                                            text(label_owned).size(13),
+                                            text(timing)
+                                                .size(10)
+                                                .color(theme::colors::TEXT_SECONDARY),
+                                        ]
+                                        .spacing(2),
                                     ]
-                                    .spacing(2),
-                                ]
-                                .spacing(8)
-                                .align_y(Alignment::Center);
+                                    .spacing(8)
+                                    .align_y(Alignment::Center);
 
-                                let btn = button(content)
-                                    .style(if *is_selected {
-                                        |t: &iced::Theme, status| {
-                                            let mut style = theme::list_item_style(t, status);
-                                            style.background = Some(iced::Background::Color(theme::colors::SELECTED));
-                                            style.border.color = theme::colors::ACCENT;
-                                            style.border.width = 1.0;
-                                            style
-                                        }
-                                    } else {
-                                        theme::list_item_style
-                                    })
-                                    .width(Length::Fill)
-                                    .padding([4, 8]) // Reduced padding
-                                    .on_press(Message::SelectLine(*idx));
+                                    let btn = button(content)
+                                        .style(if *is_selected {
+                                            |t: &iced::Theme, status| {
+                                                let mut style = theme::list_item_style(t, status);
+                                                style.background =
+                                                    Some(iced::Background::Color(theme::colors::SELECTED));
+                                                style.border.color = theme::colors::ACCENT;
+                                                style.border.width = 1.0;
+                                                style
+                                            }
+                                        } else {
+                                            theme::list_item_style
+                                        })
+                                        .width(Length::Fill)
+                                        .padding([4, 8]) // Reduced padding
+                                        .on_press(Message::SelectLine(*idx));
 
-                                container(btn)
-                                    .width(Length::Fill)
-                                    .into()
-                            }
-                        )
-                    })
-                    .collect::<Vec<Element<Message>>>()
-            )
-            .spacing(2)
-        )
+                                    container(btn).width(Length::Fill).into()
+                                },
+                            )
+                        })
+                        .collect::<Vec<Element<Message>>>(),
+                )
+                .spacing(2)
+                .into()
+            },
+        ))
         .style(theme::scrollable_style)
         .height(Length::Fill); // Allow it to fill the container
 
