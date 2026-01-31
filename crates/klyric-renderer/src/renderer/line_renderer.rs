@@ -1,8 +1,9 @@
 use anyhow::Result;
 use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces};
 use std::collections::HashSet;
+use std::borrow::Cow;
 
-use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, Style};
+use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, Style, Effect};
 // use crate::style::StyleResolver; // Removed
 use crate::layout::LayoutEngine;
 use crate::text::TextRenderer;
@@ -60,7 +61,7 @@ impl<'a> LineRenderer<'a> {
         let complete_color = parse_color(complete_hex).unwrap_or(Color::WHITE);
 
         // --- OPTIMIZATION: Hoist Effect Resolution ---
-        let mut line_active_effects = Vec::new();
+        let mut line_active_effects: Vec<(&str, Cow<Effect>)> = Vec::new();
         let empty_vec = Vec::new();
         let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
         let line_effects = &line.effects;
@@ -74,15 +75,15 @@ impl<'a> LineRenderer<'a> {
                     if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
                         if let Some(d) = effect.duration { generated.duration = Some(d); }
                         if effect.easing != Easing::Linear { generated.easing = effect.easing.clone(); }
-                        line_active_effects.push((effect_name.clone(), generated));
+                        line_active_effects.push((effect_name.as_str(), Cow::Owned(generated)));
                     } else {
-                        line_active_effects.push((effect_name.clone(), effect.clone()));
+                        line_active_effects.push((effect_name.as_str(), Cow::Borrowed(effect)));
                     }
                 } else {
-                    line_active_effects.push((effect_name.clone(), effect.clone()));
+                    line_active_effects.push((effect_name.as_str(), Cow::Borrowed(effect)));
                 }
             } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
-                line_active_effects.push((effect_name.clone(), preset));
+                line_active_effects.push((effect_name.as_str(), Cow::Owned(preset)));
             }
         }
 
@@ -184,9 +185,9 @@ impl<'a> LineRenderer<'a> {
                      // Use hoisted effects list
                      for (name, effect) in &line_active_effects {
                          match effect.effect_type {
-                             EffectType::Particle => particle_effects.push((name, effect)),
-                             EffectType::Disintegrate => disintegrate_effects.push((name, effect)),
-                             _ => transform_effects.push(effect),
+                             EffectType::Particle => particle_effects.push((name, &**effect)),
+                             EffectType::Disintegrate => disintegrate_effects.push((name, &**effect)),
+                             _ => transform_effects.push(&**effect),
                          }
                      }
                      
