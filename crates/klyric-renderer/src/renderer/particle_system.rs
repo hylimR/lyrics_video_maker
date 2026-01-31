@@ -412,13 +412,7 @@ mod tests {
         let key = hash_test_key("test_key");
 
         // Ensure emitter by preset name
-        system.ensure_emitter(
-            key,
-            Some("fire".to_string()),
-            None,
-            bounds,
-            42,
-        );
+        system.ensure_emitter(key, Some("fire".to_string()), None, bounds, 42);
 
         assert!(
             system.particle_emitters.contains_key(&key),
@@ -436,13 +430,7 @@ mod tests {
         let key = hash_test_key("update_key");
 
         // Create initial emitter
-        system.ensure_emitter(
-            key,
-            Some("fire".to_string()),
-            None,
-            bounds,
-            42,
-        );
+        system.ensure_emitter(key, Some("fire".to_string()), None, bounds, 42);
 
         // Update with new bounds
         let new_bounds = CharBounds {
@@ -452,13 +440,7 @@ mod tests {
             height: 60.0,
         };
 
-        system.ensure_emitter(
-            key,
-            Some("fire".to_string()),
-            None,
-            new_bounds,
-            42,
-        );
+        system.ensure_emitter(key, Some("fire".to_string()), None, new_bounds, 42);
 
         // Should still have only one emitter with this key
         assert!(
@@ -503,13 +485,7 @@ mod tests {
         let key = hash_test_key("inactive_test");
 
         // Add emitter
-        system.ensure_emitter(
-            key,
-            Some("fire".to_string()),
-            None,
-            bounds,
-            42,
-        );
+        system.ensure_emitter(key, Some("fire".to_string()), None, bounds, 42);
 
         // Mark as inactive by NOT including in active_keys set
         let active_keys = HashSet::new();
@@ -531,13 +507,7 @@ mod tests {
         let bounds = test_bounds();
         let key = hash_test_key("active_test");
 
-        system.ensure_emitter(
-            key,
-            Some("fire".to_string()),
-            None,
-            bounds,
-            42,
-        );
+        system.ensure_emitter(key, Some("fire".to_string()), None, bounds, 42);
 
         // Include in active_keys
         let mut active_keys = HashSet::new();
@@ -589,13 +559,7 @@ mod tests {
         let key = hash_test_key("preset_name_test");
 
         // Use a preset name that should exist in the factory
-        system.ensure_emitter(
-            key,
-            Some("sparkle".to_string()),
-            None,
-            bounds,
-            42,
-        );
+        system.ensure_emitter(key, Some("sparkle".to_string()), None, bounds, 42);
 
         assert!(
             system.particle_emitters.contains_key(&key),
@@ -686,9 +650,7 @@ mod tests {
 
         let emitter = ParticleEmitter::new(config, SpawnPattern::Point { x: 0.0, y: 0.0 }, 42);
 
-        system
-            .particle_emitters
-            .insert(key, emitter);
+        system.particle_emitters.insert(key, emitter);
 
         let count_before = system.particle_emitters.len();
 

@@ -8,8 +8,8 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 use crate::model::{
-    AnimatedValue, Easing, Effect, EffectType, KLyricDocumentV2, Line, PositionValue, Style,
-    Transform, RenderTransform,
+    AnimatedValue, Easing, Effect, EffectType, KLyricDocumentV2, Line, PositionValue,
+    RenderTransform, Style, Transform,
 };
 // use crate::style::StyleResolver; // Removed
 use crate::effects::{EffectEngine, TriggerContext};
@@ -222,6 +222,24 @@ impl<'a> LineRenderer<'a> {
             }
         }
 
+        // --- OPTIMIZATION: Hoist Shadow/Stroke Base Colors ---
+        // Resolve Line or Style shadow as the "Base" shadow.
+        // We parse the color once here instead of inside the character loop.
+        let line_shadow_ref = line.shadow.as_ref();
+        let style_shadow_ref = style.shadow.as_ref();
+        let base_shadow = line_shadow_ref.or(style_shadow_ref);
+        let base_shadow_color = base_shadow
+            .and_then(|s| s.color.as_ref())
+            .and_then(|c| parse_color(c));
+
+        // Resolve Line or Style stroke as the "Base" stroke.
+        let line_stroke_ref = line.stroke.as_ref();
+        let style_stroke_ref = style.stroke.as_ref();
+        let base_stroke = line_stroke_ref.or(style_stroke_ref);
+        let base_stroke_color = base_stroke
+            .and_then(|s| s.color.as_ref())
+            .and_then(|c| parse_color(c));
+
         let mut current_blur = -1.0f32;
 
         // --- OPTIMIZATION: Pre-calculate Active Effects ---
@@ -374,10 +392,8 @@ impl<'a> LineRenderer<'a> {
                     self.canvas.save();
 
                     // Apply Transforms
-                    self.canvas.translate((
-                        draw_x + final_transform.x,
-                        draw_y + final_transform.y,
-                    ));
+                    self.canvas
+                        .translate((draw_x + final_transform.x, draw_y + final_transform.y));
 
                     let path_center_x = bounds.center_x();
                     let path_center_y = bounds.center_y();
@@ -408,74 +424,69 @@ impl<'a> LineRenderer<'a> {
                     };
 
                     // --- 1. SHADOW ---
-                    let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) {
-                        Some(c)
-                    } else if let Some(l) = &line.shadow {
-                        Some(l)
+                    // Determine shadow object and color.
+                    // Priority: Char Override > Line > Style.
+                    // We optimized by pre-calculating Line/Style (Base) outside the loop.
+                    let char_shadow_ref = char_data.and_then(|c| c.shadow.as_ref());
+                    let (shadow_obj, shadow_color) = if let Some(cs) = char_shadow_ref {
+                        // Char override: must parse color freshly
+                        (Some(cs), cs.color.as_ref().and_then(|c| parse_color(c)))
                     } else {
-                        style.shadow.as_ref()
+                        // Fallback to Base (Line/Style)
+                        (base_shadow, base_shadow_color)
                     };
 
-                    if let Some(shadow) = shadow_opts {
-                        if let Some(color_hex) = &shadow.color {
-                            if let Some(shadow_color) = parse_color(color_hex) {
-                                shadow_paint.set_color(shadow_color);
-                                shadow_paint.set_alpha_f(final_opacity);
-                                // shadow_paint.set_anti_alias(true); // Already set
+                    if let (Some(shadow), Some(color)) = (shadow_obj, shadow_color) {
+                        shadow_paint.set_color(color);
+                        shadow_paint.set_alpha_f(final_opacity);
+                        // shadow_paint.set_anti_alias(true); // Already set
 
-                                // Apply blur to shadow if needed (or inherit from transform?)
-                                // For now, if there's global blur, apply it to shadow too
-                                if final_transform.blur > 0.0 {
-                                    shadow_paint.set_mask_filter(MaskFilter::blur(
-                                        BlurStyle::Normal,
-                                        final_transform.blur,
-                                        false,
-                                    ));
-                                } else {
-                                    shadow_paint.set_mask_filter(None);
-                                }
-
-                                self.canvas.save();
-                                self.canvas
-                                    .translate((shadow.x_or_default(), shadow.y_or_default()));
-                                self.canvas.draw_path(path, &shadow_paint);
-                                self.canvas.restore();
-                            }
+                        // Apply blur to shadow if needed (or inherit from transform?)
+                        // For now, if there's global blur, apply it to shadow too
+                        if final_transform.blur > 0.0 {
+                            shadow_paint.set_mask_filter(MaskFilter::blur(
+                                BlurStyle::Normal,
+                                final_transform.blur,
+                                false,
+                            ));
+                        } else {
+                            shadow_paint.set_mask_filter(None);
                         }
+
+                        self.canvas.save();
+                        self.canvas
+                            .translate((shadow.x_or_default(), shadow.y_or_default()));
+                        self.canvas.draw_path(path, &shadow_paint);
+                        self.canvas.restore();
                     }
 
                     // --- 2. STROKE ---
-                    let stroke_opts = if let Some(c) = char_data.and_then(|c| c.stroke.as_ref()) {
-                        Some(c)
-                    } else if let Some(l) = &line.stroke {
-                        Some(l)
+                    let char_stroke_ref = char_data.and_then(|c| c.stroke.as_ref());
+                    let (stroke_obj, stroke_color) = if let Some(cs) = char_stroke_ref {
+                        (Some(cs), cs.color.as_ref().and_then(|c| parse_color(c)))
                     } else {
-                        style.stroke.as_ref()
+                        (base_stroke, base_stroke_color)
                     };
 
-                    if let Some(stroke) = stroke_opts {
+                    if let (Some(stroke), Some(color)) = (stroke_obj, stroke_color) {
                         if stroke.width_or_default() > 0.0 {
-                            if let Some(color_hex) = &stroke.color {
-                                if let Some(stroke_color) = parse_color(color_hex) {
-                                    // stroke_paint.set_style(PaintStyle::Stroke); // Already set
-                                    stroke_paint.set_stroke_width(stroke.width_or_default());
-                                    stroke_paint.set_color(stroke_color);
-                                    stroke_paint.set_alpha_f(final_opacity);
-                                    // stroke_paint.set_anti_alias(true); // Already set
+                            // stroke_paint.set_style(PaintStyle::Stroke); // Already set
+                            stroke_paint.set_stroke_width(stroke.width_or_default());
+                            stroke_paint.set_color(color);
+                            stroke_paint.set_alpha_f(final_opacity);
+                            // stroke_paint.set_anti_alias(true); // Already set
 
-                                    if final_transform.blur > 0.0 {
-                                        stroke_paint.set_mask_filter(MaskFilter::blur(
-                                            BlurStyle::Normal,
-                                            final_transform.blur,
-                                            false,
-                                        ));
-                                    } else {
-                                        stroke_paint.set_mask_filter(None);
-                                    }
-
-                                    self.canvas.draw_path(path, &stroke_paint);
-                                }
+                            if final_transform.blur > 0.0 {
+                                stroke_paint.set_mask_filter(MaskFilter::blur(
+                                    BlurStyle::Normal,
+                                    final_transform.blur,
+                                    false,
+                                ));
+                            } else {
+                                stroke_paint.set_mask_filter(None);
                             }
+
+                            self.canvas.draw_path(path, &stroke_paint);
                         }
                     }
 
