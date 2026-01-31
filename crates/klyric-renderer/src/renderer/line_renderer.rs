@@ -148,12 +148,6 @@ impl<'a> LineRenderer<'a> {
             .get_typeface(line_family_def)
             .or_else(|| self.text_renderer.get_default_typeface());
 
-        // --- OPTIMIZATION: Font Cache ---
-        // Reuse SkFont instances locally to avoid HashMap lookups in TextRenderer
-        let mut current_font: Option<Font> = None;
-        // Key: (typeface_unique_id, size_in_bits)
-        let mut current_font_key: Option<(u32, u32)> = None;
-
         // --- OPTIMIZATION: Hoist Line Transform ---
         let line_transform_default = Transform::default();
         let line_transform_ref = line.transform.as_ref().unwrap_or(&line_transform_default);
@@ -187,20 +181,12 @@ impl<'a> LineRenderer<'a> {
             let typeface_ref = override_typeface.as_ref().or(default_typeface.as_ref());
 
             if let Some(typeface) = typeface_ref {
-                // Resolve Font (Cached)
-                let tf_id: u32 = typeface.unique_id().into();
-                let size_bits = size.to_bits();
-
-                if current_font_key != Some((tf_id, size_bits)) {
-                    let f = self.text_renderer.get_font(typeface, size);
-                    current_font = Some(f);
-                    current_font_key = Some((tf_id, size_bits));
-                }
-                let font = current_font.as_ref().unwrap();
-
                 // Get path
                 let glyph_id = glyph.glyph_id;
-                if let Some(path) = font.get_path(glyph_id) {
+                if let Some(path) =
+                    self.text_renderer
+                        .get_path_cached(typeface, size, glyph_id)
+                {
                     // Dimensions for effects
                     // Skia path bounds
                     let bounds = path.bounds();

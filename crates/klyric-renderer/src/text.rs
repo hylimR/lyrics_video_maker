@@ -20,6 +20,8 @@ pub struct TextRenderer {
     font_cache: HashMap<String, Typeface>,
     /// Cache for resolved fonts: (typeface_id, size_bits) -> Font
     resolved_font_cache: HashMap<(u32, u32), Font>,
+    /// Cache for glyph paths: (typeface_id, size_bits, glyph_id) -> Path
+    path_cache: HashMap<(u32, u32, u16), Path>,
     /// Default typeface
     default_typeface: Option<Typeface>,
 }
@@ -36,6 +38,7 @@ impl TextRenderer {
             font_mgr: FontMgr::new(),
             font_cache: HashMap::new(),
             resolved_font_cache: HashMap::new(),
+            path_cache: HashMap::new(),
             default_typeface: None,
         }
     }
@@ -125,6 +128,11 @@ impl TextRenderer {
         if self.resolved_font_cache.len() > MAX_CACHE_SIZE {
             self.resolved_font_cache.clear();
         }
+
+        const MAX_PATH_CACHE_SIZE: usize = 5000;
+        if self.path_cache.len() > MAX_PATH_CACHE_SIZE {
+            self.path_cache.clear();
+        }
     }
 
     /// Create a resolved font for optimized measurement
@@ -159,6 +167,27 @@ impl TextRenderer {
         let glyph_id = font.unichar_to_glyph(ch as i32);
 
         font.get_path(glyph_id)
+    }
+
+    /// Get a cached path for a glyph
+    pub fn get_path_cached(
+        &mut self,
+        typeface: &Typeface,
+        size: f32,
+        glyph_id: u16,
+    ) -> Option<Path> {
+        let key = (typeface.unique_id().into(), size.to_bits(), glyph_id);
+        if let Some(path) = self.path_cache.get(&key) {
+            return Some(path.clone());
+        }
+
+        let font = self.get_font(typeface, size);
+        if let Some(path) = font.get_path(glyph_id) {
+            self.path_cache.insert(key, path.clone());
+            Some(path)
+        } else {
+            None
+        }
     }
 
     // Legacy helper for system font dirs (can be removed if we trust Skia FontMgr)
@@ -445,6 +474,41 @@ mod tests {
             // We can't easily test the upper bound eviction without adding 501 fonts
             // which requires 501 different sizes or typefaces.
             // But this proves the optimization (NOT clearing small caches) works.
+        }
+    }
+
+    #[test]
+    fn test_path_caching() {
+        let mut renderer = TextRenderer::new();
+
+        #[cfg(target_os = "windows")]
+        let font_name = "Arial";
+        #[cfg(target_os = "macos")]
+        let font_name = "Helvetica";
+        #[cfg(target_os = "linux")]
+        let font_name = "DejaVu Sans";
+
+        if let Some(typeface) = renderer.get_typeface(font_name) {
+            let size = 48.0;
+            // Get glyph ID for 'A'
+            let font = Font::from_typeface(typeface.clone(), size);
+            let glyph_id = font.unichar_to_glyph('A' as i32);
+
+            // 1. Initial Call - Miss
+            let path1 = renderer.get_path_cached(&typeface, size, glyph_id);
+            assert!(path1.is_some());
+            assert_eq!(renderer.path_cache.len(), 1);
+
+            // 2. Second Call - Hit
+            let path2 = renderer.get_path_cached(&typeface, size, glyph_id);
+            assert!(path2.is_some());
+            assert_eq!(renderer.path_cache.len(), 1); // Should still be 1
+
+            // 3. Different Size - Miss
+            let size2 = 24.0;
+            let path3 = renderer.get_path_cached(&typeface, size2, glyph_id);
+            assert!(path3.is_some());
+            assert_eq!(renderer.path_cache.len(), 2);
         }
     }
 }
