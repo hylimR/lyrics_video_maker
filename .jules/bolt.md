@@ -32,3 +32,8 @@ Action: Always hoist effect categorization outside of per-glyph or per-particle 
 Learning: `LineRenderer::render_line` allocated multiple vectors and cloned `TriggerContext` for every glyph, creating significant allocator pressure per frame.
 Insight: Vectors for effects can be populated directly from a single loop over effect names using `Cow<Effect>`, avoiding intermediate allocations. `TriggerContext` can be hoisted outside the glyph loop and passed by reference to `EffectEngine`.
 Action: Optimized `render_line` to use a single resolution loop and reuse `TriggerContext`. Updated `EffectEngine::compute_transform` to accept `&TriggerContext` and `Borrow<Effect>`. This reduces allocations and memory traffic in the render loop.
+
+## 2025-05-22 - Environment Compilation Blockers
+Learning: The development environment lacks necessary system dependencies (`libasound2-dev` for `alsa-sys`) and the `wasm32-unknown-unknown` target, preventing full compilation and testing of the `klyric-renderer` crate. Additionally, `skia-bindings` compilation causes a clang segmentation fault.
+Insight: Code verification must rely on rigorous reading and logic checks when toolchain verification is unavailable.
+Action: Rely on expert code analysis and limited verification. Document constraints in PR.
