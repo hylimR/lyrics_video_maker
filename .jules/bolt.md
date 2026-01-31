@@ -22,3 +22,8 @@ Action: Changed `clear_font_cache` to check `len() > 500` before clearing. This 
 Learning: `font.get_path(glyph_id)` involves FFI overhead and C++ object construction for every glyph in every frame, even for static text.
 Insight: `skia_safe::Path` objects are reference-counted (copy-on-write) wrappers around C++ `SkPath`. Cloning them is cheap. We can cache the resulting `Path` object to avoid the FFI/construction cost entirely.
 Action: Added `path_cache` to `TextRenderer` keyed by `(typeface_id, size_bits, glyph_id)`. Updated `LineRenderer` to use this cache. This reduces the per-glyph overhead significantly, especially for text-heavy scenes.
+
+## 2024-05-28 - Effect Categorization Hoisting
+Learning: `LineRenderer::render_line` was iterating over a mixed list of effects inside the hot glyph loop to find specific types (like `StrokeReveal`).
+Insight: Pre-filtering effects into specific vectors (e.g., `stroke_reveal_effects`) outside the loop allows the inner loop to iterate only over relevant items (often zero), avoiding O(N) checks per glyph.
+Action: Always hoist effect categorization outside of per-glyph or per-particle loops. Separate "Transform" effects from "Render" effects early.

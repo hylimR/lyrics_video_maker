@@ -117,11 +117,14 @@ impl<'a> LineRenderer<'a> {
             Vec::with_capacity(line_active_effects.len());
         let mut disintegrate_effects_base: Vec<(&str, &Effect)> =
             Vec::with_capacity(line_active_effects.len());
+        let mut stroke_reveal_effects: Vec<&Effect> =
+            Vec::with_capacity(line_active_effects.len());
 
         for (name, effect) in &line_active_effects {
             match effect.effect_type {
                 EffectType::Particle => particle_effects_base.push((name, &**effect)),
                 EffectType::Disintegrate => disintegrate_effects_base.push((name, &**effect)),
+                EffectType::StrokeReveal => stroke_reveal_effects.push(&**effect),
                 _ => transform_effects_base.push(&**effect),
             }
         }
@@ -300,10 +303,8 @@ impl<'a> LineRenderer<'a> {
 
                     // Check for StrokeReveal
                     let mut stroke_reveal_progress = None;
-                    for effect in &transform_effects_base {
-                        if effect.effect_type == EffectType::StrokeReveal
-                            && EffectEngine::should_trigger(effect, &ctx)
-                        {
+                    for effect in &stroke_reveal_effects {
+                        if EffectEngine::should_trigger(effect, &ctx) {
                             let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                             stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
                             break; // Only one stroke reveal supported
