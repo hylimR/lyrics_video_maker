@@ -17,3 +17,8 @@ Action: Added `glyph_id: u16` to `GlyphInfo` and populated it during layout. Upd
 Learning: Unconditionally clearing caches (like `resolved_font_cache`) "to prevent memory leaks" is a massive performance footgun for the common case (static content).
 Insight: A cache should only be cleared if it is actually in danger of growing too large. For font caches, a threshold of ~500 entries is plenty for static text but prevents infinite growth from animations.
 Action: Changed `clear_font_cache` to check `len() > 500` before clearing. This preserves the cache across frames for static text, eliminating the need to rebuild `skia_safe::Font` objects (and their underlying C++ structures) 60 times a second.
+
+## 2024-05-27 - Skia Path Caching
+Learning: `font.get_path(glyph_id)` involves FFI overhead and C++ object construction for every glyph in every frame, even for static text.
+Insight: `skia_safe::Path` objects are reference-counted (copy-on-write) wrappers around C++ `SkPath`. Cloning them is cheap. We can cache the resulting `Path` object to avoid the FFI/construction cost entirely.
+Action: Added `path_cache` to `TextRenderer` keyed by `(typeface_id, size_bits, glyph_id)`. Updated `LineRenderer` to use this cache. This reduces the per-glyph overhead significantly, especially for text-heavy scenes.
