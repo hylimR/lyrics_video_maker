@@ -3,7 +3,9 @@ use skia_safe::{
     surfaces, BlendMode, BlurStyle, Canvas, Color, Font, MaskFilter, Paint, PaintStyle, Typeface,
 };
 use std::borrow::Cow;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 
 use crate::model::{
     AnimatedValue, Easing, Effect, EffectType, KLyricDocumentV2, Line, PositionValue, Style,
@@ -29,7 +31,7 @@ pub struct LineRenderer<'a> {
     pub time: f64,
     pub text_renderer: &'a mut TextRenderer,
     pub particle_system: &'a mut ParticleRenderSystem,
-    pub active_keys: &'a mut HashSet<String>,
+    pub active_keys: &'a mut HashSet<u64>,
     pub width: u32,
     pub height: u32,
 }
@@ -517,8 +519,14 @@ impl<'a> LineRenderer<'a> {
                             continue;
                         }
 
-                        let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
-                        self.active_keys.insert(key.clone());
+                        // Generate Hash Key
+                        let mut hasher = DefaultHasher::new();
+                        line_idx.hash(&mut hasher);
+                        glyph.char_index.hash(&mut hasher);
+                        name.hash(&mut hasher);
+                        let key = hasher.finish();
+
+                        self.active_keys.insert(key);
 
                         // We need to capture the glyph as an image for the emitter
                         // Create small surface
@@ -529,27 +537,8 @@ impl<'a> LineRenderer<'a> {
                             continue;
                         }
 
-                        // Create offscreen surface
-                        // Note: creating surfaces every frame is expensive.
-                        // But disintegration usually only triggers ONCE per char.
-                        // Optimization: Check if emitter exists already?
-                        // ParticleSystem does checks, but we shouldn't create surface if not needed.
-                        // But we can't easily check particle system state from here without mutable borrow conflict?
-                        // Actually active_keys insertion handles liveness.
-                        // We should only generate if self.time is close to start?
-                        // EffectEngine handles trigger/progress.
-
-                        // "ensure_disintegration_emitter" checks existence.
-                        // But ideally we don't construct the Image if it exists.
-                        // Let's rely on loose check or just pay the cost (it's fine for export).
-
+                        // Check if emitter exists already
                         if self.particle_system.particle_emitters.contains_key(&key) {
-                            // Just update active
-                            // But we can't access it here easily because self.particle_system is borrowed?
-                            // No, we have &mut self in render_line.
-                            // Actually we have separate borrows in Mod.rs.
-                            // LineRenderer struct holds &mut separate fields.
-                            // So yes we can check.
                             if let Some(e) = self.particle_system.particle_emitters.get_mut(&key) {
                                 e.active = true;
                                 continue;
@@ -562,12 +551,7 @@ impl<'a> LineRenderer<'a> {
                             let c = surface.canvas();
                             // Center the path in the capture
                             let _tx = (capture_w as f32 / 2.0) - cx;
-                            let _ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
-                                                                     // path bounds .top might be negative.
-                                                                     // bounds.y is usually negative (ascender).
-                                                                     // If bounds y is -50, height 70.
-                                                                     // We want to translate such that top-left of bounds is at (0,0)?
-                                                                     // Or center.
+                            let _ty = (capture_h as f32 / 2.0) - cy;
 
                             let bounds_left = bounds.left;
                             let bounds_top = bounds.top;
@@ -623,8 +607,14 @@ impl<'a> LineRenderer<'a> {
                             ..Default::default()
                         };
 
-                        let key = format!("{}_{}_{}", line_idx, glyph.char_index, name);
-                        self.active_keys.insert(key.clone());
+                        // Generate Hash Key
+                        let mut hasher = DefaultHasher::new();
+                        line_idx.hash(&mut hasher);
+                        glyph.char_index.hash(&mut hasher);
+                        name.hash(&mut hasher);
+                        let key = hasher.finish();
+
+                        self.active_keys.insert(key);
 
                         let bounds_rect = CharBounds {
                             x: draw_x + final_transform.x + bounds.left,
@@ -698,4 +688,3 @@ fn is_char_dependent(effect: &Effect) -> bool {
         _ => false, // Keyframe, Range Transition, etc. are time-based (independent)
     }
 }
-

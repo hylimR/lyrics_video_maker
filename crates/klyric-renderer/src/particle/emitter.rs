@@ -23,6 +23,8 @@ pub struct ParticleEmitter {
     color_rgba: u32,
     /// Total time emitter has been running
     pub elapsed: f32,
+    /// If true, the emitter is managed by the frame loop (auto-deactivated if not touched)
+    pub frame_driven: bool,
 }
 
 impl ParticleEmitter {
@@ -37,6 +39,7 @@ impl ParticleEmitter {
             active: true,
             color_rgba,
             elapsed: 0.0,
+            frame_driven: true,
         }
     }
 
