@@ -1,6 +1,6 @@
-# CLAUDE.md
+# GEMINI.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Gemini Code when working with code in this repository.
 
 ## Project Overview
 
@@ -100,10 +100,10 @@ crates/
 │   │   ├── particle/    # Particle system
 │   │   ├── presets/     # Effect presets (particles, transitions)
 │   │   ├── renderer/    # Native renderer (skia-safe)
-│   │   └── wasm_renderer.rs  # WASM renderer (tiny-skia)
+│   │   ├── text.rs      # Font loading and text measurement
+│   │   └── expressions.rs  # Expression evaluation
 │   └── Cargo.toml
-│
-└── klyric-preview/      # Standalone OpenGL preview (winit + glutin)
+
 
 samples/                 # Sample .klyric files and audio
 .agent/specs/            # KLyric format specification
@@ -111,12 +111,10 @@ samples/                 # Sample .klyric files and audio
 
 ### Rendering Pipeline
 ```
-KLyric v2.0 JSON → Parser → Style Resolver → Layout Engine → Effect Engine → Rasterizer → RGBA Pixels
+KLyric v2.0 JSON → Parser → Style Resolver → Layout Engine → Effect Engine → Renderer (skia-safe) → RGBA Pixels
 ```
 
-The renderer supports dual targets via conditional compilation:
-- **Native:** `skia-safe` (GPU accelerated)
-- **WASM:** `tiny-skia` + `ab_glyph` (CPU, for browser preview)
+The renderer uses `skia-safe` for GPU-accelerated rendering. Legacy WASM support using `tiny-skia` exists in the codebase but is no longer actively maintained.
 
 ### Iced Architecture (Elm Pattern)
 
@@ -151,15 +149,11 @@ worker_connection.send(RenderRequest { ... });
 Subscription::run(worker_subscription) → Message::FrameRendered(handle)
 ```
 
-### 3. Dual-Target Renderer
-When modifying `klyric-renderer`, be aware of conditional compilation:
-```rust
-#[cfg(not(target_arch = "wasm32"))]
-pub mod renderer;  // skia-safe
-
-#[cfg(target_arch = "wasm32")]
-pub mod wasm_renderer;  // tiny-skia
-```
+### 3. Native Renderer
+The renderer uses `skia-safe` for high-performance GPU-accelerated rendering:
+- Text rendering with `TextRenderer` for font loading and measurement
+- Canvas-based drawing with particle effects and animations
+- Direct integration with the background render worker
 
 ### 4. Audio Playback
 Audio is handled via `rodio` in `audio.rs`. The `AudioManager` syncs with playback state.

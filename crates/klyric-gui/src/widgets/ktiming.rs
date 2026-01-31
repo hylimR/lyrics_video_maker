@@ -16,19 +16,19 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     let header = container(
         row![
             theme::icon_sized("⌨️ K-Timing Editor", 14.0),
-            Space::with_width(Length::Fixed(24.0)),
+            Space::new().width(Length::Fixed(24.0)),
             container(
                 row![
                     text("Space").size(10).color(theme::colors::ACCENT),
                     text(" mark").size(10).color(theme::colors::TEXT_SECONDARY),
-                    Space::with_width(Length::Fixed(12.0)),
+                    Space::new().width(Length::Fixed(12.0)),
                     theme::icon_sized("←→", 10.0).color(theme::colors::ACCENT),
                     text(" navigate").size(10).color(theme::colors::TEXT_SECONDARY),
                 ]
             )
             .style(theme::card_style)
             .padding([4, 8]),
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             button(theme::icon_sized("↺ Reset", 11.0))
                 .style(theme::secondary_button_style)
                 .padding([4, 10])
@@ -87,7 +87,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                     text(line.text.as_deref().unwrap_or("Untitled"))
                         .size(13)
                         .color(theme::colors::TEXT_PRIMARY),
-                    Space::with_width(Length::Fill),
+                    Space::new().width(Length::Fill),
                     text(format!("{:.2}s → {:.2}s", line.start, line.end))
                         .size(11)
                         .color(theme::colors::TEXT_SECONDARY),
@@ -111,7 +111,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         container(
             column![
                 theme::icon_sized("📝", 32.0).color(theme::colors::TEXT_MUTED),
-                Space::with_height(Length::Fixed(8.0)),
+                Space::new().height(Length::Fixed(8.0)),
                 text("Select a line to edit timing")
                     .size(13)
                     .color(theme::colors::TEXT_SECONDARY),
@@ -136,3 +136,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     .height(Length::Fill)
     .into()
 }
+
+
+
+

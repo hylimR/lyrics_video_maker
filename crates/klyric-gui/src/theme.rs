@@ -2,7 +2,7 @@
 //! Inspired by bl3_save_edit's polished dark aesthetic
 
 use iced::widget::{button, container, text_input, scrollable, slider};
-use iced::{Border, Color, Theme, Background};
+use iced::{Border, Color, Theme, Background, Shadow, Vector};
 
 // ============================================================================
 // Color Palette
@@ -12,6 +12,7 @@ use iced::{Border, Color, Theme, Background};
 pub const ICON_FONT: iced::Font = iced::Font::with_name("Segoe UI Emoji");
 
 /// Icons for the application
+#[allow(dead_code)]
 pub mod icons {
     pub const FILE_OPEN: &str = "📁";
     pub const FILE_SAVE: &str = "💾";
@@ -78,6 +79,7 @@ pub fn dark_theme() -> Theme {
             primary: colors::ACCENT,
             success: colors::SUCCESS,
             danger: colors::ERROR,
+            warning: colors::ERROR,
         },
     )
 }
@@ -469,7 +471,7 @@ pub fn text_input_style(_theme: &Theme, status: text_input::Status) -> text_inpu
             value: colors::TEXT_PRIMARY,
             selection: colors::ACCENT,
         },
-        text_input::Status::Focused => text_input::Style {
+        text_input::Status::Focused { .. } => text_input::Style {
             background: Background::Color(colors::SURFACE_LIGHT),
             border: Border {
                 color: colors::ACCENT,
@@ -510,7 +512,7 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
             radius: 4.0.into(),
         },
         scroller: scrollable::Scroller {
-            color: colors::BORDER_HOVER,
+            background: Background::Color(colors::BORDER_HOVER),
             border: Border {
                 color: Color::TRANSPARENT,
                 width: 0.0,
@@ -519,16 +521,33 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
         },
     };
     
+    let auto_scroll = scrollable::AutoScroll {
+        background: Background::Color(Color { a: 0.9, ..colors::SURFACE_MID }),
+        border: Border {
+            color: Color { a: 0.5, ..colors::TEXT_PRIMARY },
+            width: 1.0,
+            radius: 50.0.into(),
+        },
+        shadow: Shadow {
+            color: Color { a: 0.5, ..colors::SURFACE_DARKEST },
+            offset: Vector::ZERO,
+            blur_radius: 5.0,
+        },
+        icon: colors::TEXT_PRIMARY,
+    };
+    
     match status {
-        scrollable::Status::Active => scrollable::Style {
+        scrollable::Status::Active { .. } => scrollable::Style {
             container: container::Style::default(),
             vertical_rail: scrollbar.clone(),
             horizontal_rail: scrollbar,
             gap: None,
+            auto_scroll,
         },
         scrollable::Status::Hovered { 
             is_horizontal_scrollbar_hovered,
             is_vertical_scrollbar_hovered,
+            ..
         } => {
             let hovered_scrollbar = scrollable::Rail {
                 background: Some(Background::Color(colors::SURFACE_MID)),
@@ -538,11 +557,11 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                     radius: 4.0.into(),
                 },
                 scroller: scrollable::Scroller {
-                    color: if is_vertical_scrollbar_hovered || is_horizontal_scrollbar_hovered {
+                    background: Background::Color(if is_vertical_scrollbar_hovered || is_horizontal_scrollbar_hovered {
                         colors::ACCENT
                     } else {
                         colors::BORDER_HOVER
-                    },
+                    }),
                     border: Border {
                         color: Color::TRANSPARENT,
                         width: 0.0,
@@ -555,11 +574,13 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                 vertical_rail: hovered_scrollbar.clone(),
                 horizontal_rail: hovered_scrollbar,
                 gap: None,
+                auto_scroll,
             }
         },
         scrollable::Status::Dragged {
             is_horizontal_scrollbar_dragged,
             is_vertical_scrollbar_dragged,
+            ..
         } => {
             let dragged_scrollbar = scrollable::Rail {
                 background: Some(Background::Color(colors::SURFACE_MID)),
@@ -569,11 +590,11 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                     radius: 4.0.into(),
                 },
                 scroller: scrollable::Scroller {
-                    color: if is_vertical_scrollbar_dragged || is_horizontal_scrollbar_dragged {
+                    background: Background::Color(if is_vertical_scrollbar_dragged || is_horizontal_scrollbar_dragged {
                         colors::ACCENT_PRESSED
                     } else {
                         colors::ACCENT
-                    },
+                    }),
                     border: Border {
                         color: Color::TRANSPARENT,
                         width: 0.0,
@@ -586,6 +607,7 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                 vertical_rail: dragged_scrollbar.clone(),
                 horizontal_rail: dragged_scrollbar,
                 gap: None,
+                auto_scroll,
             }
         },
     }
@@ -727,9 +749,13 @@ pub fn button_icon_style(_theme: &Theme, status: button::Status) -> button::Styl
 pub fn text_input_inherit_style(_theme: &Theme, status: text_input::Status) -> text_input::Style {
     let mut style = text_input_style(_theme, status);
     style.value = colors::TEXT_MUTED;
-    if status != text_input::Status::Focused {
+    if !matches!(status, text_input::Status::Focused { .. }) {
         style.border.color = Color::TRANSPARENT;
         style.background = Background::Color(Color::TRANSPARENT);
     }
     style
 }
+
+
+
+

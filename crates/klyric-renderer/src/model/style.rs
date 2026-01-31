@@ -34,9 +34,14 @@ pub struct Style {
     /// Global effects (applied to all lines using this style)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effects: Option<Vec<String>>,
+
+    /// Modifier layers (New System)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layers: Option<Vec<EffectLayer>>,
 }
 
 use super::layout::Transform;
+use super::modifiers::EffectLayer;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]

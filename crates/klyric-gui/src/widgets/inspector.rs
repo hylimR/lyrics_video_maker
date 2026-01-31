@@ -55,7 +55,7 @@ where F: Fn(String) -> Message + 'a
         content = content.push(reset_btn);
     } else {
         // Placeholder
-        content = content.push(Space::with_width(Length::Fixed(24.0)));
+        content = content.push(Space::new().width(Length::Fixed(24.0)));
     }
 
     content.into()
@@ -101,7 +101,7 @@ where F: Fn(String) -> Message + 'a
         
         content = content.push(reset_btn);
     } else {
-        content = content.push(Space::with_width(Length::Fixed(24.0)));
+        content = content.push(Space::new().width(Length::Fixed(24.0)));
     }
 
     content.into()
@@ -160,7 +160,7 @@ where F: Fn(f32) -> Message + 'a + Clone
             .padding(4);
         content = content.push(reset_btn);
     } else {
-        content = content.push(Space::with_width(Length::Fixed(24.0)));
+        content = content.push(Space::new().width(Length::Fixed(24.0)));
     }
 
     content.into()
@@ -211,7 +211,7 @@ pub fn smart_font_picker<'a>(
             .padding(4);
         content = content.push(reset_btn);
     } else {
-        content = content.push(Space::with_width(Length::Fixed(24.0)));
+        content = content.push(Space::new().width(Length::Fixed(24.0)));
     }
 
     content.into()
@@ -252,7 +252,7 @@ where F: Fn(String) -> Message + 'a
             .padding(4);
         content = content.push(reset_btn);
     } else {
-        content = content.push(Space::with_width(Length::Fixed(24.0)));
+        content = content.push(Space::new().width(Length::Fixed(24.0)));
     }
 
     content.into()
@@ -263,7 +263,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     container(
         column![
             header(state),
-            Space::with_height(10),
+            Space::new().height(10),
             scrollable(
                 content(state)
             )
@@ -350,11 +350,11 @@ fn header(state: &AppState) -> Element<'_, Message> {
 fn content(state: &AppState) -> Element<'_, Message> {
     column![
         typography_section(state),
-        Space::with_height(1),
+        Space::new().height(1),
         shadow_section(state),
-        Space::with_height(1),
+        Space::new().height(1),
         effect_section(state),
-        Space::with_height(1),
+        Space::new().height(1),
         transform_section(state),
     ].spacing(1).into()
 }
@@ -489,12 +489,12 @@ fn typography_section(state: &AppState) -> Element<'_, Message> {
     container(
         column![
             text("TYPOGRAPHY").size(11).color(theme::colors::TEXT_SECONDARY), // bold removed for consistency
-            Space::with_height(10),
+            Space::new().height(10),
             
             smart_font_picker("Family", fam_loc, fam_res, fam_inh, font_options, Message::SetFontFamily, Message::UnsetFontFamily),
             smart_number_input("Size", size_loc, size_res, size_inh, Message::SetFontSize, Message::UnsetFontSize),
             
-            Space::with_height(10),
+            Space::new().height(10),
             text("STROKE").size(11).color(theme::colors::TEXT_SECONDARY),
              smart_number_input("Width", stroke_w_loc, stroke_w_res, stroke_w_inh, Message::SetStrokeWidth, Message::UnsetStrokeWidth),
              
@@ -562,7 +562,7 @@ fn transform_section(state: &AppState) -> Element<'_, Message> {
     container(
         column![
             text("TRANSFORM").size(11).color(theme::colors::TEXT_SECONDARY), // bold removed
-            Space::with_height(10),
+            Space::new().height(10),
              smart_slider("Offset X", x_loc, x_res, x_inh, -960.0..=960.0, 1.0, Message::SetOffsetX, Message::UnsetOffsetX),
              smart_slider("Offset Y", y_loc, y_res, y_inh, -540.0..=540.0, 1.0, Message::SetOffsetY, Message::UnsetOffsetY),
              smart_slider("Rotation", rot_loc, rot_res, rot_inh, -360.0..=360.0, 1.0, Message::SetRotation, Message::UnsetRotation),
@@ -613,7 +613,7 @@ fn shadow_section(state: &AppState) -> Element<'_, Message> {
     container(
         column![
             text("SHADOW").size(11).color(theme::colors::TEXT_SECONDARY),
-            Space::with_height(10),
+            Space::new().height(10),
             smart_color_input("Color", col_loc, col_res, col_inh, Message::SetShadowColor, Message::UnsetShadowColor),
             smart_slider("Offset X", x_loc, x_res, x_inh, -20.0..=20.0, 0.5, Message::SetShadowOffsetX, Message::UnsetShadowOffsetX),
             smart_slider("Offset Y", y_loc, y_res, y_inh, -20.0..=20.0, 0.5, Message::SetShadowOffsetY, Message::UnsetShadowOffsetY),
@@ -627,18 +627,17 @@ fn shadow_section(state: &AppState) -> Element<'_, Message> {
     .into()
 }
 fn effect_section(state: &AppState) -> Element<'_, Message> {
-    // Show current effects count or simple list
-    // And provide sample buttons
+    // Show active effects list with delete buttons
     
-    let effect_count = if let Some(line) = state.current_line() {
-        line.effects.len()
+    let active_effects = if let Some(line) = state.current_line() {
+        line.effects.clone()
     } else if let Some(doc) = &state.document {
         doc.styles.get("base")
            .and_then(|s| s.effects.as_ref())
-           .map(|v| v.len())
-           .unwrap_or(0)
+           .cloned()
+           .unwrap_or_default()
     } else {
-        0
+        Vec::new()
     };
 
     let sample_effects = vec![
@@ -647,7 +646,7 @@ fn effect_section(state: &AppState) -> Element<'_, Message> {
         "ParticleOverride".to_string()
     ];
 
-    let content: Element<'_, Message> = row![
+    let add_controls = row![
         pick_list(
             sample_effects,
             None::<String>,
@@ -658,21 +657,60 @@ fn effect_section(state: &AppState) -> Element<'_, Message> {
         .padding([4, 8])
         .width(Length::Fill),
         
-        button(text("Clear").size(12))
+        button(text("Clear All").size(12))
             .on_press(Message::UnsetEffect)
             .style(theme::secondary_button_style)
             .padding([4, 10]),
-    ].spacing(4).into();
+    ].spacing(4);
+
+    let mut list_col = column![].spacing(2);
+    
+    if active_effects.is_empty() {
+        list_col = list_col.push(
+            text("No active effects")
+                .size(11)
+                .color(theme::colors::TEXT_MUTED)
+                .width(Length::Fill)
+        );
+    } else {
+        for effect_name in active_effects {
+            // Trim timestamp for display if possible, or just show full name
+            // Name format is usually "type_timestamp"
+            let display_name = if let Some(idx) = effect_name.rfind('_') {
+                // If the suffix looks like timestamp, hide it? 
+                // Alternatively just show the prefix.
+                // But unique names are important. Let's show prefix + "..."
+                &effect_name[0..idx]
+            } else {
+                &effect_name
+            };
+            
+            let item = row![
+                text(display_name).size(11).width(Length::Fill),
+                button(text("✖").size(10))
+                    .on_press(Message::RemoveEffect(effect_name.clone()))
+                    .style(theme::button_icon_style)
+                    .padding(2)
+            ]
+            .align_y(Alignment::Center)
+            .padding(4)
+            .spacing(4);
+            
+            list_col = list_col.push(container(item).style(theme::list_item_style));
+        }
+    }
 
     container(
         column![
              row![
                 text("EFFECTS").size(11).color(theme::colors::TEXT_SECONDARY),
-                Space::with_width(Length::Fill),
-                text(format!("Count: {}", effect_count)).size(10).color(theme::colors::TEXT_MUTED),
+                Space::new().width(Length::Fill),
+                text(format!("Count: {}", 0)).size(10).color(theme::colors::TRANSPARENT), // Hidden but kept for spacing/legacy layout match if needed
             ],
-            Space::with_height(10),
-            content,
+            Space::new().height(10),
+            add_controls,
+            Space::new().height(4),
+            list_col,
         ]
         .spacing(4)
     )
@@ -681,3 +719,7 @@ fn effect_section(state: &AppState) -> Element<'_, Message> {
     .width(Length::Fill)
     .into()
 }
+
+
+
+

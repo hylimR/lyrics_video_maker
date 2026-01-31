@@ -11,7 +11,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     let title = container(
         row![
             text("Settings").size(20),
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             button(text("✕").size(16))
                 .style(theme::toolbar_button_style)
                 .on_press(Message::ToggleSettings),
@@ -22,9 +22,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     .style(theme::section_header_style);
 
     let chinese_filter = checkbox(
-        "Show Chinese compatible fonts only",
         state.config.show_chinese_only,
     )
+    .label("Show Chinese compatible fonts only")
     .on_toggle(Message::ToggleShowChineseOnly);
 
     let current_font_name = state.config.ui_font.as_deref().unwrap_or("Default");
@@ -37,7 +37,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
             button(
                 row![
                     text(&f.name).size(14),
-                    Space::with_width(Length::Fill),
+                    Space::new().width(Length::Fill),
                     if is_selected { text("✓").size(14) } else { text("") }
                 ]
             )
@@ -55,9 +55,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 
     let content = column![
         chinese_filter,
-        Space::with_height(16),
+        Space::new().height(16),
         text("UI Font:").size(14),
-        Space::with_height(8),
+        Space::new().height(8),
         container(
             scrollable(column(font_list).spacing(2))
                 .height(Length::Fill)
@@ -67,7 +67,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         .height(Length::Fixed(300.0))
         .width(Length::Fill)
         .padding(1),
-        Space::with_height(16),
+        Space::new().height(16),
         text("Preview:").size(14).color(theme::colors::TEXT_SECONDARY),
         container(
             text("The quick brown fox jumps over the lazy dog.\nCreate 1234567890\n测试中文显示效果\n日本語のテスト")
@@ -104,3 +104,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     })
     .into()
 }
+
+
+
+

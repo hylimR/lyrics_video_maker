@@ -27,17 +27,3 @@ evalexpr = "13.1.0"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 skia-safe = { version = "0.75", features = ["textlayout", "svg", "gl"] }
 
-# WASM bindings (optional, only for wasm32 target)
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2"
-console_error_panic_hook = "0.1"
-console_log = "1"
-getrandom = { version = "0.2", features = ["js"] }
-tiny-skia = "0.11"
-ab_glyph = "0.2"
-fontdb = "0.16"
-owned_ttf_parser = "0.19"
-
-[features]
-default = []
-wasm = []

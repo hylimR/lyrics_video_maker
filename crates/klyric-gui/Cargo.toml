@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 # GUI Framework
-iced = { version = "0.13", features = ["canvas", "image", "tokio"] }
+iced = { version = "0.14", features = ["canvas", "image", "tokio"] }
 
 # Renderer
 klyric-renderer = { path = "../klyric-renderer" }

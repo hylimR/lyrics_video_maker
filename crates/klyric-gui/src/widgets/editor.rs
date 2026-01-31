@@ -83,7 +83,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         text(format!("{} lines", doc.lines.len()))
              .size(12)
              .color(theme::colors::TEXT_SECONDARY),
-        Space::with_width(Length::Fill),
+        Space::new().width(Length::Fill),
         button(text("+ Add").size(12))
             .style(theme::secondary_button_style)
             .padding([4, 8])
@@ -114,3 +114,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     .height(Length::Fill)
     .into()
 }
+
+
+
+

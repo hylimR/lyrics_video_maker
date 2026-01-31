@@ -66,14 +66,18 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     row![
         play_pause,
         stop,
-        Space::with_width(Length::Fixed(16.0)),
+        Space::new().width(Length::Fixed(16.0)),
         time_display,
-        Space::with_width(Length::Fixed(16.0)),
+        Space::new().width(Length::Fixed(16.0)),
         seek_slider,
-        Space::with_width(Length::Fixed(16.0)),
+        Space::new().width(Length::Fixed(16.0)),
     ]
     .spacing(8)
     .padding([12, 16])
     .align_y(Alignment::Center)
     .into()
 }
+
+
+
+

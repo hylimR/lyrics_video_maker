@@ -88,6 +88,7 @@ pub enum Message {
     SetEffect(String),
     UnsetEffect,
     AddSampleEffect(String),
+    RemoveEffect(String),
     
     // Line-level style edits
     SetLineStrokeWidth(String),
@@ -108,9 +109,7 @@ pub enum Message {
 
     // Window management
     OpenDebugWindow,
-    DebugWindowOpened(iced::window::Id),
-    DebugWindowClosed(iced::window::Id),
-    MainWindowOpened(iced::window::Id),
+    CloseDebugWindow,
     
     // Worker messages
     PreviewRendered(iced::widget::image::Handle),
@@ -125,3 +124,7 @@ pub enum Message {
     FontBytesLoaded(Result<Vec<u8>, String>),
     NoOp,
 }
+
+
+
+

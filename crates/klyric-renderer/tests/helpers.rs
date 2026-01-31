@@ -187,6 +187,8 @@ pub fn doc_with_line(text: &str, start: f64, end: f64) -> KLyricDocumentV2 {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         },
     );
 
@@ -293,6 +295,8 @@ pub fn doc_with_multiple_lines(lines_data: &[(&str, f64, f64)]) -> KLyricDocumen
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         },
     );
 

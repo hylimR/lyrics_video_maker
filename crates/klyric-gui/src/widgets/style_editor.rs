@@ -56,7 +56,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         container(
             column![
                 text("Global Styles").size(12).color(theme::colors::TEXT_SECONDARY),
-                Space::with_height(Length::Fixed(8.0)),
+                Space::new().height(Length::Fixed(8.0)),
                 
                 // Font settings
                 row![
@@ -80,9 +80,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                     text("px").size(11).color(theme::colors::TEXT_MUTED),
                 ].spacing(8).align_y(Alignment::Center),
                 
-                Space::with_height(Length::Fixed(12.0)),
+                Space::new().height(Length::Fixed(12.0)),
                 text("Colors").size(12).color(theme::colors::TEXT_SECONDARY),
-                Space::with_height(Length::Fixed(4.0)),
+                Space::new().height(Length::Fixed(4.0)),
                 
                 // Color settings
                 row![
@@ -138,14 +138,14 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     let effect_section = container(
         column![
             text("Effect").size(12).color(theme::colors::TEXT_SECONDARY),
-            Space::with_height(Length::Fixed(8.0)),
+            Space::new().height(Length::Fixed(8.0)),
             pick_list(
                 effects,
                 Some(selected_effect),
                 Message::SetEffect,
             )
             .padding([8, 12]),
-            Space::with_height(Length::Fixed(8.0)),
+            Space::new().height(Length::Fixed(8.0)),
             text("Sample Effects").size(12).color(theme::colors::TEXT_SECONDARY),
             row![
                 button(text("Typewriter").size(10))
@@ -182,12 +182,12 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
             column![
                 row![
                     text("Line Styles").size(12).color(theme::colors::TEXT_SECONDARY),
-                    Space::with_width(Length::Fill),
+                    Space::new().width(Length::Fill),
                     text(format!("Line {}", state.selected_line.map(|i| i + 1).unwrap_or(0)))
                         .size(10)
                         .color(theme::colors::TEXT_MUTED),
                 ],
-                Space::with_height(Length::Fixed(8.0)),
+                Space::new().height(Length::Fixed(8.0)),
                 
                 row![
                     text("Stroke:").size(11).width(Length::Fixed(50.0)),
@@ -233,9 +233,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
             container(
                 column![
                     global_section,
-                    Space::with_height(Length::Fixed(8.0)),
+                    Space::new().height(Length::Fixed(8.0)),
                     effect_section,
-                    Space::with_height(Length::Fixed(8.0)),
+                    Space::new().height(Length::Fixed(8.0)),
                     line_section,
                 ]
             )
@@ -247,3 +247,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     .height(Length::Fill)
     .into()
 }
+
+
+
+

@@ -50,11 +50,10 @@ pub struct AppState {
 
     /// Audio Manager for playback
     pub audio_manager: Option<crate::audio::AudioManager>,
-    /// Main window ID
-    pub main_window: Option<iced::window::Id>,
 
-    /// Debug window ID
-    pub debug_window: Option<iced::window::Id>,
+
+    /// Show debug overlay
+    pub show_debug: bool,
 
     /// App Configuration
     pub config: crate::config::AppConfig,
@@ -75,8 +74,7 @@ impl std::fmt::Debug for AppState {
             .field("document", &self.document)
             .field("file_path", &self.file_path)
             .field("is_dirty", &self.is_dirty)
-            .field("main_window", &self.main_window)
-            .field("debug_window", &self.debug_window)
+            .field("show_debug", &self.show_debug)
             .finish()
     }
 }
@@ -180,8 +178,7 @@ impl AppState {
             worker_connection: Some(crate::worker::spawn()),
             audio_manager,
             playback,
-            main_window: None,
-            debug_window: None,
+            show_debug: false,
             config: crate::config::AppConfig::load(),
             show_settings: false,
             available_fonts: Vec::new(),
@@ -215,3 +212,7 @@ impl AppState {
         self.current_line_mut()?.chars.get_mut(idx)
     }
 }
+
+
+
+

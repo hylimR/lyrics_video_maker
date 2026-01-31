@@ -55,6 +55,15 @@ impl<'a> StyleResolver<'a> {
         if source.glow.is_some() {
             target.glow = source.glow.clone();
         }
+        if source.transform.is_some() {
+            target.transform = source.transform.clone();
+        }
+        if source.effects.is_some() {
+            target.effects = source.effects.clone();
+        }
+        if source.layers.is_some() {
+            target.layers = source.layers.clone();
+        }
     }
 }
 
@@ -130,6 +139,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -168,6 +179,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         // Child style extends parent with additional stroke
@@ -182,6 +195,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -229,6 +244,8 @@ mod tests {
             }),
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         // Middle style B extends C
@@ -246,6 +263,8 @@ mod tests {
             shadow: None, // Inherits from C
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         // Top style A extends B
@@ -260,6 +279,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -304,6 +325,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         styles.insert("override".to_string(), Style {
@@ -320,6 +343,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -353,6 +378,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         styles.insert("child".to_string(), Style {
@@ -367,6 +394,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -404,6 +433,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         // Child only adds glow, leaves font and stroke as None
@@ -419,6 +450,8 @@ mod tests {
                 intensity: Some(0.8),
             }),
             transform: None,
+            effects: None,
+            layers: None,
         });
         
         let doc = doc_with_styles(styles);
@@ -453,5 +486,66 @@ mod tests {
         assert!(resolved.stroke.is_none());
         assert!(resolved.shadow.is_none());
         assert!(resolved.glow.is_none());
+    }
+
+    #[test]
+    fn test_merge_effects() {
+        // Effects should be replaced by child style if present
+        let mut styles = HashMap::new();
+        
+        styles.insert("base".to_string(), Style {
+            extends: None,
+            font: None,
+            colors: None,
+            stroke: None,
+            shadow: None,
+            glow: None,
+            transform: None,
+            effects: Some(vec!["base_effect".to_string()]),
+            layers: None,
+        });
+        
+        // Child overrides effects
+        styles.insert("override".to_string(), Style {
+            extends: Some("base".to_string()),
+            font: None,
+            colors: None,
+            stroke: None,
+            shadow: None,
+            glow: None,
+            transform: None,
+            effects: Some(vec!["child_effect".to_string()]),
+            layers: None,
+        });
+        
+        // Child inherits effects (none in child)
+        styles.insert("inherit".to_string(), Style {
+            extends: Some("base".to_string()),
+            font: None,
+            colors: None,
+            stroke: None,
+            shadow: None,
+            glow: None,
+            transform: None,
+            effects: None,
+            layers: None,
+        });
+
+        let doc = doc_with_styles(styles);
+        let resolver = StyleResolver::new(&doc);
+        
+        // Test override
+        let resolved_override = resolver.resolve("override");
+        assert!(resolved_override.effects.is_some());
+        let effects = resolved_override.effects.unwrap();
+        assert_eq!(effects.len(), 1);
+        assert_eq!(effects[0], "child_effect".to_string());
+        
+        // Test inheritance
+        let resolved_inherit = resolver.resolve("inherit");
+        assert!(resolved_inherit.effects.is_some());
+        let effects_inh = resolved_inherit.effects.unwrap();
+        assert_eq!(effects_inh.len(), 1);
+        assert_eq!(effects_inh[0], "base_effect".to_string());
     }
 }

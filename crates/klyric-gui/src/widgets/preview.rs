@@ -16,7 +16,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     let header = container(
         row![
             theme::icon_sized("👁️ Preview", 14.0),
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             if let Some(doc) = &state.document {
                 text(format!("{}×{}", doc.project.resolution.width, doc.project.resolution.height))
                     .size(12)
@@ -57,11 +57,11 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         container(
             column![
                 theme::icon_sized("🎥", 48.0).color(theme::colors::TEXT_MUTED),
-                Space::with_height(Length::Fixed(12.0)),
+                Space::new().height(Length::Fixed(12.0)),
                 text("No preview available")
                     .size(14)
                     .color(theme::colors::TEXT_SECONDARY),
-                Space::with_height(Length::Fixed(4.0)),
+                Space::new().height(Length::Fixed(4.0)),
                 text("Load a document to see the preview")
                     .size(11)
                     .color(theme::colors::TEXT_MUTED),
@@ -97,3 +97,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 }
 
 use iced::widget::row;
+
+
+
+

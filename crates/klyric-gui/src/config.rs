@@ -50,3 +50,7 @@ impl AppConfig {
         dirs::config_dir().map(|d| d.join("klyric").join("config.json"))
     }
 }
+
+
+
+

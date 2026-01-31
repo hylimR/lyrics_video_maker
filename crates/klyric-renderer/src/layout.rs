@@ -121,6 +121,8 @@ mod tests {
             shadow: None,
             glow: None,
             transform: None,
+            effects: None,
+            layers: None,
         }
     }
 

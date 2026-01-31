@@ -170,12 +170,22 @@ impl<'a> LineRenderer<'a> {
                          }
                      }
                      
-                     let final_transform = EffectEngine::compute_transform(
+                     let mut final_transform = EffectEngine::compute_transform(
                          self.time,
                          &base_transform,
                          &transform_effects,
                          ctx.clone()
                      );
+
+                     // --- 4. MODIFIER LAYERS (New System) ---
+                     if let Some(layers) = style.layers.as_ref() {
+                         final_transform = EffectEngine::apply_layers(
+                             self.time,
+                             &final_transform,
+                             layers,
+                             &ctx
+                         );
+                     }
 
                      // Disintegrate Effect Progress
                      let mut disintegration_progress = 0.0;

@@ -2,10 +2,10 @@
 
 use iced::{
     Element, Task, Subscription,
-    widget::{button, column, container, row, text, horizontal_rule, Space},
+    widget::{button, column, container, row, text, rule, stack, Space},
     Length, Alignment,
     time,
-    keyboard,
+
 };
 use std::time::Duration;
 
@@ -85,32 +85,6 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             }
         }
 
-        Message::MainWindowOpened(id) => {
-            state.main_window = Some(id);
-        }
-        
-        Message::OpenDebugWindow => {
-            if state.debug_window.is_some() {
-                return Task::none();
-            }
-            
-            let (_, task) = iced::window::open(iced::window::Settings {
-               size: iced::Size::new(600.0, 800.0),
-               ..Default::default() 
-            });
-            
-            return task.map(Message::DebugWindowOpened);
-        }
-        
-        Message::DebugWindowOpened(id) => {
-            state.debug_window = Some(id);
-        }
-        
-        Message::DebugWindowClosed(id) => {
-             if state.debug_window == Some(id) {
-                 state.debug_window = None;
-             }
-        }
 
         Message::OpenFile => {
             return Task::perform(
@@ -1080,6 +1054,28 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
         }
         
         // Line-level style edits
+        Message::RemoveEffect(name) => {
+            let selected_line_idx = state.selected_line;
+            if let Some(doc) = &mut state.document {
+                 if let Some(idx) = selected_line_idx {
+                     if let Some(line) = doc.lines.get_mut(idx) {
+                         if let Some(pos) = line.effects.iter().position(|e| e == &name) {
+                             line.effects.remove(pos);
+                         }
+                     }
+                 } else {
+                     // Global
+                     let style = doc.styles.entry("base".to_string()).or_default();
+                     if let Some(effects) = style.effects.as_mut() {
+                         if let Some(pos) = effects.iter().position(|e| e == &name) {
+                             effects.remove(pos);
+                         }
+                     }
+                 }
+                 state.is_dirty = true;
+            }
+        }
+        
         Message::SetLineStrokeWidth(val) => {
             // Equivalent to SetStrokeWidth when line selected
              if let Ok(num) = val.parse::<f32>() {
@@ -1151,6 +1147,16 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
             state.window_height = h;
         }
 
+        Message::OpenDebugWindow => {
+            state.show_debug = true;
+        }
+
+        Message::CloseDebugWindow => {
+            state.show_debug = false;
+        }
+
+
+
         Message::PreviewRendered(handle) => {
             state.preview_handle = Some(handle);
         }
@@ -1167,12 +1173,10 @@ pub fn update(state: &mut AppState, message: Message) -> Task<Message> {
 }
 
 /// View function - builds the UI with custom styling
-pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Message> {
+pub fn view(state: &AppState) -> Element<'_, Message> {
     // If this is NOT the main window, assume it's a debug window
     // This avoids race condition where debug_window ID isn't set yet when first rendering
-    if Some(window_id) != state.main_window {
-        return debug_view(state);
-    }
+    
     
     // If settings modal is open, show it overlaying everything
     if state.show_settings {
@@ -1190,25 +1194,25 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::SaveFile),
-            Space::with_width(Length::Fixed(16.0)),
-            container(horizontal_rule(1)).width(Length::Fixed(1.0)).height(Length::Fixed(24.0)),
-            Space::with_width(Length::Fixed(16.0)),
+            Space::new().width(Length::Fixed(16.0)),
+            container(rule::horizontal(1)).width(Length::Fixed(1.0)).height(Length::Fixed(24.0)),
+            Space::new().width(Length::Fixed(16.0)),
             button(theme::icon_text(theme::icons::EXPORT, "Export"))
                 .style(theme::primary_button_style)
                 .padding([6, 16])
                 .on_press(Message::OpenExportPanel),
-            Space::with_width(Length::Fixed(12.0)),
+            Space::new().width(Length::Fixed(12.0)),
             // Style button removed as panel is permanent
             button(theme::icon_text(theme::icons::DEBUG, "Debug"))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::OpenDebugWindow),  
-            Space::with_width(Length::Fixed(12.0)),
+            Space::new().width(Length::Fixed(12.0)),
             button(theme::icon_text(theme::icons::SETTINGS, "Settings"))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
                 .on_press(Message::ToggleSettings),
-            Space::with_width(Length::Fill),
+            Space::new().width(Length::Fill),
             button(theme::icon_text(theme::icons::VISIBLE, if state.show_preview { "Hide Preview" } else { "Preview" }))
                 .style(theme::toolbar_button_style)
                 .padding([6, 12])
@@ -1254,11 +1258,11 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
                 // User said "Move preview to left", didn't explicitly say "Always show".
                 // But generally "Move preview to left" implies it's a structural change.
                 // If hidden, we can hide it.
-                 container(Space::with_width(Length::Shrink)) 
+                 container(Space::new().height(Length::Fill)) 
                     .width(Length::Fixed(0.0))
                     .height(Length::Fill)
             },
-            if state.show_preview { Space::with_width(Length::Fixed(8.0)) } else { Space::with_width(Length::Fixed(0.0)) },
+            if state.show_preview { Space::new().width(Length::Fixed(8.0)) } else { Space::new().width(Length::Fixed(0.0)) },
             container(inspector_panel)
                 .width(Length::FillPortion(1))
                 .height(Length::Fill),
@@ -1270,7 +1274,7 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
             container(ktiming_panel)
                 .width(Length::Fill)
                 .height(Length::FillPortion(1)), // Less height for timing
-            Space::with_height(Length::Fixed(8.0)),
+            Space::new().height(Length::Fixed(8.0)),
             container(line_selector_panel)
                 .width(Length::Fill)
                 .height(Length::FillPortion(1)), // Share bottom space
@@ -1279,7 +1283,7 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
 
         column![
             container(top_row).padding([0, 8]),
-            Space::with_height(Length::Fixed(8.0)),
+            Space::new().height(Length::Fixed(8.0)),
             container(bottom_col).padding([0, 8]),
         ]
         .into()
@@ -1288,13 +1292,13 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
         container(
             column![
                 theme::icon_sized(theme::icons::PREVIEW, 64.0),
-                Space::with_height(Length::Fixed(16.0)),
+                Space::new().height(Length::Fixed(16.0)),
                 text("No document loaded").size(24),
-                Space::with_height(Length::Fixed(8.0)),
+                Space::new().height(Length::Fixed(8.0)),
                 text("Open a .klyric file to get started")
                     .size(14)
                     .color(theme::colors::TEXT_SECONDARY),
-                Space::with_height(Length::Fixed(24.0)),
+                Space::new().height(Length::Fixed(24.0)),
                 button(text("Open File").size(14))
                     .style(theme::primary_button_style)
                     .padding([10, 24])
@@ -1315,7 +1319,7 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
         .width(Length::Fill);
 
     // Main layout with proper background
-    container(
+    let content = container(
         column![
             toolbar,
             container(content)
@@ -1327,24 +1331,52 @@ pub fn view(state: &AppState, window_id: iced::window::Id) -> Element<'_, Messag
     )
     .style(theme::content_area_style)
     .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    .height(Length::Fill);
+
+    if state.show_debug {
+        stack![
+            content,
+            container(
+                container(
+                     column![
+                        row![
+                             text("Debug Inspector").size(14).width(Length::Fill),
+                             button(text("✖").size(12))
+                                .on_press(Message::CloseDebugWindow)
+                                .style(theme::button_icon_style)
+                                .padding(4)
+                        ].padding(8).align_y(Alignment::Center),
+                        debug_view(state)
+                     ]
+                )
+                .style(theme::panel_style)
+                .width(Length::Fixed(400.0))
+                .height(Length::Fixed(600.0))
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .style(|_t| container::Style { background: Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.5).into()), ..Default::default() }) // Overlay dims background
+        ].into()
+    } else {
+        content.into()
+    }
 }
 
 /// Subscription for tick events during playback and keyboard input
 pub fn subscription(state: &AppState) -> Subscription<Message> {
-    let keyboard_sub = keyboard::on_key_press(|key, _modifiers| {
-        match key.as_ref() {
-            keyboard::Key::Named(keyboard::key::Named::Space) => {
-                Some(Message::MarkSyllable)
+    let keyboard_sub = iced::event::listen().map(|event| {
+        match event {
+            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. }) => {
+                match key {
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => Message::MarkSyllable,
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowRight) => Message::AdvanceChar,
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowLeft) => Message::RetreatChar,
+                    _ => Message::NoOp,
+                }
             }
-            keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
-                Some(Message::AdvanceChar)
-            }
-            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
-                Some(Message::RetreatChar)
-            }
-            _ => None,
+            _ => Message::NoOp,
         }
     });
 
@@ -1358,7 +1390,7 @@ pub fn subscription(state: &AppState) -> Subscription<Message> {
     // if let Some(conn) = &state.worker_connection { ... }
     
     // Listen for window close events
-    var_subs.push(iced::window::close_events().map(Message::DebugWindowClosed));
+
 
     Subscription::batch(var_subs)
 }
@@ -1444,14 +1476,7 @@ fn debug_view(state: &AppState) -> Element<'_, Message> {
         .padding(8)
     };
     
-    // Windows section
-    let windows_section = column![
-        text("🪟 Windows").size(13).color(theme::colors::ACCENT),
-        row_item("Main Window:", state.main_window.map(|id| format!("{:?}", id)).unwrap_or_else(|| "None".to_string())),
-        row_item("Debug Window:", state.debug_window.map(|id| format!("{:?}", id)).unwrap_or_else(|| "None".to_string())),
-    ]
-    .spacing(4)
-    .padding(8);
+
     
     // UI state section
     let ui_section = column![
@@ -1468,17 +1493,16 @@ fn debug_view(state: &AppState) -> Element<'_, Message> {
         iced::widget::scrollable(
             column![
                 text("🔧 Debug State View").size(16).font(mono),
-                horizontal_rule(1),
+                rule::horizontal(1),
                 playback_section,
-                horizontal_rule(1),
+                rule::horizontal(1),
                 file_section,
-                horizontal_rule(1),
+                rule::horizontal(1),
                 selection_section,
-                horizontal_rule(1),
+                rule::horizontal(1),
                 doc_section,
-                horizontal_rule(1),
-                windows_section,
-                horizontal_rule(1),
+
+                rule::horizontal(1),
                 ui_section,
             ]
             .spacing(4)
@@ -1491,3 +1515,8 @@ fn debug_view(state: &AppState) -> Element<'_, Message> {
     .style(theme::canvas_container_style)
     .into()
 }
+
+
+
+
+
