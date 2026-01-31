@@ -12,3 +12,8 @@ Action: Hoist `layout_line` out of `render_line` and cache the result in `Render
 Learning: `LineRenderer::render_line` called `font.unichar_to_glyph(ch)` for every glyph in every frame, even though this mapping is constant for a given font and char.
 Insight: The `LayoutEngine` already looks up the glyph ID to measure the character width. By storing this `glyph_id` in the `GlyphInfo` struct, we can avoid the repeated lookup during rendering.
 Action: Added `glyph_id: u16` to `GlyphInfo` and populated it during layout. Updated `LineRenderer` to use the cached ID. This reduces FFI overhead and potential map lookups in the hot render loop.
+
+## 2024-05-26 - Conditional Font Cache Clearing
+Learning: Unconditionally clearing caches (like `resolved_font_cache`) "to prevent memory leaks" is a massive performance footgun for the common case (static content).
+Insight: A cache should only be cleared if it is actually in danger of growing too large. For font caches, a threshold of ~500 entries is plenty for static text but prevents infinite growth from animations.
+Action: Changed `clear_font_cache` to check `len() > 500` before clearing. This preserves the cache across frames for static text, eliminating the need to rebuild `skia_safe::Font` objects (and their underlying C++ structures) 60 times a second.
