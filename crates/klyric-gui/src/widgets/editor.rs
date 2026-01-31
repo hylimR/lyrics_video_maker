@@ -2,9 +2,11 @@
 //! Redesigned with custom dark theme styling
 
 use iced::{
-    widget::{button, column, container, row, scrollable, text, Space, lazy},
-    Element, Length, Alignment,
+    widget::{button, column, container, lazy, row, scrollable, text, Space},
+    Alignment, Element, Length,
 };
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use crate::message::Message;
 use crate::state::AppState;
@@ -23,27 +25,38 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         let line_list = scrollable(lazy(
             (DocumentRef(doc.clone()), selected_line),
             move |(doc_ref, selected_line)| {
+                let line_count = doc_ref.0.lines.len();
                 column(
-                    doc_ref
-                        .0
-                        .lines
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, line)| {
+                    (0..line_count)
+                        .map(|idx| {
                             let is_selected = selected_line == Some(idx);
 
+                            // Get line reference temporarily to compute hash
+                            let line = &doc_ref.0.lines[idx];
+
                             // Capture only necessary data for the view to optimize caching
-                            let label_opt = line.text.clone();
+                            // Use hashing to avoid cloning string while preserving content-based invalidation
+                            let mut hasher = DefaultHasher::new();
+                            line.text.hash(&mut hasher);
+                            let text_hash = hasher.finish();
+
                             let start_bits = line.start.to_bits();
                             let end_bits = line.end.to_bits();
 
+                            // Capture doc_ref for the closure
+                            let captured_doc = doc_ref.clone();
+
                             lazy(
-                                (idx, is_selected, label_opt, start_bits, end_bits),
-                                move |(idx, is_selected, label, start_bits, end_bits)| {
+                                (idx, is_selected, text_hash, start_bits, end_bits),
+                                move |(idx, is_selected, _hash, start_bits, end_bits)| {
                                     let start = f64::from_bits(start_bits);
                                     let end = f64::from_bits(end_bits);
+
+                                    // Retrieve text from captured doc
+                                    let line = &captured_doc.0.lines[idx];
+
                                     let fallback = format!("Line {}", idx + 1);
-                                    let label_str = label.as_deref().unwrap_or(&fallback);
+                                    let label_str = line.text.as_deref().unwrap_or(&fallback);
                                     let label_owned = label_str.to_string();
 
                                     let timing = format!("{:.1}s - {:.1}s", start, end);
@@ -97,8 +110,8 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         // Line actions
         let line_actions = row![
             text(format!("{} lines", doc.lines.len()))
-                    .size(12)
-                    .color(theme::colors::TEXT_SECONDARY),
+                .size(12)
+                .color(theme::colors::TEXT_SECONDARY),
             Space::with_width(Length::Fill),
             button(text("+ Add").size(12))
                 .style(theme::secondary_button_style)
@@ -121,17 +134,18 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         // Main layout
         container(
             column![
-                container(line_actions).padding([4, 8]).style(theme::section_header_style).width(Length::Fill),
+                container(line_actions)
+                    .padding([4, 8])
+                    .style(theme::section_header_style)
+                    .width(Length::Fill),
                 container(line_list).padding(4).height(Length::Fill),
             ]
-            .spacing(0)
+            .spacing(0),
         )
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
     } else {
-        container(text("No document"))
-            .padding(16)
-            .into()
+        container(text("No document")).padding(16).into()
     }
 }
