@@ -30,22 +30,40 @@ impl LayoutEngine {
         let mut cursor_x = 0.0;
         let gap = line.layout.as_ref().map(|l| l.gap).unwrap_or(0.0);
         
+        // 1. Resolve Line-level fallback family
+        let line_family_def = line
+            .font
+            .as_ref()
+            .and_then(|f| f.family.as_deref())
+            .unwrap_or(style_family);
+
+        // 2. Resolve Typeface for Line-level fallback
+        let line_typeface = renderer
+            .get_typeface(line_family_def)
+            .or_else(|| renderer.get_default_typeface());
+
         // Iterate over character objects in the line
         for (i, char_data) in line.chars.iter().enumerate() {
             let ch_str = &char_data.char;
-            
-            // Resolve Font for this Char Unit (Char > Line > Style)
-            let family = char_data.font.as_ref().and_then(|f| f.family.as_deref())
-                .or_else(|| line.font.as_ref().and_then(|f| f.family.as_deref()))
-                .unwrap_or(style_family);
 
-            let size = char_data.font.as_ref().and_then(|f| f.size)
+            // Check if char has family override
+            let char_family_override = char_data.font.as_ref().and_then(|f| f.family.as_deref());
+
+            // Resolve Typeface (Char override or Line default)
+            let font_ref = if let Some(fam) = char_family_override {
+                renderer
+                    .get_typeface(fam)
+                    .or_else(|| renderer.get_default_typeface())
+            } else {
+                line_typeface.clone()
+            };
+
+            let size = char_data
+                .font
+                .as_ref()
+                .and_then(|f| f.size)
                 .or_else(|| line.font.as_ref().and_then(|f| f.size))
                 .unwrap_or(style_size);
-
-            // Resolve Typeface once per Char Unit
-            let font_ref = renderer.get_typeface(family)
-                .or_else(|| renderer.get_default_typeface());
 
             // For each character in the string
             for ch in ch_str.chars() {
