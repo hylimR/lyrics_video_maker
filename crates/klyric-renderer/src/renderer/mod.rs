@@ -487,5 +487,4 @@ mod tests {
             "Text renderer should be accessible"
         );
     }
-
 }

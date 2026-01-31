@@ -94,9 +94,7 @@ impl TextRenderer {
                 .db
                 .with_face_data(id, |data, _index| {
                     // Clone data to own it for FontArc. Not efficient but works for WASM.
-                    FontArc::try_from_vec(data.to_vec())
-                        .ok()
-                        .map(Typeface)
+                    FontArc::try_from_vec(data.to_vec()).ok().map(Typeface)
                 })
                 .flatten();
 

@@ -144,7 +144,11 @@ impl TextRenderer {
     }
 
     /// Measure single character using a resolved font
-    pub fn measure_char_with_font(&self, resolved_font: &ResolvedFont, ch: char) -> (f32, f32, u16) {
+    pub fn measure_char_with_font(
+        &self,
+        resolved_font: &ResolvedFont,
+        ch: char,
+    ) -> (f32, f32, u16) {
         let font = &resolved_font.font;
 
         // width
@@ -175,16 +179,16 @@ impl TextRenderer {
         typeface: &Typeface,
         size: f32,
         glyph_id: u16,
-    ) -> Option<Path> {
+    ) -> Option<&Path> {
         let key = (typeface.unique_id().into(), size.to_bits(), glyph_id);
         if let Some(path) = self.path_cache.get(&key) {
-            return Some(path.clone());
+            return Some(path);
         }
 
         let font = self.get_font(typeface, size);
         if let Some(path) = font.get_path(glyph_id) {
-            self.path_cache.insert(key, path.clone());
-            Some(path)
+            self.path_cache.insert(key, path);
+            self.path_cache.get(&key)
         } else {
             None
         }
