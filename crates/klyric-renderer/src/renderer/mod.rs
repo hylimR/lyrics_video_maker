@@ -32,7 +32,7 @@ pub struct Renderer {
     /// Cache for text layouts: content_hash -> Vec<GlyphInfo>
     layout_cache: HashMap<u64, Vec<GlyphInfo>>,
     /// Reusable set for active emitter keys
-    active_emitter_keys: HashSet<String>,
+    active_emitter_keys: HashSet<u64>,
 }
 
 impl Renderer {
