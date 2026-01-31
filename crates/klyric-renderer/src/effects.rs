@@ -98,20 +98,21 @@ impl EffectEngine {
     }
 
     /// Calculate current transform based on active effects
-    pub fn compute_transform(
+    pub fn compute_transform<T: std::borrow::Borrow<Effect>>(
         current_time: f64,
         base_transform: Transform,
-        effects: &[&Effect],
-        trigger_context: TriggerContext,
+        effects: &[T],
+        trigger_context: &TriggerContext,
     ) -> Transform {
         let mut final_transform = base_transform;
 
-        for effect in effects {
-            if !Self::should_trigger(effect, &trigger_context) {
+        for effect_wrapper in effects {
+            let effect = effect_wrapper.borrow();
+            if !Self::should_trigger(effect, trigger_context) {
                 continue;
             }
 
-            let progress = Self::calculate_progress(current_time, effect, &trigger_context);
+            let progress = Self::calculate_progress(current_time, effect, trigger_context);
             if !(0.0..=1.0).contains(&progress) {
                 continue;
             }
@@ -858,7 +859,9 @@ mod tests {
         };
         let ctx = make_context(0.0, 10.0);
 
-        let result = EffectEngine::compute_transform(5.0, base, &[], ctx);
+        // Explicitly type empty slice to satisfy generics if needed, or let inference work
+        let effects: &[&Effect] = &[];
+        let result = EffectEngine::compute_transform(5.0, base, effects, &ctx);
 
         assert!(approx_eq(result.x.unwrap() as f64, 10.0, 1e-6));
         assert!(approx_eq(result.y.unwrap() as f64, 20.0, 1e-6));
@@ -894,7 +897,7 @@ mod tests {
         };
 
         // At t=1.0, progress is 0.5, so opacity should be 0.5
-        let result = EffectEngine::compute_transform(1.0, base, &[&effect], ctx);
+        let result = EffectEngine::compute_transform(1.0, base, &[&effect], &ctx);
         assert!(approx_eq(result.opacity.unwrap() as f64, 0.5, 1e-6));
     }
 
