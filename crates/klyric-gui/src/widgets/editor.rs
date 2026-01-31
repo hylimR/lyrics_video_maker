@@ -81,8 +81,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                                         .style(if *is_selected {
                                             |t: &iced::Theme, status| {
                                                 let mut style = theme::list_item_style(t, status);
-                                                style.background =
-                                                    Some(iced::Background::Color(theme::colors::SELECTED));
+                                                style.background = Some(iced::Background::Color(
+                                                    theme::colors::SELECTED,
+                                                ));
                                                 style.border.color = theme::colors::ACCENT;
                                                 style.border.width = 1.0;
                                                 style

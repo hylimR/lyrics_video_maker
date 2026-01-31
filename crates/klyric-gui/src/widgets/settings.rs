@@ -1,6 +1,6 @@
 use iced::{
     widget::{button, checkbox, column, container, row, scrollable, text, Space},
-    Element, Length, Alignment,
+    Alignment, Element, Length,
 };
 
 use crate::message::Message;
@@ -16,7 +16,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                 .style(theme::toolbar_button_style)
                 .on_press(Message::ToggleSettings),
         ]
-        .align_y(Alignment::Center)
+        .align_y(Alignment::Center),
     )
     .padding(16)
     .style(theme::section_header_style);
@@ -28,19 +28,23 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     .on_toggle(Message::ToggleShowChineseOnly);
 
     let current_font_name = state.config.ui_font.as_deref().unwrap_or("Default");
-    
-    let font_list = state.available_fonts.iter()
+
+    let font_list = state
+        .available_fonts
+        .iter()
         .filter(|f| !state.config.show_chinese_only || f.is_chinese)
         .map(|f| {
             let is_selected = state.config.ui_font.as_ref() == Some(&f.name);
-            
-            button(
-                row![
-                    text(&f.name).size(14),
-                    Space::with_width(Length::Fill),
-                    if is_selected { text("✓").size(14) } else { text("") }
-                ]
-            )
+
+            button(row![
+                text(&f.name).size(14),
+                Space::with_width(Length::Fill),
+                if is_selected {
+                    text("✓").size(14)
+                } else {
+                    text("")
+                }
+            ])
             .style(if is_selected {
                 theme::primary_button_style
             } else {
@@ -85,14 +89,9 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     .padding(16);
 
     container(
-        container(
-             column![
-                 title,
-                 content,
-             ]
-        )
-        .width(Length::Fixed(500.0))
-        .style(theme::card_style)
+        container(column![title, content,])
+            .width(Length::Fixed(500.0))
+            .style(theme::card_style),
     )
     .width(Length::Fill)
     .height(Length::Fill)

@@ -6,7 +6,8 @@ use anyhow::Result;
 use skia_safe::{surfaces, AlphaType, Canvas, Color, ColorType, ImageInfo, Surface};
 use std::collections::{HashMap, HashSet};
 
-use crate::model::{KLyricDocumentV2, Style};
+use crate::layout::{GlyphInfo, LayoutEngine};
+use crate::model::{KLyricDocumentV2, Line, Style};
 use crate::presets::{CharBounds, EffectPreset};
 use crate::style::StyleResolver;
 use crate::text::TextRenderer;
@@ -28,6 +29,8 @@ pub struct Renderer {
     style_cache: HashMap<String, Style>,
     /// Pointer to the last document used (to invalidate cache)
     last_doc_ptr: usize,
+    /// Cache for text layouts: content_hash -> Vec<GlyphInfo>
+    layout_cache: HashMap<u64, Vec<GlyphInfo>>,
     /// Reusable set for active emitter keys
     active_emitter_keys: HashSet<String>,
 }
@@ -43,6 +46,7 @@ impl Renderer {
             surface: None,
             style_cache: HashMap::new(),
             last_doc_ptr: 0,
+            layout_cache: HashMap::new(),
             active_emitter_keys: HashSet::new(),
         }
     }
@@ -70,6 +74,9 @@ impl Renderer {
         let current_doc_ptr = doc as *const _ as usize;
         if self.last_doc_ptr != current_doc_ptr {
             self.style_cache.clear();
+            // We also clear layout cache on doc change to avoid unbounded growth
+            // even though hashing protects against stale content.
+            self.layout_cache.clear();
             self.last_doc_ptr = current_doc_ptr;
         }
 
@@ -93,6 +100,14 @@ impl Renderer {
                     self.style_cache.get(style_name).unwrap()
                 };
 
+                // Layout (Cached via Content Hash)
+                let layout_hash = compute_layout_hash(line, style);
+                if !self.layout_cache.contains_key(&layout_hash) {
+                    let g = LayoutEngine::layout_line(line, style, &mut self.text_renderer);
+                    self.layout_cache.insert(layout_hash, g);
+                }
+                let glyphs = self.layout_cache.get(&layout_hash).unwrap();
+
                 let mut line_renderer = LineRenderer {
                     canvas,
                     doc,
@@ -104,7 +119,7 @@ impl Renderer {
                     height: self.height,
                 };
 
-                line_renderer.render_line(line, line_idx, style)?;
+                line_renderer.render_line(line, line_idx, style, glyphs)?;
             }
         }
 
@@ -215,6 +230,54 @@ impl Renderer {
         // Default black
         canvas.clear(Color::BLACK);
     }
+}
+
+fn compute_layout_hash(line: &Line, style: &Style) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+
+    // Line Layout
+    if let Some(l) = &line.layout {
+        // Enums don't derive Hash, use debug string
+        format!("{:?}", l.mode).hash(&mut hasher);
+        format!("{:?}", l.align).hash(&mut hasher);
+        format!("{:?}", l.justify).hash(&mut hasher);
+        l.gap.to_bits().hash(&mut hasher);
+        l.wrap.hash(&mut hasher);
+        if let Some(mw) = l.max_width {
+            mw.to_bits().hash(&mut hasher);
+        }
+    }
+
+    // Line Font Override
+    if let Some(f) = &line.font {
+        f.family.hash(&mut hasher);
+        if let Some(s) = f.size {
+            s.to_bits().hash(&mut hasher);
+        }
+    }
+
+    // Style Font (Base)
+    if let Some(f) = &style.font {
+        f.family.hash(&mut hasher);
+        if let Some(s) = f.size {
+            s.to_bits().hash(&mut hasher);
+        }
+    }
+
+    // Chars
+    for c in &line.chars {
+        c.char.hash(&mut hasher);
+        if let Some(f) = &c.font {
+            f.family.hash(&mut hasher);
+            if let Some(s) = f.size {
+                s.to_bits().hash(&mut hasher);
+            }
+        }
+    }
+
+    hasher.finish()
 }
 
 #[cfg(test)]
@@ -421,4 +484,5 @@ mod tests {
             "Text renderer should be accessible"
         );
     }
+
 }

@@ -2,8 +2,8 @@
 //! Redesigned with custom dark theme styling
 
 use iced::{
-    widget::{column, container, text, image, Space},
-    Element, Length, Alignment, ContentFit,
+    widget::{column, container, image, text, Space},
+    Alignment, ContentFit, Element, Length,
 };
 
 use crate::message::Message;
@@ -18,40 +18,40 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
             theme::icon_sized("👁️ Preview", 14.0),
             Space::with_width(Length::Fill),
             if let Some(doc) = &state.document {
-                text(format!("{}×{}", doc.project.resolution.width, doc.project.resolution.height))
-                    .size(12)
-                    .color(theme::colors::TEXT_SECONDARY)
+                text(format!(
+                    "{}×{}",
+                    doc.project.resolution.width, doc.project.resolution.height
+                ))
+                .size(12)
+                .color(theme::colors::TEXT_SECONDARY)
             } else {
                 text("")
             },
         ]
-        .align_y(Alignment::Center)
+        .align_y(Alignment::Center),
     )
     .style(theme::section_header_style)
     .padding([8, 12])
     .width(Length::Fill);
-    
+
     // Preview content
     let preview_content: Element<Message> = if let Some(handle) = &state.preview_handle {
         // Render the preview image
-        container(
-            image(handle.clone())
-                .content_fit(ContentFit::Contain)
-        )
-        .style(|_theme| container::Style {
-            background: Some(iced::Background::Color(iced::Color::BLACK)),
-            border: iced::Border {
-                color: theme::colors::BORDER,
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            ..Default::default()
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
-        .into()
+        container(image(handle.clone()).content_fit(ContentFit::Contain))
+            .style(|_theme| container::Style {
+                background: Some(iced::Background::Color(iced::Color::BLACK)),
+                border: iced::Border {
+                    color: theme::colors::BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            })
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into()
     } else {
         // No preview available
         container(
@@ -66,7 +66,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                     .size(11)
                     .color(theme::colors::TEXT_MUTED),
             ]
-            .align_x(Alignment::Center)
+            .align_x(Alignment::Center),
         )
         .style(|_theme| container::Style {
             background: Some(iced::Background::Color(theme::colors::SURFACE_DARKEST)),
