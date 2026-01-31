@@ -200,3 +200,80 @@ pub enum Justify {
     Middle,
     Bottom,
 }
+
+/// A dense version of Transform optimized for rendering.
+/// Contains direct f32 values instead of Options.
+#[derive(Debug, Clone, Copy)]
+pub struct RenderTransform {
+    pub x: f32,
+    pub y: f32,
+    pub rotation: f32,
+    pub scale: f32,
+    pub scale_x: f32,
+    pub scale_y: f32,
+    pub opacity: f32,
+    pub anchor_x: f32,
+    pub anchor_y: f32,
+    pub blur: f32,
+    pub glitch_offset: f32,
+    pub hue_shift: f32,
+}
+
+impl Default for RenderTransform {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            rotation: 0.0,
+            scale: 1.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            opacity: 1.0,
+            anchor_x: 0.5,
+            anchor_y: 0.5,
+            blur: 0.0,
+            glitch_offset: 0.0,
+            hue_shift: 0.0,
+        }
+    }
+}
+
+impl RenderTransform {
+    /// Create a RenderTransform by combining line and char transforms.
+    /// Logic mirrors existing additive/multiplicative combination in LineRenderer.
+    pub fn new(line: &Transform, char_t: &Transform) -> Self {
+        Self {
+            x: line.x_val() + char_t.x_val(),
+            y: line.y_val() + char_t.y_val(),
+            rotation: line.rotation_val() + char_t.rotation_val(),
+            scale: line.scale_val() * char_t.scale_val(),
+            scale_x: line.scale_x_val() * char_t.scale_x_val(),
+            scale_y: line.scale_y_val() * char_t.scale_y_val(),
+            opacity: line.opacity_val() * char_t.opacity_val(),
+            // Anchor is usually not additive, char overrides line if present, but here we just follow line renderer which was taking char_val.
+            // Wait, LineRenderer was: anchor_x: Some(char_transform_ref.anchor_x_val())
+            // It completely ignored line_transform for anchor!
+            anchor_x: char_t.anchor_x_val(),
+            anchor_y: char_t.anchor_y_val(),
+            blur: line.blur_val() + char_t.blur_val(),
+            glitch_offset: line.glitch_offset_val() + char_t.glitch_offset_val(),
+            hue_shift: line.hue_shift_val() + char_t.hue_shift_val(),
+        }
+    }
+
+    /// Apply a sparse delta transform (e.g. from prefix optimization)
+    pub fn apply_delta(&mut self, delta: &Transform) {
+        if let Some(v) = delta.x { self.x = v; }
+        if let Some(v) = delta.y { self.y = v; }
+        if let Some(v) = delta.rotation { self.rotation = v; }
+        if let Some(v) = delta.scale { self.scale = v; }
+        if let Some(v) = delta.scale_x { self.scale_x = v; }
+        if let Some(v) = delta.scale_y { self.scale_y = v; }
+        if let Some(v) = delta.opacity { self.opacity = v; }
+        if let Some(v) = delta.anchor_x { self.anchor_x = v; }
+        if let Some(v) = delta.anchor_y { self.anchor_y = v; }
+        if let Some(v) = delta.blur { self.blur = v; }
+        if let Some(v) = delta.glitch_offset { self.glitch_offset = v; }
+        if let Some(v) = delta.hue_shift { self.hue_shift = v; }
+    }
+}
