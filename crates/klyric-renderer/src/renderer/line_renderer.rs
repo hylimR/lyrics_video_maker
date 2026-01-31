@@ -1,5 +1,5 @@
 use anyhow::Result;
-use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces};
+use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces, Font, Typeface};
 use std::collections::HashSet;
 use std::borrow::Cow;
 
@@ -116,6 +116,12 @@ impl<'a> LineRenderer<'a> {
         let default_typeface = self.text_renderer.get_typeface(line_family_def)
              .or_else(|| self.text_renderer.get_default_typeface());
 
+        // --- OPTIMIZATION: Font Cache ---
+        // Reuse SkFont instances to avoid expensive reconstruction
+        let mut cached_font: Option<Font> = None;
+        // Key: (typeface_unique_id, size_in_bits)
+        let mut cached_font_key: Option<(u32, u32)> = None;
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -131,17 +137,40 @@ impl<'a> LineRenderer<'a> {
                 .or_else(|| line.font.as_ref().and_then(|f| f.size))
                 .unwrap_or(style_size);
 
-             // Get typeface and path
-             let typeface = if let Some(fam) = family_override {
+             // Get typeface (avoid cloning default)
+             let override_typeface = if let Some(fam) = family_override {
                  self.text_renderer.get_typeface(fam)
                      .or_else(|| self.text_renderer.get_default_typeface())
              } else {
-                 default_typeface.clone()
+                 None
              };
              
-             if let Some(typeface) = typeface {
+             let typeface_ref = override_typeface.as_ref().or(default_typeface.as_ref());
+
+             if let Some(typeface) = typeface_ref {
+                 // Resolve Font (Cached)
+                 let tf_id: u32 = typeface.unique_id().into();
+                 let size_bits = size.to_bits();
+
+                 let font = if let Some((last_id, last_size)) = cached_font_key {
+                     if last_id == tf_id && last_size == size_bits {
+                         cached_font.as_ref().unwrap()
+                     } else {
+                         let f = Font::from_typeface(typeface.clone(), size);
+                         cached_font = Some(f);
+                         cached_font_key = Some((tf_id, size_bits));
+                         cached_font.as_ref().unwrap()
+                     }
+                 } else {
+                     let f = Font::from_typeface(typeface.clone(), size);
+                     cached_font = Some(f);
+                     cached_font_key = Some((tf_id, size_bits));
+                     cached_font.as_ref().unwrap()
+                 };
+
                  // Get path
-                 if let Some(path) = self.text_renderer.get_glyph_path(&typeface, glyph.char, size) {
+                 let glyph_id = font.unichar_to_glyph(glyph.char as i32);
+                 if let Some(path) = font.get_path(glyph_id) {
                      // Dimensions for effects
                      // Skia path bounds
                      let bounds = path.bounds();
