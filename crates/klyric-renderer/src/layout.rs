@@ -14,6 +14,8 @@ pub struct GlyphInfo {
     pub advance: f32,
     /// Index into the line.chars array this glyph belongs to
     pub char_index: usize,
+    /// The glyph ID in the font
+    pub glyph_id: u16,
 }
 
 pub struct LayoutEngine;
@@ -113,17 +115,17 @@ impl LayoutEngine {
                 if font_ref.is_some() {
                     // Measure character using renderer
                     #[cfg(not(target_arch = "wasm32"))]
-                    let (advance, height) = if let Some(font) = resolved_font_ref {
+                    let (advance, height, glyph_id) = if let Some(font) = resolved_font_ref {
                         renderer.measure_char_with_font(font, ch)
                     } else {
-                        (0.0, 0.0)
+                        (0.0, 0.0, 0)
                     };
 
                     #[cfg(target_arch = "wasm32")]
-                    let (advance, height) = if let Some(tf) = &font_ref {
+                    let (advance, height, glyph_id) = if let Some(tf) = &font_ref {
                         renderer.measure_char(tf, ch, size)
                     } else {
-                        (0.0, 0.0)
+                        (0.0, 0.0, 0)
                     };
 
                     let width = advance;
@@ -136,6 +138,7 @@ impl LayoutEngine {
                         height,
                         advance,
                         char_index: i,
+                        glyph_id,
                     });
 
                     cursor_x += advance;

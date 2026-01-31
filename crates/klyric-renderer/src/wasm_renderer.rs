@@ -94,14 +94,14 @@ impl TextRenderer {
         self.default_typeface.clone()
     }
 
-    pub fn measure_char(&self, typeface: &Typeface, ch: char, size: f32) -> (f32, f32) {
+    pub fn measure_char(&self, typeface: &Typeface, ch: char, size: f32) -> (f32, f32, u16) {
         let font = &typeface.0;
         let scaled = font.as_scaled(size);
         let glyph_id = font.glyph_id(ch);
 
         let advance = scaled.h_advance(glyph_id);
         let height = scaled.ascent() - scaled.descent();
-        (advance, height)
+        (advance, height, glyph_id.0)
     }
 
     fn resolve_font_id(&mut self, family: &str) -> Option<ID> {

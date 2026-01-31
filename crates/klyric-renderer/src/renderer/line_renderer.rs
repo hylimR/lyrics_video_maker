@@ -199,7 +199,7 @@ impl<'a> LineRenderer<'a> {
                 let font = current_font.as_ref().unwrap();
 
                 // Get path
-                let glyph_id = font.unichar_to_glyph(glyph.char as i32);
+                let glyph_id = glyph.glyph_id;
                 if let Some(path) = font.get_path(glyph_id) {
                     // Dimensions for effects
                     // Skia path bounds

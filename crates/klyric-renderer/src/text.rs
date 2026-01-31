@@ -131,7 +131,7 @@ impl TextRenderer {
     }
 
     /// Measure single character using a resolved font
-    pub fn measure_char_with_font(&self, resolved_font: &ResolvedFont, ch: char) -> (f32, f32) {
+    pub fn measure_char_with_font(&self, resolved_font: &ResolvedFont, ch: char) -> (f32, f32, u16) {
         let font = &resolved_font.font;
 
         // width
@@ -139,11 +139,11 @@ impl TextRenderer {
         let mut width = [0.0];
         font.get_widths(&[glyph_id], &mut width);
 
-        (width[0], resolved_font.height)
+        (width[0], resolved_font.height, glyph_id)
     }
 
     /// Measure single character
-    pub fn measure_char(&self, typeface: &Typeface, ch: char, size: f32) -> (f32, f32) {
+    pub fn measure_char(&self, typeface: &Typeface, ch: char, size: f32) -> (f32, f32, u16) {
         let resolved_font = self.create_font(typeface, size);
         self.measure_char_with_font(&resolved_font, ch)
     }
@@ -320,7 +320,7 @@ mod tests {
         let font_name = "DejaVu Sans";
 
         if let Some(typeface) = renderer.get_typeface(font_name) {
-            let (width, height) = renderer.measure_char(&typeface, 'A', 48.0);
+            let (width, height, _) = renderer.measure_char(&typeface, 'A', 48.0);
 
             // Measurements should be positive
             assert!(width > 0.0, "Character width should be positive");
@@ -341,8 +341,8 @@ mod tests {
         let font_name = "DejaVu Sans";
 
         if let Some(typeface) = renderer.get_typeface(font_name) {
-            let (width_small, _) = renderer.measure_char(&typeface, 'A', 24.0);
-            let (width_large, _) = renderer.measure_char(&typeface, 'A', 72.0);
+            let (width_small, _, _) = renderer.measure_char(&typeface, 'A', 24.0);
+            let (width_large, _, _) = renderer.measure_char(&typeface, 'A', 72.0);
 
             // Larger size should produce larger measurement
             assert!(
