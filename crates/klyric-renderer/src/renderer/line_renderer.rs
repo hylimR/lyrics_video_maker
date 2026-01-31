@@ -122,6 +122,10 @@ impl<'a> LineRenderer<'a> {
         // Key: (typeface_unique_id, size_in_bits)
         let mut cached_font_key: Option<(u32, u32)> = None;
 
+        // --- OPTIMIZATION: Hoist Line Transform ---
+        let line_transform_default = Transform::default();
+        let line_transform_ref = line.transform.as_ref().unwrap_or(&line_transform_default);
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -166,7 +170,7 @@ impl<'a> LineRenderer<'a> {
                      cached_font = Some(f);
                      cached_font_key = Some((tf_id, size_bits));
                      cached_font.as_ref().unwrap()
-                 };
+                  };
 
                  // Get path
                  let glyph_id = font.unichar_to_glyph(glyph.char as i32);
@@ -193,22 +197,22 @@ impl<'a> LineRenderer<'a> {
                      };
 
                      // Compute Transform (Base + Effects)
-                     let line_transform = line.transform.clone().unwrap_or_default();
-                     let char_transform = char_data.and_then(|c| c.transform.clone()).unwrap_or_default();
+                     let char_transform_default = Transform::default();
+                     let char_transform_ref = char_data.and_then(|c| c.transform.as_ref()).unwrap_or(&char_transform_default);
                      
                      let base_transform = Transform {
-                         x: Some(line_transform.x_val() + char_transform.x_val()),
-                         y: Some(line_transform.y_val() + char_transform.y_val()),
-                         rotation: Some(line_transform.rotation_val() + char_transform.rotation_val()),
-                         scale: Some(line_transform.scale_val() * char_transform.scale_val()),
-                         scale_x: Some(line_transform.scale_x_val() * char_transform.scale_x_val()),
-                         scale_y: Some(line_transform.scale_y_val() * char_transform.scale_y_val()),
-                         opacity: Some(line_transform.opacity_val() * char_transform.opacity_val()),
-                         anchor_x: Some(char_transform.anchor_x_val()),
-                         anchor_y: Some(char_transform.anchor_y_val()), // Anchor is not additive usually, char overrides line
-                         blur: Some(line_transform.blur_val() + char_transform.blur_val()),
-                         glitch_offset: Some(line_transform.glitch_offset_val() + char_transform.glitch_offset_val()),
-                         hue_shift: Some(line_transform.hue_shift_val() + char_transform.hue_shift_val()),
+                         x: Some(line_transform_ref.x_val() + char_transform_ref.x_val()),
+                         y: Some(line_transform_ref.y_val() + char_transform_ref.y_val()),
+                         rotation: Some(line_transform_ref.rotation_val() + char_transform_ref.rotation_val()),
+                         scale: Some(line_transform_ref.scale_val() * char_transform_ref.scale_val()),
+                         scale_x: Some(line_transform_ref.scale_x_val() * char_transform_ref.scale_x_val()),
+                         scale_y: Some(line_transform_ref.scale_y_val() * char_transform_ref.scale_y_val()),
+                         opacity: Some(line_transform_ref.opacity_val() * char_transform_ref.opacity_val()),
+                         anchor_x: Some(char_transform_ref.anchor_x_val()),
+                         anchor_y: Some(char_transform_ref.anchor_y_val()), // Anchor is not additive usually, char overrides line
+                         blur: Some(line_transform_ref.blur_val() + char_transform_ref.blur_val()),
+                         glitch_offset: Some(line_transform_ref.glitch_offset_val() + char_transform_ref.glitch_offset_val()),
+                         hue_shift: Some(line_transform_ref.hue_shift_val() + char_transform_ref.hue_shift_val()),
                      };
                      
                      let ctx = TriggerContext {
@@ -222,7 +226,7 @@ impl<'a> LineRenderer<'a> {
                      
                      let final_transform = EffectEngine::compute_transform(
                          self.time,
-                         &base_transform,
+                         base_transform,
                          &transform_effects_base,
                          ctx.clone()
                      );
