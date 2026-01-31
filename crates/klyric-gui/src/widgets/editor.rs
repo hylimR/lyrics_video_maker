@@ -34,12 +34,14 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 
                             // Capture only necessary data for the view to optimize caching
                             let label_opt = line.text.clone();
-                            let start = line.start;
-                            let end = line.end;
+                            let start_bits = line.start.to_bits();
+                            let end_bits = line.end.to_bits();
 
                             lazy(
-                                (idx, is_selected, label_opt, start, end),
-                                move |(idx, is_selected, label, start, end)| {
+                                (idx, is_selected, label_opt, start_bits, end_bits),
+                                move |(idx, is_selected, label, start_bits, end_bits)| {
+                                    let start = f64::from_bits(start_bits);
+                                    let end = f64::from_bits(end_bits);
                                     let fallback = format!("Line {}", idx + 1);
                                     let label_str = label.as_deref().unwrap_or(&fallback);
                                     let label_owned = label_str.to_string();
