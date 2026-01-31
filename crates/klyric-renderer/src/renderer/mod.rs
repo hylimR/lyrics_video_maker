@@ -28,6 +28,8 @@ pub struct Renderer {
     style_cache: HashMap<String, Style>,
     /// Pointer to the last document used (to invalidate cache)
     last_doc_ptr: usize,
+    /// Reusable set for active emitter keys
+    active_emitter_keys: HashSet<String>,
 }
 
 impl Renderer {
@@ -41,6 +43,7 @@ impl Renderer {
             surface: None,
             style_cache: HashMap::new(),
             last_doc_ptr: 0,
+            active_emitter_keys: HashSet::new(),
         }
     }
     
@@ -65,7 +68,7 @@ impl Renderer {
         self.draw_background(canvas, doc);
         
         // Track which emitters are active this frame
-        let mut active_emitter_keys = HashSet::new();
+        self.active_emitter_keys.clear();
         
         // 2. Find Active Lines and render
         if let Some(line) = doc.get_active_line(time) {
@@ -87,7 +90,7 @@ impl Renderer {
                      time,
                      text_renderer: &mut self.text_renderer,
                      particle_system: &mut self.particle_system,
-                     active_keys: &mut active_emitter_keys,
+                     active_keys: &mut self.active_emitter_keys,
                      width: self.width,
                      height: self.height,
                  };
@@ -97,7 +100,7 @@ impl Renderer {
         }
         
         // 3. Update and render particles
-        self.particle_system.update(dt as f32, &active_emitter_keys);
+        self.particle_system.update(dt as f32, &self.active_emitter_keys);
         self.particle_system.render(canvas);
 
         Ok(())
