@@ -76,11 +76,11 @@ impl EffectEngine {
     /// Calculate current transform based on active effects
     pub fn compute_transform(
         current_time: f64,
-        base_transform: &Transform,
+        base_transform: Transform,
         effects: &[&Effect],
         trigger_context: TriggerContext
     ) -> Transform {
-        let mut final_transform = base_transform.clone();
+        let mut final_transform = base_transform;
         
         for effect in effects {
             if !Self::should_trigger(effect, &trigger_context) {
@@ -622,7 +622,7 @@ mod tests {
         };
         let ctx = make_context(0.0, 10.0);
         
-        let result = EffectEngine::compute_transform(5.0, &base, &[], ctx);
+        let result = EffectEngine::compute_transform(5.0, base, &[], ctx);
         
         assert!(approx_eq(result.x.unwrap() as f64, 10.0, 1e-6));
         assert!(approx_eq(result.y.unwrap() as f64, 20.0, 1e-6));
@@ -655,7 +655,7 @@ mod tests {
         };
         
         // At t=1.0, progress is 0.5, so opacity should be 0.5
-        let result = EffectEngine::compute_transform(1.0, &base, &[&effect], ctx);
+        let result = EffectEngine::compute_transform(1.0, base, &[&effect], ctx);
         assert!(approx_eq(result.opacity.unwrap() as f64, 0.5, 1e-6));
     }
 
