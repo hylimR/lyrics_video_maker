@@ -15,6 +15,8 @@ pub struct TextRenderer {
     font_mgr: FontMgr,
     /// Cached font data by font name
     font_cache: HashMap<String, Typeface>,
+    /// Cache for resolved fonts: (typeface_id, size_bits) -> Font
+    resolved_font_cache: HashMap<(u32, u32), Font>,
     /// Default typeface
     default_typeface: Option<Typeface>,
 }
@@ -30,6 +32,7 @@ impl TextRenderer {
         Self {
             font_mgr: FontMgr::new(),
             font_cache: HashMap::new(),
+            resolved_font_cache: HashMap::new(),
             default_typeface: None,
         }
     }
@@ -97,6 +100,23 @@ impl TextRenderer {
 
     pub fn get_default_typeface(&self) -> Option<Typeface> {
         self.default_typeface.clone()
+    }
+
+    /// Get a resolved font from cache or create it
+    pub fn get_font(&mut self, typeface: &Typeface, size: f32) -> Font {
+        let key = (typeface.unique_id().into(), size.to_bits());
+        if let Some(font) = self.resolved_font_cache.get(&key) {
+            return font.clone();
+        }
+
+        let font = Font::from_typeface(typeface.clone(), size);
+        self.resolved_font_cache.insert(key, font.clone());
+        font
+    }
+
+    /// Clear the resolved font cache to free memory (e.g. at end of frame)
+    pub fn clear_font_cache(&mut self) {
+        self.resolved_font_cache.clear();
     }
 
     /// Create a resolved font for optimized measurement

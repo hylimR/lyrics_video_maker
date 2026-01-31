@@ -62,6 +62,9 @@ impl Renderer {
         doc: &KLyricDocumentV2,
         time: f64,
     ) -> Result<()> {
+        // Clear transient font cache to prevent memory leak from animated sizes
+        self.text_renderer.clear_font_cache();
+
         // Calculate delta time
         let dt = if self.last_time > 0.0 {
             (time - self.last_time).max(0.0)
