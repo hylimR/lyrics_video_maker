@@ -244,18 +244,21 @@ impl<'a> LineRenderer<'a> {
 
         // --- OPTIMIZATION: Pre-calculate Active Effects ---
         // 1. Dependent Transform Effects
-        let mut active_dependent_effects: Vec<(&Effect, f64)> = Vec::new();
+        let mut active_dependent_effects_raw: Vec<(&Effect, f64)> = Vec::new();
         if split_idx < transform_effects_base.len() {
             for effect in &transform_effects_base[split_idx..] {
                 if EffectEngine::should_trigger(effect, &ctx) {
                     let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                     if (0.0..=1.0).contains(&p) {
                         let eased = EffectEngine::ease(p, &effect.easing);
-                        active_dependent_effects.push((effect, eased));
+                        active_dependent_effects_raw.push((effect, eased));
                     }
                 }
             }
         }
+
+        // COMPILE OPS (Optimization: Pre-calculate constants for dependent effects)
+        let compiled_ops = EffectEngine::compile_active_effects(&active_dependent_effects_raw, &ctx);
 
         // 2. Disintegrate Effects
         let mut active_disintegrate_effects: Vec<(&str, &Effect, f64)> = Vec::new();
@@ -353,12 +356,19 @@ impl<'a> LineRenderer<'a> {
                     }
 
                     // Apply remaining dependent effects (if any)
-                    if !active_dependent_effects.is_empty() {
-                        final_transform = EffectEngine::apply_active_effects(
-                            self.time,
+                    if !compiled_ops.is_empty() {
+                        let eval_ctx = crate::expressions::EvaluationContext {
+                            t: self.time,
+                            progress: 0.0, // Will be overridden by op-specific progress if needed
+                            index: Some(glyph.char_index),
+                            count: Some(glyphs.len()),
+                            ..Default::default()
+                        };
+
+                        final_transform = EffectEngine::apply_compiled_ops(
                             final_transform,
-                            &active_dependent_effects,
-                            &ctx,
+                            &compiled_ops,
+                            &eval_ctx,
                         );
                     }
 

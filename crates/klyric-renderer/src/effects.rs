@@ -2,6 +2,54 @@ use super::model::{AnimatedValue, Easing, Effect, EffectType, RenderTransform, T
 use crate::expressions::{EvaluationContext, ExpressionEvaluator};
 use std::f64::consts::PI;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RenderProperty {
+    Opacity,
+    Scale,
+    ScaleX,
+    ScaleY,
+    X,
+    Y,
+    Rotation,
+    Blur,
+    GlitchOffset,
+    AnchorX,
+    AnchorY,
+    HueShift,
+}
+
+impl RenderProperty {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "opacity" => Some(Self::Opacity),
+            "scale" => Some(Self::Scale),
+            "scale_x" => Some(Self::ScaleX),
+            "scale_y" => Some(Self::ScaleY),
+            "x" => Some(Self::X),
+            "y" => Some(Self::Y),
+            "rotation" => Some(Self::Rotation),
+            "blur" => Some(Self::Blur),
+            "glitch_offset" | "glitch" => Some(Self::GlitchOffset),
+            "anchor_x" => Some(Self::AnchorX),
+            "anchor_y" => Some(Self::AnchorY),
+            "hue_shift" => Some(Self::HueShift),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RenderValueOp<'a> {
+    Constant(f32),
+    Expression(&'a str, f64), // Store (expression, progress)
+    TypewriterLimit(f64),
+}
+
+pub struct CompiledRenderOp<'a> {
+    pub prop: RenderProperty,
+    pub value: RenderValueOp<'a>,
+}
+
 /// Engine for applying effects and calculating animations
 pub struct EffectEngine;
 
@@ -95,6 +143,222 @@ impl EffectEngine {
     /// Interpolate between two values
     pub fn lerp(start: f64, end: f64, t: f64) -> f64 {
         start + (end - start) * t
+    }
+
+    /// Compile active effects into a list of optimized render operations.
+    /// This pre-calculates any values that are constant for the current frame (e.g. lerped ranges, keyframe values).
+    pub fn compile_active_effects<'a>(
+        active_effects: &'a [(&'a Effect, f64)],
+        ctx: &TriggerContext,
+    ) -> Vec<CompiledRenderOp<'a>> {
+        let mut ops = Vec::with_capacity(active_effects.len() * 2);
+
+        for (effect, eased_progress) in active_effects {
+            match effect.effect_type {
+                EffectType::Transition => {
+                    for (prop_name, value) in &effect.properties {
+                        if let Some(prop) = RenderProperty::from_str(prop_name) {
+                            match value {
+                                AnimatedValue::Range { from, to } => {
+                                    // Pre-calculate lerp once per frame
+                                    let val = Self::lerp(*from, *to, *eased_progress);
+                                    ops.push(CompiledRenderOp {
+                                        prop,
+                                        value: RenderValueOp::Constant(val as f32),
+                                    });
+                                }
+                                AnimatedValue::Expression(expr) => {
+                                    ops.push(CompiledRenderOp {
+                                        prop,
+                                        value: RenderValueOp::Expression(expr, *eased_progress),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                EffectType::Typewriter => {
+                    // Pre-calculate visible limit logic
+                    let total_chars = ctx.char_count.unwrap_or(1) as f64;
+                    let visible_limit = *eased_progress * total_chars;
+                    ops.push(CompiledRenderOp {
+                        prop: RenderProperty::Opacity,
+                        value: RenderValueOp::TypewriterLimit(visible_limit),
+                    });
+                }
+                EffectType::Keyframe => {
+                    if effect.keyframes.is_empty() {
+                        continue;
+                    }
+
+                    // Keyframe search logic (hoisted)
+                    let mut start_kf = &effect.keyframes[0];
+                    let mut end_kf = &effect.keyframes[0];
+                    let mut found = false;
+
+                    for kf in &effect.keyframes {
+                        if kf.time >= *eased_progress {
+                            end_kf = kf;
+                            found = true;
+                            break;
+                        }
+                        start_kf = kf;
+                    }
+
+                    if !found {
+                        start_kf = effect.keyframes.last().unwrap();
+                        end_kf = start_kf;
+                    }
+
+                    let segment_duration = end_kf.time - start_kf.time;
+                    let t = if segment_duration <= 0.0 {
+                        if *eased_progress >= end_kf.time {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        (*eased_progress - start_kf.time) / segment_duration
+                    };
+
+                    let segment_eased = if let Some(e) = &start_kf.easing {
+                        Self::ease(t, e)
+                    } else {
+                        t
+                    };
+
+                    // Emit Constant ops for all keyframe properties
+                    if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::Opacity,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale, end_kf.scale) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::Scale,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::ScaleX,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::ScaleY,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::Rotation,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.x, end_kf.x) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::X,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::Y,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.blur, end_kf.blur) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::Blur,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.glitch_offset, end_kf.glitch_offset) {
+                        ops.push(CompiledRenderOp {
+                            prop: RenderProperty::GlitchOffset,
+                            value: RenderValueOp::Constant(Self::lerp(
+                                s as f64,
+                                e as f64,
+                                segment_eased,
+                            ) as f32),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+        ops
+    }
+
+    /// Apply compiled operations to a RenderTransform.
+    /// This is optimized to run inside tight loops (per-glyph).
+    pub fn apply_compiled_ops(
+        mut transform: RenderTransform,
+        ops: &[CompiledRenderOp],
+        eval_ctx: &EvaluationContext,
+    ) -> RenderTransform {
+        for op in ops {
+            match op.value {
+                RenderValueOp::Constant(v) => apply_property_enum(&mut transform, op.prop, v),
+                RenderValueOp::Expression(expr, progress) => {
+                    // Create a local context with the effect's progress
+                    let mut local_ctx = eval_ctx.clone();
+                    local_ctx.progress = progress;
+
+                    match ExpressionEvaluator::evaluate(expr, &local_ctx) {
+                        Ok(v) => apply_property_enum(&mut transform, op.prop, v as f32),
+                        Err(e) => {
+                             log::trace!("Expr error: {}", e);
+                        }
+                    }
+                }
+                RenderValueOp::TypewriterLimit(visible_limit) => {
+                    if let Some(idx) = eval_ctx.index {
+                        if (idx as f64) < visible_limit {
+                            apply_property_enum(&mut transform, op.prop, 1.0);
+                        } else {
+                            apply_property_enum(&mut transform, op.prop, 0.0);
+                        }
+                    }
+                }
+            }
+        }
+        transform
     }
 
     /// Calculate current transform based on active effects
@@ -700,6 +964,23 @@ fn apply_property_to_render(transform: &mut RenderTransform, prop: &str, value: 
     }
 }
 
+fn apply_property_enum(transform: &mut RenderTransform, prop: RenderProperty, value: f32) {
+    match prop {
+        RenderProperty::Opacity => transform.opacity = value,
+        RenderProperty::Scale => transform.scale = value,
+        RenderProperty::ScaleX => transform.scale_x = value,
+        RenderProperty::ScaleY => transform.scale_y = value,
+        RenderProperty::X => transform.x = value,
+        RenderProperty::Y => transform.y = value,
+        RenderProperty::Rotation => transform.rotation = value,
+        RenderProperty::Blur => transform.blur = value,
+        RenderProperty::GlitchOffset => transform.glitch_offset = value,
+        RenderProperty::AnchorX => transform.anchor_x = value,
+        RenderProperty::AnchorY => transform.anchor_y = value,
+        RenderProperty::HueShift => transform.hue_shift = value,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1275,5 +1556,118 @@ mod tests {
         // Transform should remain in default state
         assert!(transform.x.is_none());
         assert!(transform.opacity.is_none());
+    }
+
+    #[test]
+    fn test_compile_ops_transition() {
+        let ctx = make_context(0.0, 10.0);
+        let mut props = HashMap::new();
+        props.insert(
+            "opacity".to_string(),
+            AnimatedValue::Range { from: 0.0, to: 1.0 },
+        );
+        let effect = Effect {
+            effect_type: EffectType::Transition,
+            trigger: EffectTrigger::Enter,
+            duration: Some(2.0),
+            delay: 0.0,
+            easing: Easing::Linear,
+            properties: props,
+            mode: None,
+            direction: None,
+            keyframes: Vec::new(),
+            preset: None,
+            particle_config: None,
+            iterations: 1,
+            particle_override: None,
+        };
+
+        // progress = 0.5
+        let ops = EffectEngine::compile_active_effects(&[(&effect, 0.5)], &ctx);
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].prop, RenderProperty::Opacity);
+        match ops[0].value {
+            RenderValueOp::Constant(v) => assert!(approx_eq(v as f64, 0.5, 1e-6)),
+            _ => panic!("Expected Constant"),
+        }
+    }
+
+    #[test]
+    fn test_compile_ops_typewriter() {
+        let mut ctx = make_context(0.0, 10.0);
+        ctx.char_count = Some(10);
+
+        let effect = Effect {
+            effect_type: EffectType::Typewriter,
+            trigger: EffectTrigger::Enter,
+            duration: Some(2.0),
+            delay: 0.0,
+            easing: Easing::Linear,
+            properties: HashMap::new(),
+            mode: None,
+            direction: None,
+            keyframes: Vec::new(),
+            preset: None,
+            particle_config: None,
+            iterations: 1,
+            particle_override: None,
+        };
+
+        // progress = 0.5 -> 5 chars visible
+        let ops = EffectEngine::compile_active_effects(&[(&effect, 0.5)], &ctx);
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].prop, RenderProperty::Opacity);
+        match ops[0].value {
+            RenderValueOp::TypewriterLimit(lim) => assert!(approx_eq(lim, 5.0, 1e-6)),
+            _ => panic!("Expected TypewriterLimit"),
+        }
+    }
+
+    #[test]
+    fn test_compile_ops_expression_with_progress() {
+        let ctx = make_context(0.0, 10.0);
+        let mut props = HashMap::new();
+        props.insert(
+            "x".to_string(),
+            AnimatedValue::Expression("progress * 100.0".to_string()),
+        );
+        let effect = Effect {
+            effect_type: EffectType::Transition,
+            trigger: EffectTrigger::Enter,
+            duration: Some(2.0),
+            delay: 0.0,
+            easing: Easing::Linear,
+            properties: props,
+            mode: None,
+            direction: None,
+            keyframes: Vec::new(),
+            preset: None,
+            particle_config: None,
+            iterations: 1,
+            particle_override: None,
+        };
+
+        // progress = 0.5
+        let ops = EffectEngine::compile_active_effects(&[(&effect, 0.5)], &ctx);
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].prop, RenderProperty::X);
+
+        if let RenderValueOp::Expression(expr, p) = ops[0].value {
+            assert_eq!(expr, "progress * 100.0");
+            assert!(approx_eq(p, 0.5, 1e-6));
+
+            // Now apply it
+            let mut transform = RenderTransform::default();
+            let eval_ctx = EvaluationContext {
+                t: 0.0,
+                progress: 0.0, // Should be overridden
+                ..Default::default()
+            };
+
+            transform = EffectEngine::apply_compiled_ops(transform, &ops, &eval_ctx);
+            assert!(approx_eq(transform.x as f64, 50.0, 1e-6));
+        } else {
+            panic!("Expected Expression");
+        }
     }
 }
