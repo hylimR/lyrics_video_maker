@@ -1,23 +1,25 @@
 pub mod document;
-pub mod project;
-pub mod theme;
-pub mod style;
 pub mod effect;
 pub mod layout;
 pub mod line;
+pub mod project;
+pub mod style;
+pub mod theme;
 
 pub use document::KLyricDocumentV2;
+pub use effect::{
+    AnimatedValue, Direction, Easing, Effect, EffectTrigger, EffectType, KaraokeMode, Keyframe,
+};
+pub use layout::{Align, Anchor, Justify, Layout, LayoutMode, Position, PositionValue, Transform};
+pub use line::{Char, Line};
 pub use project::{Project, Resolution};
-pub use theme::{Theme, Background, BackgroundType, Gradient, GradientType};
-pub use style::{Style, Font, FontStyle, StateColors, FillStroke, Stroke, Shadow, Glow};
-pub use effect::{Effect, EffectType, EffectTrigger, AnimatedValue, Keyframe, Easing, KaraokeMode, Direction};
-pub use layout::{Position, PositionValue, Anchor, Transform, Layout, LayoutMode, Align, Justify};
-pub use line::{Line, Char};
+pub use style::{FillStroke, Font, FontStyle, Glow, Shadow, StateColors, Stroke, Style};
+pub use theme::{Background, BackgroundType, Gradient, GradientType, Theme};
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_v2_document() {
         let json = r#"{
@@ -38,7 +40,7 @@ mod tests {
                 }
             ]
         }"#;
-        
+
         let doc = KLyricDocumentV2::from_json(json).unwrap();
         assert_eq!(doc.version, "2.0");
         assert_eq!(doc.project.title, "Test Song");

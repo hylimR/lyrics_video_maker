@@ -1,8 +1,8 @@
+use super::super::traits::ParticlePreset;
+use super::super::types::CharBounds;
 use crate::particle::{
     BlendMode, ParticleConfig, ParticleEmitter, ParticlePhysics, ParticleShape, RangeValue,
 };
-use super::super::types::CharBounds;
-use super::super::traits::ParticlePreset;
 
 /// 🌧️ Rain effect - droplets falling from above
 pub struct RainPreset;

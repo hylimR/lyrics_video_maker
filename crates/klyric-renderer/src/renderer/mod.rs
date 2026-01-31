@@ -1,18 +1,18 @@
-pub mod utils;
-pub mod particle_system;
 pub mod line_renderer;
+pub mod particle_system;
+pub mod utils;
 
 use anyhow::Result;
-use skia_safe::{Canvas, Color, ImageInfo, ColorType, AlphaType, surfaces, Surface};
+use skia_safe::{surfaces, AlphaType, Canvas, Color, ColorType, ImageInfo, Surface};
 use std::collections::{HashMap, HashSet};
 
 use crate::model::{KLyricDocumentV2, Style};
+use crate::presets::{CharBounds, EffectPreset};
 use crate::style::StyleResolver;
 use crate::text::TextRenderer;
-use crate::presets::{CharBounds, EffectPreset};
 
-use self::particle_system::ParticleRenderSystem;
 use self::line_renderer::LineRenderer;
+use self::particle_system::ParticleRenderSystem;
 use self::utils::parse_color;
 
 pub struct Renderer {
@@ -46,15 +46,24 @@ impl Renderer {
             active_emitter_keys: HashSet::new(),
         }
     }
-    
+
     pub fn text_renderer_mut(&mut self) -> &mut TextRenderer {
         &mut self.text_renderer
     }
 
     /// Render directly to an existing Canvas
-    pub fn render_to_canvas(&mut self, canvas: &Canvas, doc: &KLyricDocumentV2, time: f64) -> Result<()> {
+    pub fn render_to_canvas(
+        &mut self,
+        canvas: &Canvas,
+        doc: &KLyricDocumentV2,
+        time: f64,
+    ) -> Result<()> {
         // Calculate delta time
-        let dt = if self.last_time > 0.0 { (time - self.last_time).max(0.0) } else { 0.0 };
+        let dt = if self.last_time > 0.0 {
+            (time - self.last_time).max(0.0)
+        } else {
+            0.0
+        };
         self.last_time = time;
 
         // Check if document changed (pointer check)
@@ -66,41 +75,42 @@ impl Renderer {
 
         // 1. Draw Background
         self.draw_background(canvas, doc);
-        
+
         // Track which emitters are active this frame
         self.active_emitter_keys.clear();
-        
+
         // 2. Find Active Lines and render
         if let Some(line) = doc.get_active_line(time) {
-             // We need the line index to create unique keys
-             if let Some(line_idx) = doc.lines.iter().position(|l| std::ptr::eq(l, line)) {
-                 // Resolve style (cached)
-                 let style_name = line.style.as_deref().unwrap_or("base");
-                 let style = if let Some(s) = self.style_cache.get(style_name) {
-                     s
-                 } else {
-                     let s = StyleResolver::new(doc).resolve(style_name);
-                     self.style_cache.insert(style_name.to_string(), s);
-                     self.style_cache.get(style_name).unwrap()
-                 };
+            // We need the line index to create unique keys
+            if let Some(line_idx) = doc.lines.iter().position(|l| std::ptr::eq(l, line)) {
+                // Resolve style (cached)
+                let style_name = line.style.as_deref().unwrap_or("base");
+                let style = if let Some(s) = self.style_cache.get(style_name) {
+                    s
+                } else {
+                    let s = StyleResolver::new(doc).resolve(style_name);
+                    self.style_cache.insert(style_name.to_string(), s);
+                    self.style_cache.get(style_name).unwrap()
+                };
 
-                 let mut line_renderer = LineRenderer {
-                     canvas,
-                     doc,
-                     time,
-                     text_renderer: &mut self.text_renderer,
-                     particle_system: &mut self.particle_system,
-                     active_keys: &mut self.active_emitter_keys,
-                     width: self.width,
-                     height: self.height,
-                 };
-                 
-                 line_renderer.render_line(line, line_idx, style)?;
-             }
+                let mut line_renderer = LineRenderer {
+                    canvas,
+                    doc,
+                    time,
+                    text_renderer: &mut self.text_renderer,
+                    particle_system: &mut self.particle_system,
+                    active_keys: &mut self.active_emitter_keys,
+                    width: self.width,
+                    height: self.height,
+                };
+
+                line_renderer.render_line(line, line_idx, style)?;
+            }
         }
-        
+
         // 3. Update and render particles
-        self.particle_system.update(dt as f32, &self.active_emitter_keys);
+        self.particle_system
+            .update(dt as f32, &self.active_emitter_keys);
         self.particle_system.render(canvas);
 
         Ok(())
@@ -114,26 +124,30 @@ impl Renderer {
         } else {
             true
         };
-        
+
         if needs_recreate {
-            log::info!(" creating/recreating renderer surface: {}x{}", self.width, self.height);
+            log::info!(
+                " creating/recreating renderer surface: {}x{}",
+                self.width,
+                self.height
+            );
             let surface = surfaces::raster_n32_premul((self.width as i32, self.height as i32))
-                 .ok_or_else(|| anyhow::anyhow!("Failed to create skia surface"))?;
+                .ok_or_else(|| anyhow::anyhow!("Failed to create skia surface"))?;
             self.surface = Some(surface);
         }
-        
+
         // Take surface ownerhip temporarily to avoid double borrow
         let mut surface = self.surface.take().expect("Surface should exist");
-        
+
         // Render
         let render_result = self.render_to_canvas(surface.canvas(), doc, time);
-        
+
         if let Err(e) = render_result {
             // Put surface back before returning error
             self.surface = Some(surface);
             return Err(e);
         }
-        
+
         // Return pixels (RGBA or BGRA? Surface N32 usually implies native. We might need specific ColorType::RGBA8888)
         // Ensure we get RGBA for ffmpeg
         let mut pixels = vec![0u8; (self.width * self.height * 4) as usize];
@@ -141,14 +155,15 @@ impl Renderer {
             (self.width as i32, self.height as i32),
             ColorType::RGBA8888,
             AlphaType::Premul,
-            None
+            None,
         );
-        
-        let read_success = surface.read_pixels(&info, &mut pixels, (self.width * 4) as usize, (0, 0));
-        
+
+        let read_success =
+            surface.read_pixels(&info, &mut pixels, (self.width * 4) as usize, (0, 0));
+
         // Put surface back
         self.surface = Some(surface);
-        
+
         if read_success {
             Ok(pixels)
         } else {
@@ -162,8 +177,21 @@ impl Renderer {
     }
 
     /// Trigger a burst effect at given position
-    pub fn burst_effect(&mut self, preset: EffectPreset, x: f32, y: f32, width: f32, height: f32, seed: u64) {
-        let bounds = CharBounds { x, y, width, height };
+    pub fn burst_effect(
+        &mut self,
+        preset: EffectPreset,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        seed: u64,
+    ) {
+        let bounds = CharBounds {
+            x,
+            y,
+            width,
+            height,
+        };
         self.particle_system.burst_effect(preset, bounds, seed);
     }
 
@@ -171,16 +199,16 @@ impl Renderer {
     pub fn clear_particles(&mut self) {
         self.particle_system.clear();
     }
-    
+
     fn draw_background(&self, canvas: &Canvas, doc: &KLyricDocumentV2) {
         if let Some(theme) = &doc.theme {
             if let Some(bg) = &theme.background {
                 if let Some(hex) = &bg.color {
-                     if let Some(color) = parse_color(hex) {
-                         let sc = Color::from_argb(255, color.r(), color.g(), color.b());
-                         canvas.clear(sc);
-                         return;
-                     }
+                    if let Some(color) = parse_color(hex) {
+                        let sc = Color::from_argb(255, color.r(), color.g(), color.b());
+                        canvas.clear(sc);
+                        return;
+                    }
                 }
             }
         }
@@ -192,8 +220,8 @@ impl Renderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{Background, Project, Resolution, Theme};
     use std::collections::HashMap;
-    use crate::model::{Project, Resolution, Theme, Background};
 
     /// Create a minimal empty document for testing
     fn minimal_doc() -> KLyricDocumentV2 {
@@ -255,7 +283,9 @@ mod tests {
         let mut renderer = Renderer::new(100, 100);
         let doc = minimal_doc();
 
-        let pixels = renderer.render_frame(&doc, 0.0).expect("Render should succeed");
+        let pixels = renderer
+            .render_frame(&doc, 0.0)
+            .expect("Render should succeed");
 
         // Correct pixel count: width * height * 4 bytes (RGBA)
         let expected_size = 100 * 100 * 4;
@@ -273,7 +303,9 @@ mod tests {
         let mut renderer = Renderer::new(10, 10);
         let doc = minimal_doc();
 
-        let pixels = renderer.render_frame(&doc, 0.0).expect("Render should succeed");
+        let pixels = renderer
+            .render_frame(&doc, 0.0)
+            .expect("Render should succeed");
 
         // Check that pixels are black (R=0, G=0, B=0)
         // Due to premultiplied alpha, fully opaque black is (0, 0, 0, 255)
@@ -297,7 +329,9 @@ mod tests {
         let mut renderer = Renderer::new(10, 10);
         let doc = doc_with_background("#FF0000"); // Red
 
-        let pixels = renderer.render_frame(&doc, 0.0).expect("Render should succeed");
+        let pixels = renderer
+            .render_frame(&doc, 0.0)
+            .expect("Render should succeed");
 
         // Check that we have red pixels
         // At least one pixel should be red
@@ -388,4 +422,3 @@ mod tests {
         );
     }
 }
-

@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::project::Project;
-use super::theme::Theme;
-use super::style::Style;
 use super::effect::Effect;
 use super::line::Line;
+use super::project::Project;
+use super::style::Style;
+use super::theme::Theme;
 
 /// Root KLyric v2.0 document structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,25 +14,25 @@ pub struct KLyricDocumentV2 {
     /// JSON Schema reference
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
-    
+
     /// Format version (must be "2.0")
     pub version: String,
-    
+
     /// Project metadata
     pub project: Project,
-    
+
     /// Theme and background settings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub theme: Option<Theme>,
-    
+
     /// Named style definitions
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub styles: HashMap<String, Style>,
-    
+
     /// Named effect definitions
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub effects: HashMap<String, Effect>,
-    
+
     /// Lyric lines with timing and characters
     pub lines: Vec<Line>,
 }
@@ -42,7 +42,7 @@ impl KLyricDocumentV2 {
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
-    
+
     /// Serialize to JSON
     pub fn to_json(&self, pretty: bool) -> Result<String, serde_json::Error> {
         if pretty {
@@ -51,16 +51,18 @@ impl KLyricDocumentV2 {
             serde_json::to_string(self)
         }
     }
-    
+
     /// Get the line that should be displayed at a given time
     pub fn get_active_line(&self, time: f64) -> Option<&Line> {
-        self.lines.iter().find(|line| time >= line.start && time <= line.end)
+        self.lines
+            .iter()
+            .find(|line| time >= line.start && time <= line.end)
     }
-    
+
     /// Resolve a style by name, handling inheritance
     pub fn resolve_style(&self, name: &str) -> Style {
         let mut resolved = Style::default();
-        
+
         if let Some(style) = self.styles.get(name) {
             // Handle inheritance
             if let Some(ref extends) = style.extends {
@@ -69,7 +71,7 @@ impl KLyricDocumentV2 {
             // Merge current style
             merge_style(&mut resolved, style);
         }
-        
+
         resolved
     }
 }

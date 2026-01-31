@@ -17,7 +17,7 @@ pub fn parse_color(hex: &str) -> Option<Color> {
     } else {
         return None;
     };
-    
+
     // skia_safe::Color::from_argb(a, r, g, b)
     Some(Color::from_argb(a, r, g, b))
 }
@@ -112,7 +112,7 @@ mod tests {
         // Invalid percentage should return default 0.5 (50.0 / 100.0)
         let result = parse_percentage("invalid%");
         assert!((result - 0.5).abs() < f32::EPSILON);
-        
+
         // Pure gibberish
         let result = parse_percentage("abc");
         assert!((result - 0.5).abs() < f32::EPSILON);

@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::physics::ParticlePhysics;
-use super::types::{BlendMode, ParticleShape};
 use super::rng::Rng;
+use super::types::{BlendMode, ParticleShape};
 
 /// Range of values for randomization
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,12 +86,24 @@ pub struct ParticleConfig {
     pub blend_mode: BlendMode,
 }
 
-fn default_count() -> u32 { 10 }
-fn default_lifetime() -> RangeValue { RangeValue::Range(0.5, 1.5) }
-fn default_speed() -> RangeValue { RangeValue::Range(50.0, 150.0) }
-fn default_direction() -> RangeValue { RangeValue::Single(270.0) }
-fn default_size() -> RangeValue { RangeValue::Range(4.0, 8.0) }
-fn default_color() -> String { "#FFFFFF".to_string() }
+fn default_count() -> u32 {
+    10
+}
+fn default_lifetime() -> RangeValue {
+    RangeValue::Range(0.5, 1.5)
+}
+fn default_speed() -> RangeValue {
+    RangeValue::Range(50.0, 150.0)
+}
+fn default_direction() -> RangeValue {
+    RangeValue::Single(270.0)
+}
+fn default_size() -> RangeValue {
+    RangeValue::Range(4.0, 8.0)
+}
+fn default_color() -> String {
+    "#FFFFFF".to_string()
+}
 
 impl Default for ParticleConfig {
     fn default() -> Self {
@@ -132,18 +144,16 @@ impl SpawnPattern {
                 let t = rng.next_f32();
                 (x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)
             }
-            SpawnPattern::Rect { x, y, w, h } => {
-                (x + rng.next_f32() * w, y + rng.next_f32() * h)
-            }
+            SpawnPattern::Rect { x, y, w, h } => (x + rng.next_f32() * w, y + rng.next_f32() * h),
         }
     }
 }
 
 /// Apply expression overrides to particle configuration
 pub fn apply_particle_overrides(
-    config: &mut ParticleConfig, 
+    config: &mut ParticleConfig,
     overrides: &std::collections::HashMap<String, String>,
-    ctx: &crate::expressions::EvaluationContext
+    ctx: &crate::expressions::EvaluationContext,
 ) {
     use crate::expressions::ExpressionEvaluator;
 
@@ -153,24 +163,32 @@ pub fn apply_particle_overrides(
                 "count" => config.count = val as u32,
                 "spawn_rate" | "rate" => config.spawn_rate = val as f32,
                 "spread" => config.spread = val as f32,
-                
+
                 // Ranges (set as Single or specific min/max)
                 "speed" => config.speed = RangeValue::Single(val as f32),
-                "speed.min" => match &mut config.speed { RangeValue::Range(min, _) | RangeValue::Single(min) => *min = val as f32, },
-                "speed.max" => if let RangeValue::Range(_, max) = &mut config.speed { *max = val as f32; } else { config.speed = RangeValue::Range(val as f32, val as f32); },
-                
+                "speed.min" => match &mut config.speed {
+                    RangeValue::Range(min, _) | RangeValue::Single(min) => *min = val as f32,
+                },
+                "speed.max" => {
+                    if let RangeValue::Range(_, max) = &mut config.speed {
+                        *max = val as f32;
+                    } else {
+                        config.speed = RangeValue::Range(val as f32, val as f32);
+                    }
+                }
+
                 "lifetime" => config.lifetime = RangeValue::Single(val as f32),
                 "direction" => config.direction = RangeValue::Single(val as f32),
                 "size" | "start_size" => config.start_size = RangeValue::Single(val as f32),
                 "end_size" => config.end_size = RangeValue::Single(val as f32),
                 "rotation_speed" => config.rotation_speed = RangeValue::Single(val as f32),
-                
+
                 // Physics
                 "gravity" => config.physics.gravity = val as f32,
                 "drag" => config.physics.drag = val as f32,
                 "wind_x" => config.physics.wind_x = val as f32,
                 "wind_y" => config.physics.wind_y = val as f32,
-                
+
                 _ => {}
             }
         }
@@ -192,7 +210,10 @@ mod tests {
     #[test]
     fn test_spawn_pattern_line() {
         let pattern = SpawnPattern::Line {
-            x1: 0.0, y1: 0.0, x2: 100.0, y2: 0.0,
+            x1: 0.0,
+            y1: 0.0,
+            x2: 100.0,
+            y2: 0.0,
         };
         let mut rng = Rng::new(42);
         for _ in 0..10 {
@@ -205,10 +226,10 @@ mod tests {
     #[test]
     fn test_range_value_sample() {
         let mut rng = Rng::new(42);
-        
+
         let single = RangeValue::Single(5.0);
         assert_eq!(single.sample(&mut rng), 5.0);
-        
+
         let range = RangeValue::Range(0.0, 100.0);
         let val = range.sample(&mut rng);
         assert!((0.0..=100.0).contains(&val));

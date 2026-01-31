@@ -4,7 +4,6 @@ use super::config::{ParticleConfig, SpawnPattern};
 use super::rng::Rng;
 use super::types::{parse_hex_color, Particle};
 
-
 /// Particle emitter that spawns and manages particles
 #[derive(Debug, Clone)]
 pub struct ParticleEmitter {
@@ -54,7 +53,9 @@ impl ParticleEmitter {
 
         // Calculate velocity from direction + spread
         let base_dir = self.config.direction.sample(&mut self.rng);
-        let spread_offset = self.rng.range(-self.config.spread / 2.0, self.config.spread / 2.0);
+        let spread_offset = self
+            .rng
+            .range(-self.config.spread / 2.0, self.config.spread / 2.0);
         let dir_rad = (base_dir + spread_offset).to_radians();
 
         let speed = self.config.speed.sample(&mut self.rng);
@@ -128,12 +129,9 @@ mod tests {
             count: 5,
             ..Default::default()
         };
-        
-        let mut emitter = ParticleEmitter::new(
-            config,
-            SpawnPattern::Point { x: 100.0, y: 100.0 },
-            42
-        );
+
+        let mut emitter =
+            ParticleEmitter::new(config, SpawnPattern::Point { x: 100.0, y: 100.0 }, 42);
 
         assert!(emitter.particles.is_empty());
         emitter.burst();
@@ -147,12 +145,8 @@ mod tests {
             spawn_rate: 10.0, // 10 per second
             ..Default::default()
         };
-        
-        let mut emitter = ParticleEmitter::new(
-            config,
-            SpawnPattern::Point { x: 0.0, y: 0.0 },
-            42
-        );
+
+        let mut emitter = ParticleEmitter::new(config, SpawnPattern::Point { x: 0.0, y: 0.0 }, 42);
 
         // Should spawn particles over time
         emitter.update(0.5);
@@ -166,12 +160,8 @@ mod tests {
             lifetime: RangeValue::Single(0.1), // Short life
             ..Default::default()
         };
-        
-        let mut emitter = ParticleEmitter::new(
-            config,
-            SpawnPattern::Point { x: 0.0, y: 0.0 },
-            42
-        );
+
+        let mut emitter = ParticleEmitter::new(config, SpawnPattern::Point { x: 0.0, y: 0.0 }, 42);
 
         emitter.burst();
         assert_eq!(emitter.particles.len(), 3);
