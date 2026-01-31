@@ -61,34 +61,55 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                         .enumerate()
                         .map(|(idx, ch)| {
                             let is_selected = selected_char == Some(idx);
-                            let duration = ch.end - ch.start;
 
-                            let box_content = column![
-                                text(&ch.char)
-                                    .size(20)
-                                    .color(if is_selected { theme::colors::ACCENT } else { theme::colors::TEXT_PRIMARY }),
-                                text(format!("{:.2}s", duration))
-                                    .size(9)
-                                    .color(theme::colors::TEXT_MUTED),
-                            ]
-                            .align_x(Alignment::Center)
-                            .spacing(2);
+                            // Capture data for lazy
+                            let char_text = ch.char.clone();
+                            let start_bits = ch.start.to_bits();
+                            let end_bits = ch.end.to_bits();
 
-                            button(box_content)
-                                .style(if is_selected {
-                                    |theme: &iced::Theme, status| {
-                                        let mut style = theme::char_box_style(theme, status);
-                                        style.background = Some(iced::Background::Color(theme::colors::SELECTED));
-                                        style.border.color = theme::colors::ACCENT;
-                                        style.border.width = 2.0;
-                                        style
-                                    }
-                                } else {
-                                    theme::char_box_style
-                                })
-                                .padding([10, 14])
-                                .on_press(Message::SelectChar(idx))
-                                .into()
+                            lazy(
+                                (idx, char_text, start_bits, end_bits, is_selected),
+                                move |(idx, char_text, start_bits, end_bits, is_selected)| {
+                                    let start = f64::from_bits(start_bits);
+                                    let end = f64::from_bits(end_bits);
+                                    let duration = end - start;
+
+                                    let box_content = column![
+                                        text(char_text)
+                                            .size(20)
+                                            .color(if is_selected {
+                                                theme::colors::ACCENT
+                                            } else {
+                                                theme::colors::TEXT_PRIMARY
+                                            }),
+                                        text(format!("{:.2}s", duration))
+                                            .size(9)
+                                            .color(theme::colors::TEXT_MUTED),
+                                    ]
+                                    .align_x(Alignment::Center)
+                                    .spacing(2);
+
+                                    let btn = button(box_content)
+                                        .style(if is_selected {
+                                            |theme: &iced::Theme, status| {
+                                                let mut style = theme::char_box_style(theme, status);
+                                                style.background = Some(iced::Background::Color(
+                                                    theme::colors::SELECTED,
+                                                ));
+                                                style.border.color = theme::colors::ACCENT;
+                                                style.border.width = 2.0;
+                                                style
+                                            }
+                                        } else {
+                                            theme::char_box_style
+                                        })
+                                        .padding([10, 14])
+                                        .on_press(Message::SelectChar(idx));
+
+                                    container(btn).into()
+                                },
+                            )
+                            .into()
                         })
                         .collect();
 
