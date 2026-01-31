@@ -6,7 +6,8 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 
 use crate::model::{
-    Easing, Effect, EffectType, KLyricDocumentV2, Line, PositionValue, Style, Transform,
+    AnimatedValue, Easing, Effect, EffectType, KLyricDocumentV2, Line, PositionValue, Style,
+    Transform,
 };
 // use crate::style::StyleResolver; // Removed
 use crate::effects::{EffectEngine, TriggerContext};
@@ -155,6 +156,31 @@ impl<'a> LineRenderer<'a> {
         let line_transform_default = Transform::default();
         let line_transform_ref = line.transform.as_ref().unwrap_or(&line_transform_default);
 
+        // --- OPTIMIZATION: Hoist Line-Level Effects ---
+        // If all active transform effects are character-independent, compute them once per line.
+        let precomputed_delta = if !transform_effects_base.is_empty()
+            && transform_effects_base
+                .iter()
+                .all(|e| !is_char_dependent(e))
+        {
+            let ctx = TriggerContext {
+                start_time: line.start,
+                end_time: line.end,
+                current_time: self.time,
+                active: true,
+                char_index: None, // No index for line-level
+                char_count: None,
+            };
+            Some(EffectEngine::compute_transform(
+                self.time,
+                Transform::default(),
+                &transform_effects_base,
+                ctx,
+            ))
+        } else {
+            None
+        };
+
         // Loop:
         for glyph in glyphs.iter() {
             let char_absolute_x = base_x + glyph.x;
@@ -258,12 +284,17 @@ impl<'a> LineRenderer<'a> {
                         char_count: Some(glyphs.len()),
                     };
 
-                    let final_transform = EffectEngine::compute_transform(
-                        self.time,
-                        base_transform,
-                        &transform_effects_base,
-                        ctx.clone(),
-                    );
+                    let mut final_transform = base_transform;
+                    if let Some(delta) = &precomputed_delta {
+                        merge_transform(&mut final_transform, delta);
+                    } else {
+                        final_transform = EffectEngine::compute_transform(
+                            self.time,
+                            final_transform,
+                            &transform_effects_base,
+                            ctx.clone(),
+                        );
+                    }
 
                     // Disintegrate Effect Progress
                     let mut disintegration_progress = 0.0;
@@ -656,5 +687,59 @@ impl<'a> LineRenderer<'a> {
         }
 
         (x, y)
+    }
+}
+
+/// Check if an effect depends on character index/context.
+fn is_char_dependent(effect: &Effect) -> bool {
+    match effect.effect_type {
+        EffectType::Typewriter => true,
+        EffectType::Custom => true, // Assume custom is unsafe/dependent
+        EffectType::Transition => {
+            // Check if any property uses an Expression
+            effect.properties.values().any(|v| matches!(v, AnimatedValue::Expression(_)))
+        }
+        _ => false, // Keyframe, Range Transition, etc. are time-based (independent)
+    }
+}
+
+/// Merge fields from delta transform into base transform.
+/// Only fields that are Some in delta will overwrite base.
+fn merge_transform(base: &mut Transform, delta: &Transform) {
+    if let Some(v) = delta.x {
+        base.x = Some(v);
+    }
+    if let Some(v) = delta.y {
+        base.y = Some(v);
+    }
+    if let Some(v) = delta.rotation {
+        base.rotation = Some(v);
+    }
+    if let Some(v) = delta.scale {
+        base.scale = Some(v);
+    }
+    if let Some(v) = delta.scale_x {
+        base.scale_x = Some(v);
+    }
+    if let Some(v) = delta.scale_y {
+        base.scale_y = Some(v);
+    }
+    if let Some(v) = delta.opacity {
+        base.opacity = Some(v);
+    }
+    if let Some(v) = delta.anchor_x {
+        base.anchor_x = Some(v);
+    }
+    if let Some(v) = delta.anchor_y {
+        base.anchor_y = Some(v);
+    }
+    if let Some(v) = delta.blur {
+        base.blur = Some(v);
+    }
+    if let Some(v) = delta.glitch_offset {
+        base.glitch_offset = Some(v);
+    }
+    if let Some(v) = delta.hue_shift {
+        base.hue_shift = Some(v);
     }
 }
