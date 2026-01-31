@@ -1,6 +1,9 @@
 use super::model::{Line, Style, Align};
 use crate::text::TextRenderer;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::text::ResolvedFont;
+
 #[derive(Debug, Clone)]
 pub struct GlyphInfo {
     pub char: char,
@@ -65,12 +68,27 @@ impl LayoutEngine {
                 .or_else(|| line.font.as_ref().and_then(|f| f.size))
                 .unwrap_or(style_size);
 
+            #[cfg(not(target_arch = "wasm32"))]
+            let resolved_font = font_ref.as_ref().map(|tf| renderer.create_font(tf, size));
+
             // For each character in the string
             for ch in ch_str.chars() {
                 // Try to get font
-                if let Some(typeface) = &font_ref {
+                if font_ref.is_some() {
                     // Measure character using renderer
-                    let (advance, height) = renderer.measure_char(typeface, ch, size);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let (advance, height) = if let Some(font) = &resolved_font {
+                        renderer.measure_char_with_font(font, ch)
+                    } else {
+                        (0.0, 0.0)
+                    };
+
+                    #[cfg(target_arch = "wasm32")]
+                    let (advance, height) = if let Some(tf) = &font_ref {
+                        renderer.measure_char(tf, ch, size)
+                    } else {
+                        (0.0, 0.0)
+                    };
                     
                     let width = advance; 
                     
