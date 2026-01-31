@@ -224,6 +224,43 @@ impl<'a> LineRenderer<'a> {
 
         let mut current_blur = -1.0f32;
 
+        // --- OPTIMIZATION: Pre-calculate Active Effects ---
+        // 1. Dependent Transform Effects
+        let mut active_dependent_effects: Vec<(&Effect, f64)> = Vec::new();
+        if split_idx < transform_effects_base.len() {
+            for effect in &transform_effects_base[split_idx..] {
+                if EffectEngine::should_trigger(effect, &ctx) {
+                    let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                    if (0.0..=1.0).contains(&p) {
+                        let eased = EffectEngine::ease(p, &effect.easing);
+                        active_dependent_effects.push((effect, eased));
+                    }
+                }
+            }
+        }
+
+        // 2. Disintegrate Effects
+        let mut active_disintegrate_effects: Vec<(&str, &Effect, f64)> = Vec::new();
+        for (name, effect) in &disintegrate_effects_base {
+            if EffectEngine::should_trigger(effect, &ctx) {
+                let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                if (0.0..=1.0).contains(&p) {
+                    active_disintegrate_effects.push((name, effect, p));
+                }
+            }
+        }
+
+        // 3. Particle Effects
+        let mut active_particle_effects: Vec<(&str, &Effect, f64)> = Vec::new();
+        for (name, effect) in &particle_effects_base {
+            if EffectEngine::should_trigger(effect, &ctx) {
+                let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                if (0.0..=1.0).contains(&p) {
+                    active_particle_effects.push((name, effect, p));
+                }
+            }
+        }
+
         // Loop:
         for glyph in glyphs.iter() {
             // Update context
@@ -298,11 +335,11 @@ impl<'a> LineRenderer<'a> {
                     }
 
                     // Apply remaining dependent effects (if any)
-                    if split_idx < transform_effects_base.len() {
-                        final_transform = EffectEngine::apply_to_render_transform(
+                    if !active_dependent_effects.is_empty() {
+                        final_transform = EffectEngine::apply_active_effects(
                             self.time,
                             final_transform,
-                            &transform_effects_base[split_idx..],
+                            &active_dependent_effects,
                             &ctx,
                         );
                     }
@@ -509,15 +546,8 @@ impl<'a> LineRenderer<'a> {
                     self.canvas.restore(); // Restore transform for next glyph/effects
 
                     // --- DISINTEGRATION EFFECT ---
-                    for (name, effect) in &disintegrate_effects_base {
-                        if !EffectEngine::should_trigger(effect, &ctx) {
-                            continue;
-                        }
-
-                        let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                        if !(0.0..=1.0).contains(&progress) {
-                            continue;
-                        }
+                    for (name, effect, progress) in &active_disintegrate_effects {
+                        let progress = *progress;
 
                         // Generate Hash Key
                         let mut hasher = DefaultHasher::new();
@@ -588,15 +618,8 @@ impl<'a> LineRenderer<'a> {
 
                     // --- PARTICLE SPAWNING ---
                     // Process standard particle effects
-                    for (name, effect) in &particle_effects_base {
-                        if !EffectEngine::should_trigger(effect, &ctx) {
-                            continue;
-                        }
-
-                        let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                        if !(0.0..=1.0).contains(&progress) {
-                            continue;
-                        }
+                    for (name, effect, progress) in &active_particle_effects {
+                        let progress = *progress;
 
                         // Evaluation Context for Particles
                         let eval_ctx = crate::expressions::EvaluationContext {
