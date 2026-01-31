@@ -156,25 +156,28 @@ impl<'a> LineRenderer<'a> {
         let line_transform_default = Transform::default();
         let line_transform_ref = line.transform.as_ref().unwrap_or(&line_transform_default);
 
-        // --- OPTIMIZATION: Hoist Line-Level Effects ---
-        // If all active transform effects are character-independent, compute them once per line.
-        let precomputed_delta = if !transform_effects_base.is_empty()
-            && transform_effects_base
-                .iter()
-                .all(|e| !is_char_dependent(e))
-        {
+        // --- OPTIMIZATION: Hoist Line-Level Effects (Prefix) ---
+        // Find the longest prefix of effects that are character-independent.
+        // We can precompute their result once per line.
+        let split_idx = transform_effects_base
+            .iter()
+            .position(|e| is_char_dependent(e))
+            .unwrap_or(transform_effects_base.len());
+
+        let prefix_delta = if split_idx > 0 {
             let ctx = TriggerContext {
                 start_time: line.start,
                 end_time: line.end,
                 current_time: self.time,
                 active: true,
-                char_index: None, // No index for line-level
-                char_count: None,
+                char_index: None, // Independent effects don't need index
+                char_count: None, // Independent effects don't need count (usually)
             };
+            // Compute transform using the independent prefix
             Some(EffectEngine::compute_transform(
                 self.time,
                 Transform::default(),
-                &transform_effects_base,
+                &transform_effects_base[0..split_idx],
                 &ctx,
             ))
         } else {
@@ -290,13 +293,18 @@ impl<'a> LineRenderer<'a> {
                     };
 
                     let mut final_transform = base_transform;
-                    if let Some(delta) = &precomputed_delta {
+
+                    // Apply precomputed independent effects
+                    if let Some(delta) = &prefix_delta {
                         merge_transform(&mut final_transform, delta);
-                    } else {
+                    }
+
+                    // Apply remaining dependent effects (if any)
+                    if split_idx < transform_effects_base.len() {
                         final_transform = EffectEngine::compute_transform(
                             self.time,
                             final_transform,
-                            &transform_effects_base,
+                            &transform_effects_base[split_idx..],
                             &ctx,
                         );
                     }
