@@ -261,23 +261,29 @@ impl<'a> LineRenderer<'a> {
         let compiled_ops = EffectEngine::compile_active_effects(&active_dependent_effects_raw, &ctx);
 
         // 2. Disintegrate Effects
-        let mut active_disintegrate_effects: Vec<(&str, &Effect, f64)> = Vec::new();
+        let mut active_disintegrate_effects: Vec<(&str, &Effect, f64, DefaultHasher)> = Vec::new();
         for (name, effect) in &disintegrate_effects_base {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 if (0.0..=1.0).contains(&p) {
-                    active_disintegrate_effects.push((name, effect, p));
+                    let mut hasher = DefaultHasher::new();
+                    line_idx.hash(&mut hasher);
+                    name.hash(&mut hasher);
+                    active_disintegrate_effects.push((name, effect, p, hasher));
                 }
             }
         }
 
         // 3. Particle Effects
-        let mut active_particle_effects: Vec<(&str, &Effect, f64)> = Vec::new();
+        let mut active_particle_effects: Vec<(&str, &Effect, f64, DefaultHasher)> = Vec::new();
         for (name, effect) in &particle_effects_base {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 if (0.0..=1.0).contains(&p) {
-                    active_particle_effects.push((name, effect, p));
+                    let mut hasher = DefaultHasher::new();
+                    line_idx.hash(&mut hasher);
+                    name.hash(&mut hasher);
+                    active_particle_effects.push((name, effect, p, hasher));
                 }
             }
         }
@@ -567,14 +573,13 @@ impl<'a> LineRenderer<'a> {
                     self.canvas.restore(); // Restore transform for next glyph/effects
 
                     // --- DISINTEGRATION EFFECT ---
-                    for (name, effect, progress) in &active_disintegrate_effects {
+                    for (name, effect, progress, base_hasher) in &active_disintegrate_effects {
                         let progress = *progress;
 
                         // Generate Hash Key
-                        let mut hasher = DefaultHasher::new();
-                        line_idx.hash(&mut hasher);
+                        // Optimization: Clone pre-hashed state (line + name) and just add char_index
+                        let mut hasher = base_hasher.clone();
                         glyph.char_index.hash(&mut hasher);
-                        name.hash(&mut hasher);
                         let key = hasher.finish();
 
                         self.active_keys.insert(key);
@@ -639,7 +644,7 @@ impl<'a> LineRenderer<'a> {
 
                     // --- PARTICLE SPAWNING ---
                     // Process standard particle effects
-                    for (name, effect, progress) in &active_particle_effects {
+                    for (name, effect, progress, base_hasher) in &active_particle_effects {
                         let progress = *progress;
 
                         // Evaluation Context for Particles
@@ -652,10 +657,9 @@ impl<'a> LineRenderer<'a> {
                         };
 
                         // Generate Hash Key
-                        let mut hasher = DefaultHasher::new();
-                        line_idx.hash(&mut hasher);
+                        // Optimization: Clone pre-hashed state (line + name) and just add char_index
+                        let mut hasher = base_hasher.clone();
                         glyph.char_index.hash(&mut hasher);
-                        name.hash(&mut hasher);
                         let key = hasher.finish();
 
                         self.active_keys.insert(key);
