@@ -8,7 +8,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Resolved font wrapper for optimized measurement
-pub struct ResolvedFont(pub(crate) Font);
+pub struct ResolvedFont {
+    pub(crate) font: Font,
+    pub(crate) height: f32,
+}
 
 /// Text renderer with font caching using Skia
 pub struct TextRenderer {
@@ -121,22 +124,22 @@ impl TextRenderer {
 
     /// Create a resolved font for optimized measurement
     pub fn create_font(&self, typeface: &Typeface, size: f32) -> ResolvedFont {
-        ResolvedFont(Font::from_typeface(typeface, size))
+        let font = Font::from_typeface(typeface, size);
+        let metrics = font.metrics().1;
+        let height = metrics.descent - metrics.ascent;
+        ResolvedFont { font, height }
     }
 
     /// Measure single character using a resolved font
     pub fn measure_char_with_font(&self, resolved_font: &ResolvedFont, ch: char) -> (f32, f32) {
-        let font = &resolved_font.0;
+        let font = &resolved_font.font;
 
         // width
-        let _glyph_id = font.unichar_to_glyph(ch as i32);
-        let width = font.measure_text(ch.to_string(), None).0; // simple measure
+        let glyph_id = font.unichar_to_glyph(ch as i32);
+        let mut width = [0.0];
+        font.get_widths(&[glyph_id], &mut width);
 
-        // height?
-        let metrics = font.metrics().1;
-        let height = metrics.descent - metrics.ascent; // approximate height
-
-        (width, height)
+        (width[0], resolved_font.height)
     }
 
     /// Measure single character
