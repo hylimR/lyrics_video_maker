@@ -1,4 +1,4 @@
-use super::model::{AnimatedValue, Easing, Effect, EffectType, Transform, RenderTransform};
+use super::model::{AnimatedValue, Easing, Effect, EffectType, RenderTransform, Transform};
 use crate::expressions::{EvaluationContext, ExpressionEvaluator};
 use std::f64::consts::PI;
 
@@ -420,12 +420,10 @@ impl EffectEngine {
                         );
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
-                        transform.scale_x =
-                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                        transform.scale_x = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
-                        transform.scale_y =
-                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                        transform.scale_y = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                     }
                     if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
                         apply_property_to_render(
@@ -573,12 +571,10 @@ impl EffectEngine {
                         );
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
-                        transform.scale_x =
-                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                        transform.scale_x = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
-                        transform.scale_y =
-                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                        transform.scale_y = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                     }
                     if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
                         apply_property_to_render(

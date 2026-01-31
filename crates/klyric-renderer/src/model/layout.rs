@@ -263,17 +263,41 @@ impl RenderTransform {
 
     /// Apply a sparse delta transform (e.g. from prefix optimization)
     pub fn apply_delta(&mut self, delta: &Transform) {
-        if let Some(v) = delta.x { self.x = v; }
-        if let Some(v) = delta.y { self.y = v; }
-        if let Some(v) = delta.rotation { self.rotation = v; }
-        if let Some(v) = delta.scale { self.scale = v; }
-        if let Some(v) = delta.scale_x { self.scale_x = v; }
-        if let Some(v) = delta.scale_y { self.scale_y = v; }
-        if let Some(v) = delta.opacity { self.opacity = v; }
-        if let Some(v) = delta.anchor_x { self.anchor_x = v; }
-        if let Some(v) = delta.anchor_y { self.anchor_y = v; }
-        if let Some(v) = delta.blur { self.blur = v; }
-        if let Some(v) = delta.glitch_offset { self.glitch_offset = v; }
-        if let Some(v) = delta.hue_shift { self.hue_shift = v; }
+        if let Some(v) = delta.x {
+            self.x = v;
+        }
+        if let Some(v) = delta.y {
+            self.y = v;
+        }
+        if let Some(v) = delta.rotation {
+            self.rotation = v;
+        }
+        if let Some(v) = delta.scale {
+            self.scale = v;
+        }
+        if let Some(v) = delta.scale_x {
+            self.scale_x = v;
+        }
+        if let Some(v) = delta.scale_y {
+            self.scale_y = v;
+        }
+        if let Some(v) = delta.opacity {
+            self.opacity = v;
+        }
+        if let Some(v) = delta.anchor_x {
+            self.anchor_x = v;
+        }
+        if let Some(v) = delta.anchor_y {
+            self.anchor_y = v;
+        }
+        if let Some(v) = delta.blur {
+            self.blur = v;
+        }
+        if let Some(v) = delta.glitch_offset {
+            self.glitch_offset = v;
+        }
+        if let Some(v) = delta.hue_shift {
+            self.hue_shift = v;
+        }
     }
 }
