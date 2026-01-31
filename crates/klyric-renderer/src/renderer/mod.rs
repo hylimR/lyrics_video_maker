@@ -4,9 +4,10 @@ pub mod line_renderer;
 
 use anyhow::Result;
 use skia_safe::{Canvas, Color, ImageInfo, ColorType, AlphaType, surfaces, Surface};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::model::KLyricDocumentV2;
+use crate::model::{KLyricDocumentV2, Style};
+use crate::style::StyleResolver;
 use crate::text::TextRenderer;
 use crate::presets::{CharBounds, EffectPreset};
 
@@ -23,6 +24,10 @@ pub struct Renderer {
     last_time: f64,
     /// Cached surface for rendering
     surface: Option<Surface>,
+    /// Cache for resolved styles to avoid re-resolution every frame
+    style_cache: HashMap<String, Style>,
+    /// Pointer to the last document used (to invalidate cache)
+    last_doc_ptr: usize,
 }
 
 impl Renderer {
@@ -34,6 +39,8 @@ impl Renderer {
             particle_system: ParticleRenderSystem::new(),
             last_time: 0.0,
             surface: None,
+            style_cache: HashMap::new(),
+            last_doc_ptr: 0,
         }
     }
     
@@ -46,7 +53,14 @@ impl Renderer {
         // Calculate delta time
         let dt = if self.last_time > 0.0 { (time - self.last_time).max(0.0) } else { 0.0 };
         self.last_time = time;
-            
+
+        // Check if document changed (pointer check)
+        let current_doc_ptr = doc as *const _ as usize;
+        if self.last_doc_ptr != current_doc_ptr {
+            self.style_cache.clear();
+            self.last_doc_ptr = current_doc_ptr;
+        }
+
         // 1. Draw Background
         self.draw_background(canvas, doc);
         
@@ -57,6 +71,16 @@ impl Renderer {
         if let Some(line) = doc.get_active_line(time) {
              // We need the line index to create unique keys
              if let Some(line_idx) = doc.lines.iter().position(|l| std::ptr::eq(l, line)) {
+                 // Resolve style (cached)
+                 let style_name = line.style.as_deref().unwrap_or("base");
+                 let style = if let Some(s) = self.style_cache.get(style_name) {
+                     s
+                 } else {
+                     let s = StyleResolver::new(doc).resolve(style_name);
+                     self.style_cache.insert(style_name.to_string(), s);
+                     self.style_cache.get(style_name).unwrap()
+                 };
+
                  let mut line_renderer = LineRenderer {
                      canvas,
                      doc,
@@ -68,7 +92,7 @@ impl Renderer {
                      height: self.height,
                  };
                  
-                 line_renderer.render_line(line, line_idx)?;
+                 line_renderer.render_line(line, line_idx, style)?;
              }
         }
         
