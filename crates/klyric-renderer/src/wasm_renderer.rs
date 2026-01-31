@@ -3,20 +3,24 @@ use crate::model::{KLyricDocumentV2, Line, Style, PositionValue};
 use crate::layout::LayoutEngine;
 use anyhow::{Result, anyhow};
 use tiny_skia::{Pixmap, Color};
-use ab_glyph::{Font, FontArc, PxScale, ScaleFont, point};
-use fontdb::Database;
+use ab_glyph::{Font, FontArc, ScaleFont};
+use fontdb::{Database, ID};
 
 // Typeface wrapper for ab_glyph::FontArc
 #[derive(Clone, Debug)]
 pub struct Typeface(pub FontArc);
 
 
-use owned_ttf_parser::{Face, GlyphId, OutlineBuilder};
+use owned_ttf_parser::{Face, OutlineBuilder};
 
 pub struct TextRenderer {
     db: Database,
     default_typeface: Option<Typeface>,
     family_map: HashMap<String, String>,
+
+    // Caches
+    path_cache: HashMap<(ID, char), tiny_skia::Path>,
+    id_cache: HashMap<String, ID>,
 }
 
 impl TextRenderer {
@@ -26,6 +30,8 @@ impl TextRenderer {
             db,
             default_typeface: None,
             family_map: HashMap::new(),
+            path_cache: HashMap::new(),
+            id_cache: HashMap::new(),
         }
     }
 
@@ -41,6 +47,9 @@ impl TextRenderer {
                     let actual_family = family_name.clone();
                     log::info!("Mapped alias '{}' to family '{}'", alias, actual_family);
                     self.family_map.insert(alias.to_string(), actual_family);
+
+                    // Pre-populate id cache for alias
+                    self.id_cache.insert(alias.to_string(), *id);
                 }
             }
         }
@@ -88,46 +97,60 @@ impl TextRenderer {
         (advance, height)
     }
 
-    pub fn trace_glyph_path(
-        &self, 
-        family: &str, 
-        ch: char, 
-        size: f32, 
-        x: f32, y: f32,
-        builder: &mut tiny_skia::PathBuilder
-    ) {
-        // Resolve ID
-        let family = self.family_map.get(family).map(|s| s.as_str()).unwrap_or(family);
+    fn resolve_font_id(&mut self, family: &str) -> Option<ID> {
+        if let Some(id) = self.id_cache.get(family) {
+            return Some(*id);
+        }
+
+        let resolved_family = self.family_map.get(family).map(|s| s.as_str()).unwrap_or(family);
         let query = fontdb::Query {
-            families: &[fontdb::Family::Name(family), fontdb::Family::SansSerif],
+            families: &[fontdb::Family::Name(resolved_family), fontdb::Family::SansSerif],
             ..fontdb::Query::default()
         };
-        
+
         if let Some(id) = self.db.query(&query) {
-             self.db.with_face_data(id, |data, index| {
-                 if let Ok(face) = Face::parse(data, index) {
-                     if let Some(gid) = face.glyph_index(ch) {
-                         let units_per_em = face.units_per_em() as f32;
-                         let scale_factor = size / units_per_em;
-                         
-                         // owned_ttf_parser uses Y-up. Screen is Y-down.
-                         // We need to mirror Y and apply offset (x, y).
-                         // The glyph acts around its baseline (0, 0 in font space).
-                         // Layout (x, y) refers to the baseline position on screen.
-                         // So px = x + font_x * scale
-                         // py = y - font_y * scale
-                         
-                         let mut visitor = TtfPathVisitor {
-                             builder,
-                             scale: scale_factor,
-                             offset_x: x,
-                             offset_y: y,
-                         };
-                         
-                         let _ = face.outline_glyph(gid, &mut visitor);
+            self.id_cache.insert(family.to_string(), id);
+            Some(id)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_glyph_path(&mut self, family: &str, ch: char) -> Option<tiny_skia::Path> {
+        let id = self.resolve_font_id(family)?;
+
+        if let Some(path) = self.path_cache.get(&(id, ch)) {
+            return Some(path.clone());
+        }
+
+        // Cache miss: generate path
+        let mut path_opt = None;
+        self.db.with_face_data(id, |data, index| {
+             if let Ok(face) = Face::parse(data, index) {
+                 if let Some(gid) = face.glyph_index(ch) {
+                     let units_per_em = face.units_per_em() as f32;
+                     let scale_factor = 1.0 / units_per_em;
+
+                     let mut builder = tiny_skia::PathBuilder::new();
+                     let mut visitor = TtfPathVisitor {
+                         builder: &mut builder,
+                         scale: scale_factor,
+                         offset_x: 0.0,
+                         offset_y: 0.0,
+                     };
+
+                     if face.outline_glyph(gid, &mut visitor).is_some() {
+                         path_opt = builder.finish();
                      }
                  }
-             });
+             }
+        });
+
+        if let Some(path) = path_opt {
+            self.path_cache.insert((id, ch), path.clone());
+            Some(path)
+        } else {
+            None
         }
     }
 }
@@ -293,28 +316,22 @@ impl Renderer {
             let family = font_spec.and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
             let size = font_spec.and_then(|f| f.size).unwrap_or(72.0);
             
-            // Just verify typeface exists, we don't need the object for draw_glyph_path as currently implemented
-            let typeface = self.text_renderer.get_typeface(family)
-                .or_else(|| self.text_renderer.get_default_typeface());
-                
-            if let Some(_tf) = typeface {
-               let render_x = lx + glyph_info.x;
-               let render_y = ly + glyph_info.y;
-               
-               self.draw_glyph_path(
-                   pixmap, family, glyph_info.char, size, render_x, render_y,
-                   fill_color,
-                   stroke_color, stroke_width,
-                   shadow_color, shadow_offset
-               );
-            }
+            let render_x = lx + glyph_info.x;
+            let render_y = ly + glyph_info.y;
+
+            self.draw_glyph_path(
+                pixmap, family, glyph_info.char, size, render_x, render_y,
+                fill_color,
+                stroke_color, stroke_width,
+                shadow_color, shadow_offset
+            );
         }
         
         Ok(())
     }
     
     fn draw_glyph_path(
-        &self, 
+        &mut self,
         pixmap: &mut Pixmap, 
         family: &str, 
         ch: char, 
@@ -327,19 +344,18 @@ impl Renderer {
         shadow_color: Option<Color>,
         shadow_offset: (f32, f32)
     ) {
-        // Build Path
-        let mut builder = tiny_skia::PathBuilder::new();
-        
-        self.text_renderer.trace_glyph_path(family, ch, size, x, y, &mut builder);
-
-        if let Some(path) = builder.finish() {
+        if let Some(path) = self.text_renderer.get_glyph_path(family, ch) {
             let mut paint = tiny_skia::Paint::default();
             paint.anti_alias = true;
+
+            // Transform: Scale (size), Translate (x, y)
+            let transform = tiny_skia::Transform::from_translate(x, y)
+                .pre_scale(size, size);
 
             // 1. Shadow
             if let Some(sc) = shadow_color {
                 paint.set_color(sc);
-                let shadow_transform = tiny_skia::Transform::from_translate(shadow_offset.0, shadow_offset.1);
+                let shadow_transform = transform.post_translate(shadow_offset.0, shadow_offset.1);
                 pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, shadow_transform, None);
             }
 
@@ -351,17 +367,17 @@ impl Renderer {
                     stroke_paint.anti_alias = true;
                     
                     let stroke = tiny_skia::Stroke {
-                        width: stroke_width,
+                        width: stroke_width / size, // Stroke width must be inverse scaled because transform scales everything!
                         ..tiny_skia::Stroke::default()
                     };
                     
-                    pixmap.stroke_path(&path, &stroke_paint, &stroke, tiny_skia::Transform::identity(), None);
+                    pixmap.stroke_path(&path, &stroke_paint, &stroke, transform, None);
                 }
             }
 
             // 3. Fill
             paint.set_color(fill_color);
-            pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, tiny_skia::Transform::identity(), None);
+            pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, None);
         }
     }
 }
