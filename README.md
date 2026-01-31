@@ -66,6 +66,18 @@ cargo build --release --workspace
 
 The binary will be available at `target/release/klyric`.
 
+## 🎮 Usage
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| **Open File** | `Ctrl+O` / `Cmd+O` |
+| **Save File** | `Ctrl+S` / `Cmd+S` |
+| **Playback / Mark** | `Space` |
+| **Previous Character** | `Left Arrow` |
+| **Next Character** | `Right Arrow` |
+
 ## 🧪 Development
 
 ### Running Tests
@@ -86,7 +98,12 @@ cargo test -p klyric-renderer
 - **Message:** All user actions generate a `Message` enum variant, handled by the `update` function in `app.rs`.
 - **Renderer:** The `klyric-renderer` crate is independent of the GUI and can be used in headless environments.
 
-## ⚠️ Notes
+## ⚠️ Known Issues & Notes
 
+### Known Issues
+- **Linux Dependencies:** A version conflict exists between `ashpd` (0.11.0) and `zbus` (5.13.1) which may cause compilation warnings or errors.
+- **Windows File Locks:** If you encounter "file in use" errors with `skia-bindings` during build, it may be due to `rust-analyzer` locking files. Solution: Clean the package with `cargo clean -p skia-bindings` or restart the analyzer.
+
+### Notes
 - **Font Discovery:** The application currently relies on embedded fonts or specific system fonts.
 - **WASM Support:** The renderer has a WASM target for potential web-based previews, utilizing `tiny-skia`.
