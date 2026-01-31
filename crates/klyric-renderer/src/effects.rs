@@ -469,6 +469,159 @@ impl EffectEngine {
         transform
     }
 
+    /// Apply pre-calculated effects to a RenderTransform
+    pub fn apply_active_effects(
+        current_time: f64,
+        mut transform: RenderTransform,
+        active_effects: &[(&Effect, f64)],
+        trigger_context: &TriggerContext,
+    ) -> RenderTransform {
+        for (effect, eased_progress) in active_effects {
+            match effect.effect_type {
+                EffectType::Transition => {
+                    let eval_ctx = EvaluationContext {
+                        t: current_time,
+                        progress: *eased_progress,
+                        index: trigger_context.char_index,
+                        count: trigger_context.char_count,
+                        ..Default::default()
+                    };
+
+                    for (prop, value) in &effect.properties {
+                        let val = match value {
+                            AnimatedValue::Range { from, to } => {
+                                Self::lerp(*from, *to, *eased_progress)
+                            }
+                            AnimatedValue::Expression(expr) => {
+                                match ExpressionEvaluator::evaluate(expr, &eval_ctx) {
+                                    Ok(v) => v,
+                                    Err(e) => {
+                                        log::warn!("Expression error in {}: {}", prop, e);
+                                        continue;
+                                    }
+                                }
+                            }
+                        };
+                        apply_property_to_render(&mut transform, prop, val);
+                    }
+                }
+                EffectType::Typewriter => {
+                    if let (Some(idx), Some(_count)) =
+                        (trigger_context.char_index, trigger_context.char_count)
+                    {
+                        let total_chars = trigger_context.char_count.unwrap_or(1) as f64;
+                        let visible_limit = *eased_progress * total_chars;
+
+                        if (idx as f64) < visible_limit {
+                            apply_property_to_render(&mut transform, "opacity", 1.0);
+                        } else {
+                            apply_property_to_render(&mut transform, "opacity", 0.0);
+                        }
+                    }
+                }
+                EffectType::Keyframe => {
+                    if effect.keyframes.is_empty() {
+                        continue;
+                    }
+                    let mut start_kf = &effect.keyframes[0];
+                    let mut end_kf = &effect.keyframes[0];
+                    let mut found = false;
+
+                    for kf in &effect.keyframes {
+                        if kf.time >= *eased_progress {
+                            end_kf = kf;
+                            found = true;
+                            break;
+                        }
+                        start_kf = kf;
+                    }
+
+                    if !found {
+                        start_kf = effect.keyframes.last().unwrap();
+                        end_kf = start_kf;
+                    }
+
+                    let segment_duration = end_kf.time - start_kf.time;
+                    let t = if segment_duration <= 0.0 {
+                        if *eased_progress >= end_kf.time {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        (*eased_progress - start_kf.time) / segment_duration
+                    };
+
+                    let segment_eased = if let Some(e) = &start_kf.easing {
+                        Self::ease(t, e)
+                    } else {
+                        t
+                    };
+
+                    if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "opacity",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale, end_kf.scale) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "scale",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
+                        transform.scale_x =
+                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
+                        transform.scale_y =
+                            Self::lerp(s as f64, e as f64, segment_eased) as f32;
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "rotation",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.x, end_kf.x) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "x",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "y",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.blur, end_kf.blur) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "blur",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                    if let (Some(s), Some(e)) = (start_kf.glitch_offset, end_kf.glitch_offset) {
+                        apply_property_to_render(
+                            &mut transform,
+                            "glitch_offset",
+                            Self::lerp(s as f64, e as f64, segment_eased),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        transform
+    }
+
     /// Check if an effect should trigger based on context
     pub fn should_trigger(_effect: &Effect, _ctx: &TriggerContext) -> bool {
         // Basic trigger logic
