@@ -229,10 +229,7 @@ impl<'a> LineRenderer<'a> {
             if let Some(typeface) = typeface_ref {
                 // Get path
                 let glyph_id = glyph.glyph_id;
-                if let Some(path) =
-                    self.text_renderer
-                        .get_path_cached(typeface, size, glyph_id)
-                {
+                if let Some(path) = self.text_renderer.get_path_cached(typeface, size, glyph_id) {
                     // Dimensions for effects
                     // Skia path bounds
                     let bounds = path.bounds();
@@ -373,20 +370,21 @@ impl<'a> LineRenderer<'a> {
                     self.canvas.translate((-path_center_x, -path_center_y));
 
                     // Modify path if StrokeReveal is active
-                    let draw_path = if let Some(progress) = stroke_reveal_progress {
-                        let mut measure = skia_safe::PathMeasure::new(&path, false, None);
+                    let mut modified_path = None;
+                    let path = if let Some(progress) = stroke_reveal_progress {
+                        let mut measure = skia_safe::PathMeasure::new(path, false, None);
                         let length = measure.length();
                         if let Some(partial_path) =
                             measure.segment(0.0, length * progress as f32, true)
                         {
-                            partial_path
+                            modified_path = Some(partial_path);
+                            modified_path.as_ref().unwrap()
                         } else {
-                            path.clone()
+                            path
                         }
                     } else {
-                        path.clone() // Clone for drawing to avoid borrow issues? path is local
+                        path
                     };
-                    let path = &draw_path; // Re-bind path to modified version if needed
 
                     // --- 1. SHADOW ---
                     let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) {
@@ -710,7 +708,10 @@ fn is_char_dependent(effect: &Effect) -> bool {
         EffectType::Custom => true, // Assume custom is unsafe/dependent
         EffectType::Transition => {
             // Check if any property uses an Expression
-            effect.properties.values().any(|v| matches!(v, AnimatedValue::Expression(_)))
+            effect
+                .properties
+                .values()
+                .any(|v| matches!(v, AnimatedValue::Expression(_)))
         }
         _ => false, // Keyframe, Range Transition, etc. are time-based (independent)
     }
