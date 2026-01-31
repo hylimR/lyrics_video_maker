@@ -1,12 +1,12 @@
-# CLAUDE.md
+# GEMINI.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to the Gemini assistant when working with code in this repository.
 
 ## Project Overview
 
 A professional **Lyric Video Generator** built entirely in Rust. Creates high-quality lyric videos with per-character timing (K-Timing), animations, and visual effects.
 
-**Stack:** Pure Rust with Iced GUI framework and skia-safe rendering.
+**Stack:** Pure Rust with Iced GUI framework and Skia rendering.
 
 ## Mandatory Checks
 
@@ -15,9 +15,10 @@ A professional **Lyric Video Generator** built entirely in Rust. Creates high-qu
 > 1. **Compilation**: `cargo check --workspace`
 > 2. **Tests**: `cargo test --workspace`
 > 3. **Lints**: `cargo clippy --workspace -- -D warnings`
+> 4. **WASM Check**: `cargo check -p klyric-renderer --target wasm32-unknown-unknown`
 >
 > **Post-Coding Review:**
-> You MUST run the `requesting-code-review` skill (or other relevant review skills like `m15-anti-pattern`) after every coding session to verify your work.
+> You MUST run the `requesting-code-review` skill (or other relevant review skills) after every coding session to verify your work.
 >
 > **Failure to do so is a violation of protocol.**
 
@@ -41,6 +42,7 @@ cargo test -p klyric-renderer test_fn  # Run single test
 
 # Check compilation
 cargo check --workspace                # Check all crates
+cargo check -p klyric-renderer --target wasm32-unknown-unknown # Check WASM
 ```
 
 ## Testing Strategy
@@ -81,6 +83,7 @@ crates/
 │   │   ├── message.rs   # Message enum for events
 │   │   ├── worker.rs    # Background render worker
 │   │   ├── audio.rs     # Audio playback (rodio)
+│   │   ├── theme.rs     # UI Styles & Constants (New standard)
 │   │   └── widgets/     # UI components
 │   │       ├── editor.rs
 │   │       ├── preview.rs
@@ -115,15 +118,15 @@ KLyric v2.0 JSON → Parser → Style Resolver → Layout Engine → Effect Engi
 ```
 
 The renderer supports dual targets via conditional compilation:
-- **Native:** `skia-safe` (GPU accelerated)
-- **WASM:** `tiny-skia` + `ab_glyph` (CPU, for browser preview)
+- **Native:** `skia-safe` (GPU accelerated). Used by the desktop app and preview.
+- **WASM:** `tiny-skia` + `ab_glyph` (CPU, for browser preview). Used when compiling for `wasm32`.
 
 ### Iced Architecture (Elm Pattern)
 
 The GUI follows Iced's Elm architecture:
-- **Model:** `AppState` in `state.rs`
-- **Update:** `app::update()` handles `Message` variants
-- **View:** `app::view()` returns widget tree
+- **Model:** `AppState` in `state.rs`. Stores the document as `Option<Arc<KLyricDocumentV2>>`.
+- **Update:** `app::update()` handles `Message` variants.
+- **View:** `app::view()` returns widget tree.
 
 ```rust
 // Message flow
@@ -142,7 +145,7 @@ Rust structs in `crates/klyric-renderer/src/model/` define the KLyric v2.0 forma
 Specification: `.agent/specs/KLYRIC_FORMAT_SPEC.md`
 
 ### 2. Background Render Worker
-Heavy rendering runs in a separate thread via `worker.rs`:
+Heavy rendering runs in a separate thread via `worker.rs`. It shares the document state efficiently via `Arc<KLyricDocumentV2>`.
 ```rust
 // GUI sends render requests
 worker_connection.send(RenderRequest { ... });
@@ -152,7 +155,7 @@ Subscription::run(worker_subscription) → Message::FrameRendered(handle)
 ```
 
 ### 3. Dual-Target Renderer
-When modifying `klyric-renderer`, be aware of conditional compilation:
+When modifying `klyric-renderer`, be aware of conditional compilation. **Always verify WASM compilation.**
 ```rust
 #[cfg(not(target_arch = "wasm32"))]
 pub mod renderer;  // skia-safe
@@ -164,26 +167,39 @@ pub mod wasm_renderer;  // tiny-skia
 ### 4. Audio Playback
 Audio is handled via `rodio` in `audio.rs`. The `AudioManager` syncs with playback state.
 
+### 5. UI Styling
+Use `crates/klyric-gui/src/theme.rs` for all styles, constants, and icons. Do not hardcode values in widgets.
+- **Icons:** Use `theme::icons::*` constants.
+- **Styles:** Define `StyleSheet` impls or container styles in `theme.rs`.
+
+### 6. Async Operations
+File operations (Open, Save, Export) use `Task::perform` to avoid blocking the UI.
+1. Set status to "Busy" (optional, for immediate feedback).
+2. Spawn async task (`rfd` dialogs, file I/O).
+3. Dispatch result `Message` (e.g., `FileOpened`, `FileSaved`).
+4. Handle result in `update()`.
+
+## Troubleshooting & Known Issues
+
+### Windows Build Locks
+If you encounter "file in use" errors with `skia-bindings` (especially `pdb` or `dll` files), `rust-analyzer` is likely holding a lock.
+**Fix:** Stop the language server or run `cargo clean -p skia-bindings`.
+
+### Dependency Conflicts
+There is a known conflict between `ashpd` (via `rfd` -> `ashpd` 0.11) and `zbus` versions if dependencies aren't managed carefully.
+- `klyric-gui` currently manages this by pinning or ensuring compatible versions.
+
+### Compilation Errors
+- **UTF-8 Errors:** Clang 18 + GCC 13 headers can cause `string_view` UTF-8 errors in `skia-bindings`. Ensure your build environment is clean or use a compatible Clang version.
+
 ## Directory Reference
 
 | Path | Purpose |
 |------|---------|
 | `crates/klyric-gui/src/app.rs` | Main update/view logic |
-| `crates/klyric-gui/src/state.rs` | Application state |
-| `crates/klyric-gui/src/message.rs` | Event definitions |
+| `crates/klyric-gui/src/state.rs` | Application state (`AppState`) |
+| `crates/klyric-gui/src/message.rs` | Event definitions (`Message`) |
+| `crates/klyric-gui/src/theme.rs` | UI Styles, Icons, Constants |
 | `crates/klyric-renderer/src/model/` | KLyric data models |
 | `crates/klyric-renderer/src/renderer/` | Native skia-safe renderer |
-| `.agent/specs/KLYRIC_FORMAT_SPEC.md` | Format specification |
-
-## Windows Build Notes
-
-If you encounter "file in use" errors with `skia-bindings`, rust-analyzer may be holding file locks.
-
-**Solution** (configured in `.vscode/settings.json`):
-```json
-{ "rust-analyzer.check.extraArgs": ["--target-dir", "target/ra"] }
-```
-
-Quick fixes:
-1. Stop rust-analyzer: `Ctrl+Shift+P` → "rust-analyzer: Stop Server"
-2. Clean: `cargo clean -p skia-bindings`
+| `crates/klyric-renderer/src/wasm_renderer.rs` | WASM tiny-skia renderer |
