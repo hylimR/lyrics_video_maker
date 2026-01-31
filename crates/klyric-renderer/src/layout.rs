@@ -43,15 +43,16 @@ impl LayoutEngine {
                 .or_else(|| line.font.as_ref().and_then(|f| f.size))
                 .unwrap_or(style_size);
 
+            // Resolve Typeface once per Char Unit
+            let font_ref = renderer.get_typeface(family)
+                .or_else(|| renderer.get_default_typeface());
+
             // For each character in the string
             for ch in ch_str.chars() {
                 // Try to get font
-                let font_ref = renderer.get_typeface(family)
-                    .or_else(|| renderer.get_default_typeface());
-                
-                if let Some(typeface) = font_ref {
+                if let Some(typeface) = &font_ref {
                     // Measure character using renderer
-                    let (advance, height) = renderer.measure_char(&typeface, ch, size);
+                    let (advance, height) = renderer.measure_char(typeface, ch, size);
                     
                     let width = advance; 
                     
