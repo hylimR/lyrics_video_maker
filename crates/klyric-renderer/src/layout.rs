@@ -39,7 +39,8 @@ impl LayoutEngine {
             .and_then(|f| f.size)
             .unwrap_or(72.0);
 
-        let mut glyphs = Vec::new();
+        // Pre-allocate to avoid reallocations. usually one glyph per Char.
+        let mut glyphs = Vec::with_capacity(line.chars.len());
         let mut cursor_x = 0.0;
         let gap = line.layout.as_ref().map(|l| l.gap).unwrap_or(0.0);
 
