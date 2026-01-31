@@ -87,6 +87,19 @@ impl<'a> LineRenderer<'a> {
             }
         }
 
+        // --- OPTIMIZATION: Hoist Effect Categorization ---
+        let mut transform_effects_base: Vec<&Effect> = Vec::with_capacity(line_active_effects.len());
+        let mut particle_effects_base: Vec<(&str, &Effect)> = Vec::with_capacity(line_active_effects.len());
+        let mut disintegrate_effects_base: Vec<(&str, &Effect)> = Vec::with_capacity(line_active_effects.len());
+
+        for (name, effect) in &line_active_effects {
+            match effect.effect_type {
+                EffectType::Particle => particle_effects_base.push((name, &**effect)),
+                EffectType::Disintegrate => disintegrate_effects_base.push((name, &**effect)),
+                _ => transform_effects_base.push(&**effect),
+            }
+        }
+
         // --- OPTIMIZATION: Hoist Paint Creation ---
         let mut paint = Paint::default();
         paint.set_anti_alias(true);
@@ -178,29 +191,16 @@ impl<'a> LineRenderer<'a> {
                          char_count: Some(glyphs.len()),
                      };
                      
-                     let mut transform_effects = Vec::new();
-                     let mut particle_effects = Vec::new();
-                     let mut disintegrate_effects = Vec::new();
-
-                     // Use hoisted effects list
-                     for (name, effect) in &line_active_effects {
-                         match effect.effect_type {
-                             EffectType::Particle => particle_effects.push((name, &**effect)),
-                             EffectType::Disintegrate => disintegrate_effects.push((name, &**effect)),
-                             _ => transform_effects.push(&**effect),
-                         }
-                     }
-                     
                      let final_transform = EffectEngine::compute_transform(
                          self.time,
                          &base_transform,
-                         &transform_effects,
+                         &transform_effects_base,
                          ctx.clone()
                      );
 
                      // Disintegrate Effect Progress
                      let mut disintegration_progress = 0.0;
-                     if let Some((_name, effect)) = disintegrate_effects.first() {
+                     if let Some((_name, effect)) = disintegrate_effects_base.first() {
                          if EffectEngine::should_trigger(effect, &ctx) {
                              disintegration_progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
                              disintegration_progress = disintegration_progress.clamp(0.0, 1.0);
@@ -230,7 +230,7 @@ impl<'a> LineRenderer<'a> {
                      
                      // Check for StrokeReveal
                      let mut stroke_reveal_progress = None;
-                     for effect in &transform_effects {
+                     for effect in &transform_effects_base {
                          if effect.effect_type == EffectType::StrokeReveal && EffectEngine::should_trigger(effect, &ctx) {
                              let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                              stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
@@ -372,7 +372,7 @@ impl<'a> LineRenderer<'a> {
                      self.canvas.restore(); // Restore transform for next glyph/effects
 
                      // --- DISINTEGRATION EFFECT ---
-                     for (name, effect) in disintegrate_effects {
+                     for (name, effect) in disintegrate_effects_base.iter().cloned() {
                          if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
 
                          let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
@@ -461,7 +461,7 @@ impl<'a> LineRenderer<'a> {
                      
                      // --- PARTICLE SPAWNING ---
                      // Process standard particle effects
-                     for (name, effect) in particle_effects {
+                     for (name, effect) in particle_effects_base.iter().cloned() {
                          if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
                          
                          let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
