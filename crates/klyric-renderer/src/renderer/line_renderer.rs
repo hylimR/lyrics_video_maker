@@ -63,6 +63,49 @@ impl<'a> LineRenderer<'a> {
             .unwrap_or(DEFAULT_COMPLETE_COLOR);
         let complete_color = parse_color(complete_hex).unwrap_or(Color::WHITE);
 
+        // --- OPTIMIZATION: Hoist Effect Resolution ---
+        let mut line_active_effects = Vec::new();
+        let empty_vec = Vec::new();
+        let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
+        let line_effects = &line.effects;
+
+        // Collect all effect names: Style effects first (base), then Line effects (override/stack)
+        let all_effects_names = style_effects.iter().chain(line_effects.iter());
+
+        for effect_name in all_effects_names {
+            if let Some(effect) = self.doc.effects.get(effect_name) {
+                if let Some(preset_name) = &effect.preset {
+                    if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
+                        if let Some(d) = effect.duration { generated.duration = Some(d); }
+                        if effect.easing != Easing::Linear { generated.easing = effect.easing.clone(); }
+                        line_active_effects.push((effect_name.clone(), generated));
+                    } else {
+                        line_active_effects.push((effect_name.clone(), effect.clone()));
+                    }
+                } else {
+                    line_active_effects.push((effect_name.clone(), effect.clone()));
+                }
+            } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
+                line_active_effects.push((effect_name.clone(), preset));
+            }
+        }
+
+        // --- OPTIMIZATION: Hoist Paint Creation ---
+        let mut paint = Paint::default();
+        paint.set_anti_alias(true);
+
+        let mut shadow_paint = Paint::default();
+        shadow_paint.set_anti_alias(true);
+
+        let mut stroke_paint = Paint::default();
+        stroke_paint.set_style(PaintStyle::Stroke);
+        stroke_paint.set_anti_alias(true);
+
+        // --- OPTIMIZATION: Hoist Default Typeface ---
+        let line_family_def = line.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or(style_family);
+        let default_typeface = self.text_renderer.get_typeface(line_family_def)
+             .or_else(|| self.text_renderer.get_default_typeface());
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -71,17 +114,20 @@ impl<'a> LineRenderer<'a> {
              // Resolve Font for THIS glyph (matches layout logic)
              let char_data = line.chars.get(glyph.char_index);
              
-             let family = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.family.as_deref()))
-                .or_else(|| line.font.as_ref().and_then(|f| f.family.as_deref()))
-                .unwrap_or(style_family);
+             // Check if we have overrides
+             let family_override = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.family.as_deref()));
 
              let size = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.size))
                 .or_else(|| line.font.as_ref().and_then(|f| f.size))
                 .unwrap_or(style_size);
 
              // Get typeface and path
-             let typeface = self.text_renderer.get_typeface(family)
-                 .or_else(|| self.text_renderer.get_default_typeface());
+             let typeface = if let Some(fam) = family_override {
+                 self.text_renderer.get_typeface(fam)
+                     .or_else(|| self.text_renderer.get_default_typeface())
+             } else {
+                 default_typeface.clone()
+             };
              
              if let Some(typeface) = typeface {
                  // Get path
@@ -126,37 +172,6 @@ impl<'a> LineRenderer<'a> {
                          hue_shift: Some(line_transform.hue_shift_val() + char_transform.hue_shift_val()),
                      };
                      
-                     // ... Effect Resolution Logic ...
-                     let mut active_effects = Vec::new();
-                     
-                     // Collect all effect names: Style effects first (base), then Line effects (override/stack)
-                     // Note: We are just stacking them. If the user wants "Override", they might not want base effects?
-                     // But typically "Global > Line" means Global applies, then Line applies on top.
-                     let empty_vec = Vec::new();
-                     let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
-                     let line_effects = &line.effects;
-                     
-                     // Helper chain iterator
-                     let all_effects = style_effects.iter().chain(line_effects.iter());
-
-                     for effect_name in all_effects {
-                        if let Some(effect) = self.doc.effects.get(effect_name) {
-                            if let Some(preset_name) = &effect.preset {
-                                if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
-                                     if let Some(d) = effect.duration { generated.duration = Some(d); }
-                                     if effect.easing != Easing::Linear { generated.easing = effect.easing.clone(); }
-                                     active_effects.push((effect_name, generated));
-                                } else {
-                                     active_effects.push((effect_name, effect.clone()));
-                                }
-                            } else {
-                                active_effects.push((effect_name, effect.clone()));
-                            }
-                        } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
-                            active_effects.push((effect_name, preset));
-                        }
-                     }
-
                      let ctx = TriggerContext {
                          start_time: line.start,
                          end_time: line.end,
@@ -170,7 +185,8 @@ impl<'a> LineRenderer<'a> {
                      let mut particle_effects = Vec::new();
                      let mut disintegrate_effects = Vec::new();
 
-                     for (name, effect) in active_effects {
+                     // Use hoisted effects list
+                     for (name, effect) in &line_active_effects {
                          match effect.effect_type {
                              EffectType::Particle => particle_effects.push((name, effect)),
                              EffectType::Disintegrate => disintegrate_effects.push((name, effect)),
@@ -195,9 +211,8 @@ impl<'a> LineRenderer<'a> {
                      }
 
                      // Setup Paint
-                     let mut paint = Paint::default();
                      paint.set_color(text_color);
-                     paint.set_anti_alias(true);
+                     // paint.set_anti_alias(true); // Already set
                      
                      let final_opacity = final_transform.opacity_val() * (1.0 - disintegration_progress as f32);
                      paint.set_alpha_f(final_opacity);
@@ -205,6 +220,8 @@ impl<'a> LineRenderer<'a> {
                      // Apply Blur
                      if final_transform.blur_val() > 0.0 {
                          paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
+                     } else {
+                         paint.set_mask_filter(None);
                      }
 
                      // --- DRAWING ---
@@ -258,15 +275,16 @@ impl<'a> LineRenderer<'a> {
                      if let Some(shadow) = shadow_opts {
                          if let Some(color_hex) = &shadow.color {
                              if let Some(shadow_color) = parse_color(color_hex) {
-                                 let mut shadow_paint = Paint::default();
                                  shadow_paint.set_color(shadow_color);
                                  shadow_paint.set_alpha_f(final_opacity);
-                                 shadow_paint.set_anti_alias(true);
+                                 // shadow_paint.set_anti_alias(true); // Already set
                                  
                                  // Apply blur to shadow if needed (or inherit from transform?)
                                  // For now, if there's global blur, apply it to shadow too
                                  if final_transform.blur_val() > 0.0 {
                                      shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
+                                 } else {
+                                     shadow_paint.set_mask_filter(None);
                                  }
                                  
                                  self.canvas.save();
@@ -286,15 +304,16 @@ impl<'a> LineRenderer<'a> {
                          if stroke.width_or_default() > 0.0 {
                              if let Some(color_hex) = &stroke.color {
                                  if let Some(stroke_color) = parse_color(color_hex) {
-                                     let mut stroke_paint = Paint::default();
-                                     stroke_paint.set_style(PaintStyle::Stroke);
+                                     // stroke_paint.set_style(PaintStyle::Stroke); // Already set
                                      stroke_paint.set_stroke_width(stroke.width_or_default());
                                      stroke_paint.set_color(stroke_color);
                                      stroke_paint.set_alpha_f(final_opacity);
-                                     stroke_paint.set_anti_alias(true);
+                                     // stroke_paint.set_anti_alias(true); // Already set
                                      
                                      if final_transform.blur_val() > 0.0 {
                                          stroke_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
+                                     } else {
+                                         stroke_paint.set_mask_filter(None);
                                      }
 
                                      self.canvas.draw_path(path, &stroke_paint);

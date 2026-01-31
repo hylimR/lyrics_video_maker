@@ -77,7 +77,7 @@ impl EffectEngine {
     pub fn compute_transform(
         current_time: f64,
         base_transform: &Transform,
-        effects: &[Effect],
+        effects: &[&Effect],
         trigger_context: TriggerContext
     ) -> Transform {
         let mut final_transform = base_transform.clone();
@@ -655,7 +655,7 @@ mod tests {
         };
         
         // At t=1.0, progress is 0.5, so opacity should be 0.5
-        let result = EffectEngine::compute_transform(1.0, &base, &[effect], ctx);
+        let result = EffectEngine::compute_transform(1.0, &base, &[&effect], ctx);
         assert!(approx_eq(result.opacity.unwrap() as f64, 0.5, 1e-6));
     }
 
