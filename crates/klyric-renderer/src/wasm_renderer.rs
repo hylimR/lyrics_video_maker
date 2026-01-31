@@ -20,6 +20,13 @@ pub struct TextRenderer {
     // Caches
     path_cache: HashMap<(ID, char), tiny_skia::Path>,
     id_cache: HashMap<String, ID>,
+    typeface_cache: HashMap<String, Typeface>,
+}
+
+impl Default for TextRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TextRenderer {
@@ -31,6 +38,7 @@ impl TextRenderer {
             family_map: HashMap::new(),
             path_cache: HashMap::new(),
             id_cache: HashMap::new(),
+            typeface_cache: HashMap::new(),
         }
     }
 
@@ -63,7 +71,12 @@ impl TextRenderer {
         Ok(())
     }
 
-    pub fn get_typeface(&self, request_family: &str) -> Option<Typeface> {
+    pub fn get_typeface(&mut self, request_family: &str) -> Option<Typeface> {
+        // Check cache first
+        if let Some(tf) = self.typeface_cache.get(request_family) {
+            return Some(tf.clone());
+        }
+
         // Check alias map first
         let family = self
             .family_map
@@ -77,16 +90,34 @@ impl TextRenderer {
         };
 
         if let Some(id) = self.db.query(&query) {
-            self.db
+            let tf = self
+                .db
                 .with_face_data(id, |data, _index| {
                     // Clone data to own it for FontArc. Not efficient but works for WASM.
                     FontArc::try_from_vec(data.to_vec())
                         .ok()
-                        .map(|f| Typeface(f))
+                        .map(Typeface)
                 })
-                .flatten()
+                .flatten();
+
+            if let Some(tf) = &tf {
+                self.typeface_cache
+                    .insert(request_family.to_string(), tf.clone());
+            }
+
+            tf
         } else {
             None
+        }
+    }
+
+    pub fn clear_font_cache(&mut self) {
+        // Clear caches if they get too large
+        if self.typeface_cache.len() > 10 {
+            self.typeface_cache.clear();
+        }
+        if self.path_cache.len() > 1000 {
+            self.path_cache.clear();
         }
     }
 
@@ -234,6 +265,9 @@ impl Renderer {
     }
 
     pub fn render_frame(&mut self, doc: &KLyricDocumentV2, time: f64) -> Result<Vec<u8>> {
+        // Clear caches to prevent unbounded growth
+        self.text_renderer.clear_font_cache();
+
         let mut pixmap = Pixmap::new(self.width, self.height)
             .ok_or_else(|| anyhow!("Failed to create pixmap"))?;
 
