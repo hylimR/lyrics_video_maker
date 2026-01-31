@@ -62,6 +62,10 @@ impl LayoutEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let mut cached_font_key: Option<(u32, u32)> = None;
 
+        // Cache for Font Override
+        let mut cached_family_override: Option<&str> = None;
+        let mut cached_typeface_override: Option<Option<_>> = None;
+
         // Iterate over character objects in the line
         for (i, char_data) in line.chars.iter().enumerate() {
             let ch_str = &char_data.char;
@@ -71,9 +75,17 @@ impl LayoutEngine {
 
             // Resolve Typeface (Char override or Line default)
             let font_ref = if let Some(fam) = char_family_override {
-                renderer
-                    .get_typeface(fam)
-                    .or_else(|| renderer.get_default_typeface())
+                if cached_family_override == Some(fam) {
+                    cached_typeface_override.clone().flatten()
+                } else {
+                    let tf = renderer
+                        .get_typeface(fam)
+                        .or_else(|| renderer.get_default_typeface());
+
+                    cached_family_override = Some(fam);
+                    cached_typeface_override = Some(tf.clone());
+                    tf
+                }
             } else {
                 line_typeface.clone()
             };
