@@ -149,10 +149,10 @@ impl<'a> LineRenderer<'a> {
             .or_else(|| self.text_renderer.get_default_typeface());
 
         // --- OPTIMIZATION: Font Cache ---
-        // Reuse SkFont instances to avoid expensive reconstruction
-        let mut cached_font: Option<Font> = None;
+        // Reuse SkFont instances locally to avoid HashMap lookups in TextRenderer
+        let mut current_font: Option<Font> = None;
         // Key: (typeface_unique_id, size_in_bits)
-        let mut cached_font_key: Option<(u32, u32)> = None;
+        let mut current_font_key: Option<(u32, u32)> = None;
 
         // --- OPTIMIZATION: Hoist Line Transform ---
         let line_transform_default = Transform::default();
@@ -191,21 +191,12 @@ impl<'a> LineRenderer<'a> {
                 let tf_id: u32 = typeface.unique_id().into();
                 let size_bits = size.to_bits();
 
-                let font = if let Some((last_id, last_size)) = cached_font_key {
-                    if last_id == tf_id && last_size == size_bits {
-                        cached_font.as_ref().unwrap()
-                    } else {
-                        let f = Font::from_typeface(typeface.clone(), size);
-                        cached_font = Some(f);
-                        cached_font_key = Some((tf_id, size_bits));
-                        cached_font.as_ref().unwrap()
-                    }
-                } else {
-                    let f = Font::from_typeface(typeface.clone(), size);
-                    cached_font = Some(f);
-                    cached_font_key = Some((tf_id, size_bits));
-                    cached_font.as_ref().unwrap()
-                };
+                if current_font_key != Some((tf_id, size_bits)) {
+                    let f = self.text_renderer.get_font(typeface, size);
+                    current_font = Some(f);
+                    current_font_key = Some((tf_id, size_bits));
+                }
+                let font = current_font.as_ref().unwrap();
 
                 // Get path
                 let glyph_id = font.unichar_to_glyph(glyph.char as i32);
