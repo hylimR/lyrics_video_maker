@@ -195,6 +195,33 @@ impl<'a> LineRenderer<'a> {
             char_count: Some(glyphs.len()),
         };
 
+        // --- OPTIMIZATION: Hoist Independent Effect Progress ---
+        // 1. Stroke Reveal
+        let mut stroke_reveal_progress_base = None;
+        for effect in &stroke_reveal_effects {
+            if EffectEngine::should_trigger(effect, &ctx) {
+                let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                let clamped = p.clamp(0.0, 1.0);
+                if clamped >= 0.999 {
+                    stroke_reveal_progress_base = None; // Effect complete, show full
+                } else {
+                    stroke_reveal_progress_base = Some(clamped);
+                }
+                break;
+            }
+        }
+
+        // 2. Disintegration (for opacity)
+        let mut disintegration_progress_base = 0.0;
+        if let Some((_name, effect)) = disintegrate_effects_base.first() {
+            if EffectEngine::should_trigger(effect, &ctx) {
+                let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
+                disintegration_progress_base = p.clamp(0.0, 1.0);
+            }
+        }
+
+        let mut current_blur = -1.0f32;
+
         // Loop:
         for glyph in glyphs.iter() {
             // Update context
@@ -278,33 +305,26 @@ impl<'a> LineRenderer<'a> {
                         );
                     }
 
-                    // Disintegrate Effect Progress
-                    let mut disintegration_progress = 0.0;
-                    if let Some((_name, effect)) = disintegrate_effects_base.first() {
-                        if EffectEngine::should_trigger(effect, &ctx) {
-                            disintegration_progress =
-                                EffectEngine::calculate_progress(self.time, effect, &ctx);
-                            disintegration_progress = disintegration_progress.clamp(0.0, 1.0);
-                        }
-                    }
-
                     // Setup Paint
                     paint.set_color(text_color);
                     // paint.set_anti_alias(true); // Already set
 
                     let final_opacity =
-                        final_transform.opacity * (1.0 - disintegration_progress as f32);
+                        final_transform.opacity * (1.0 - disintegration_progress_base as f32);
                     paint.set_alpha_f(final_opacity);
 
-                    // Apply Blur
-                    if final_transform.blur > 0.0 {
-                        paint.set_mask_filter(MaskFilter::blur(
-                            BlurStyle::Normal,
-                            final_transform.blur,
-                            false,
-                        ));
-                    } else {
-                        paint.set_mask_filter(None);
+                    // Apply Blur (Optimized)
+                    if (final_transform.blur - current_blur).abs() > 0.001 {
+                        current_blur = final_transform.blur;
+                        if current_blur > 0.0 {
+                            paint.set_mask_filter(MaskFilter::blur(
+                                BlurStyle::Normal,
+                                current_blur,
+                                false,
+                            ));
+                        } else {
+                            paint.set_mask_filter(None);
+                        }
                     }
 
                     // --- DRAWING ---
@@ -313,16 +333,6 @@ impl<'a> LineRenderer<'a> {
                     let draw_y = char_absolute_y;
 
                     self.canvas.save();
-
-                    // Check for StrokeReveal
-                    let mut stroke_reveal_progress = None;
-                    for effect in &stroke_reveal_effects {
-                        if EffectEngine::should_trigger(effect, &ctx) {
-                            let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                            stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
-                            break; // Only one stroke reveal supported
-                        }
-                    }
 
                     // Apply Transforms
                     self.canvas.translate((
@@ -343,7 +353,7 @@ impl<'a> LineRenderer<'a> {
 
                     // Modify path if StrokeReveal is active
                     let mut modified_path = None;
-                    let path = if let Some(progress) = stroke_reveal_progress {
+                    let path = if let Some(progress) = stroke_reveal_progress_base {
                         let mut measure = skia_safe::PathMeasure::new(path, false, None);
                         let length = measure.length();
                         if let Some(partial_path) =
