@@ -23,6 +23,31 @@ impl RangeValue {
     }
 }
 
+impl ParticleConfig {
+    /// Reset this config from another, reusing allocations where possible
+    pub fn reset_from(&mut self, other: &Self) {
+        self.count = other.count;
+        self.spawn_rate = other.spawn_rate;
+        self.lifetime = other.lifetime.clone();
+        self.speed = other.speed.clone();
+        self.direction = other.direction.clone();
+        self.spread = other.spread;
+        self.start_size = other.start_size.clone();
+        self.end_size = other.end_size.clone();
+        self.rotation_speed = other.rotation_speed.clone();
+
+        // String optimization: reuse buffer if possible
+        if self.color != other.color {
+            self.color.clear();
+            self.color.push_str(&other.color);
+        }
+
+        self.shape = other.shape.clone();
+        self.physics = other.physics.clone();
+        self.blend_mode = other.blend_mode;
+    }
+}
+
 impl Default for RangeValue {
     fn default() -> Self {
         RangeValue::Single(1.0)
@@ -254,5 +279,31 @@ mod tests {
         let range = RangeValue::Range(0.0, 100.0);
         let val = range.sample(&mut rng);
         assert!((0.0..=100.0).contains(&val));
+    }
+
+    #[test]
+    fn test_reset_from_reuses_allocation() {
+        let mut cfg1 = ParticleConfig {
+            count: 10,
+            color: String::with_capacity(100), // Large capacity
+            ..Default::default()
+        };
+        cfg1.color.push_str("#FF0000");
+
+        let cfg2 = ParticleConfig {
+            count: 20,
+            color: "#00FF00".to_string(),
+            ..Default::default()
+        };
+
+        // Capture capacity before
+        let cap_before = cfg1.color.capacity();
+
+        cfg1.reset_from(&cfg2);
+
+        assert_eq!(cfg1.count, 20);
+        assert_eq!(cfg1.color, "#00FF00");
+        // Capacity should remain same (reused) if large enough
+        assert_eq!(cfg1.color.capacity(), cap_before);
     }
 }
