@@ -356,18 +356,18 @@ impl EffectEngine {
     pub fn apply_compiled_ops(
         mut transform: RenderTransform,
         ops: &[CompiledRenderOp],
-        eval_ctx: &EvaluationContext,
+        fast_ctx: &mut crate::expressions::FastEvaluationContext,
     ) -> RenderTransform {
+        use evalexpr::Context;
         for op in ops {
             match op.value {
                 RenderValueOp::Constant(v) => apply_property_enum(&mut transform, op.prop, v),
                 RenderValueOp::Expression(node, progress) => {
-                    // Create a local context with the effect's progress
-                    let mut local_ctx = eval_ctx.clone();
-                    local_ctx.progress = progress;
+                    // Update progress in existing context
+                    fast_ctx.set_progress(progress);
 
                     // Use pre-compiled node
-                    match ExpressionEvaluator::evaluate_node(node, &local_ctx) {
+                    match ExpressionEvaluator::evaluate_node_fast(node, fast_ctx) {
                         Ok(v) => apply_property_enum(&mut transform, op.prop, v as f32),
                         Err(e) => {
                             log::trace!("Expr error: {}", e);
@@ -375,11 +375,14 @@ impl EffectEngine {
                     }
                 }
                 RenderValueOp::TypewriterLimit(visible_limit) => {
-                    if let Some(idx) = eval_ctx.index {
-                        if (idx as f64) < visible_limit {
-                            apply_property_enum(&mut transform, op.prop, 1.0);
-                        } else {
-                            apply_property_enum(&mut transform, op.prop, 0.0);
+                    // Get index from fast context
+                    if let Some(val) = fast_ctx.get_value("index") {
+                        if let evalexpr::Value::Int(idx) = val {
+                            if (*idx as f64) < visible_limit {
+                                apply_property_enum(&mut transform, op.prop, 1.0);
+                            } else {
+                                apply_property_enum(&mut transform, op.prop, 0.0);
+                            }
                         }
                     }
                 }
@@ -1527,8 +1530,9 @@ mod tests {
                 progress: 0.0, // Should be overridden
                 ..Default::default()
             };
+            let mut fast_ctx = crate::expressions::FastEvaluationContext::new(&eval_ctx);
 
-            transform = EffectEngine::apply_compiled_ops(transform, &ops, &eval_ctx);
+            transform = EffectEngine::apply_compiled_ops(transform, &ops, &mut fast_ctx);
             assert!(approx_eq(transform.x as f64, 50.0, 1e-6));
         } else {
             panic!("Expected Expression");

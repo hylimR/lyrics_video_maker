@@ -32,7 +32,7 @@ impl Default for EvaluationContext {
 }
 
 /// A lightweight context wrapper that avoids HashMap allocations
-struct FastEvaluationContext {
+pub struct FastEvaluationContext {
     t: Value,
     progress: Value,
     width: Value,
@@ -44,7 +44,7 @@ struct FastEvaluationContext {
 }
 
 impl FastEvaluationContext {
-    fn new(ctx: &EvaluationContext) -> Self {
+    pub fn new(ctx: &EvaluationContext) -> Self {
         Self {
             t: Value::Float(ctx.t),
             progress: Value::Float(ctx.progress),
@@ -55,6 +55,14 @@ impl FastEvaluationContext {
             char_width: ctx.char_width.map(Value::Float),
             char_height: ctx.char_height.map(Value::Float),
         }
+    }
+
+    pub fn set_progress(&mut self, progress: f64) {
+        self.progress = Value::Float(progress);
+    }
+
+    pub fn set_index(&mut self, index: usize) {
+        self.index = Some(Value::Int(index as i64));
     }
 }
 
@@ -102,8 +110,12 @@ impl ExpressionEvaluator {
     pub fn evaluate_node(node: &Node, context: &EvaluationContext) -> Result<f64> {
         // Optimization: Use FastEvaluationContext to avoid HashMap allocation
         let ctx = FastEvaluationContext::new(context);
+        Self::evaluate_node_fast(node, &ctx)
+    }
 
-        match node.eval_with_context(&ctx) {
+    /// Evaluate a pre-compiled node using an existing FastEvaluationContext
+    pub fn evaluate_node_fast(node: &Node, ctx: &FastEvaluationContext) -> Result<f64> {
+        match node.eval_with_context(ctx) {
             Ok(Value::Float(f)) => Ok(f),
             Ok(Value::Int(val)) => {
                 let i: i64 = val;

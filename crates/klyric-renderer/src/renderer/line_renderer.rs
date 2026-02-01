@@ -156,6 +156,16 @@ impl<'a> LineRenderer<'a> {
             char_count: Some(glyphs.len()),
         };
 
+        // Create FastEvaluationContext for reusable evaluation
+        let base_eval_ctx = crate::expressions::EvaluationContext {
+            t: self.time,
+            progress: 0.0,
+            index: None,
+            count: Some(glyphs.len()),
+            ..Default::default()
+        };
+        let mut fast_eval_ctx = crate::expressions::FastEvaluationContext::new(&base_eval_ctx);
+
         // --- OPTIMIZATION: Hoist Independent Effect Progress ---
         // 1. Stroke Reveal
         let mut stroke_reveal_progress_base = None;
@@ -242,7 +252,7 @@ impl<'a> LineRenderer<'a> {
         }
 
         // 3. Particle Effects
-        let mut active_particle_effects: Vec<(&str, &Effect, f64, DefaultHasher)> =
+        let mut active_particle_effects: Vec<(&str, &ResolvedEffect, f64, DefaultHasher)> =
             Vec::with_capacity(effects.particle_effects.len());
         for (name, resolved) in &effects.particle_effects {
             let effect = &resolved.effect;
@@ -252,7 +262,7 @@ impl<'a> LineRenderer<'a> {
                     let mut hasher = DefaultHasher::new();
                     line_idx.hash(&mut hasher);
                     name.hash(&mut hasher);
-                    active_particle_effects.push((name, effect, p, hasher));
+                    active_particle_effects.push((name, resolved, p, hasher));
                 }
             }
         }
@@ -353,18 +363,13 @@ impl<'a> LineRenderer<'a> {
 
                     // Apply remaining dependent effects (if any)
                     if !compiled_ops.is_empty() {
-                        let eval_ctx = crate::expressions::EvaluationContext {
-                            t: self.time,
-                            progress: 0.0, // Will be overridden by op-specific progress if needed
-                            index: Some(glyph.char_index),
-                            count: Some(glyphs.len()),
-                            ..Default::default()
-                        };
+                        fast_eval_ctx.set_index(glyph.char_index);
+                        // Progress is set inside apply_compiled_ops per op if needed
 
                         final_transform = EffectEngine::apply_compiled_ops(
                             final_transform,
                             &compiled_ops,
-                            &eval_ctx,
+                            &mut fast_eval_ctx,
                         );
                     }
 
@@ -618,17 +623,13 @@ impl<'a> LineRenderer<'a> {
 
                     // --- PARTICLE SPAWNING ---
                     // Process standard particle effects
-                    for (name, effect, progress, base_hasher) in &active_particle_effects {
+                    for (name, resolved, progress, base_hasher) in &active_particle_effects {
+                        let effect = &resolved.effect;
                         let progress = *progress;
 
                         // Evaluation Context for Particles
-                        let eval_ctx = crate::expressions::EvaluationContext {
-                            t: self.time,
-                            progress,
-                            index: Some(glyph.char_index),
-                            count: Some(glyphs.len()),
-                            ..Default::default()
-                        };
+                        fast_eval_ctx.set_index(glyph.char_index);
+                        fast_eval_ctx.set_progress(progress);
 
                         // Generate Hash Key
                         // Optimization: Clone pre-hashed state (line + name) and just add char_index
@@ -656,7 +657,10 @@ impl<'a> LineRenderer<'a> {
                                 (&mut p_config, &effect.particle_override)
                             {
                                 crate::particle::config::apply_particle_overrides(
-                                    config, overrides, &eval_ctx,
+                                    config,
+                                    overrides,
+                                    Some(&resolved.compiled_expressions),
+                                    &fast_eval_ctx,
                                 );
                             }
 
