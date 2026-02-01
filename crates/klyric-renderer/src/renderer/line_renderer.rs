@@ -1,7 +1,6 @@
 use anyhow::Result;
 use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces};
 use std::collections::HashSet;
-use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, RenderTransform, Style};
@@ -83,8 +82,8 @@ impl RenderPaints {
 pub struct LineRenderScratch {
     pub active_transform_indices: Vec<(usize, f64)>,
     pub compiled_ops: Vec<CompiledRenderOp>,
-    pub active_disintegrate_indices: Vec<(usize, f64, DefaultHasher)>,
-    pub active_particle_indices: Vec<(usize, f64, DefaultHasher)>,
+    pub active_disintegrate_indices: Vec<(usize, f64, u64)>,
+    pub active_particle_indices: Vec<(usize, f64, u64)>,
 }
 
 impl LineRenderScratch {
@@ -96,6 +95,29 @@ impl LineRenderScratch {
             active_particle_indices: Vec::with_capacity(8),
         }
     }
+}
+
+// [Bolt Optimization] Fast Hashing for Cache Keys
+// Replaces DefaultHasher (SipHasher) with a simple bitwise mix (FxHash-like).
+// This eliminates allocating and cloning Hasher state in the hot loop.
+const HASH_SEED: u64 = 0x517cc1b727220a95;
+
+#[inline(always)]
+fn fast_hash_combine(acc: u64, val: u64) -> u64 {
+    (acc.rotate_left(5) ^ val).wrapping_mul(HASH_SEED)
+}
+
+#[inline(always)]
+fn fast_hash_prefix(line_idx: usize, name_hash: u64) -> u64 {
+    let mut h = HASH_SEED;
+    h = fast_hash_combine(h, line_idx as u64);
+    h = fast_hash_combine(h, name_hash);
+    h
+}
+
+#[inline(always)]
+fn fast_hash_finish(prefix: u64, char_idx: usize) -> u64 {
+    fast_hash_combine(prefix, char_idx as u64)
 }
 
 impl Default for LineRenderScratch {
@@ -174,11 +196,9 @@ impl<'a> LineRenderer<'a> {
              if EffectEngine::should_trigger(effect, &line_ctx) {
                  let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
                  if (0.0..=1.0).contains(&progress) {
-                     // [Bolt Optimization] Pre-calculate partial hash
-                     let mut hasher = DefaultHasher::new();
-                     line_idx.hash(&mut hasher);
-                     hasher.write_u64(resolved_effect.name_hash);
-                     scratch.active_disintegrate_indices.push((i, progress, hasher));
+                     // [Bolt Optimization] Pre-calculate partial hash prefix
+                     let prefix = fast_hash_prefix(line_idx, resolved_effect.name_hash);
+                     scratch.active_disintegrate_indices.push((i, progress, prefix));
                  }
              }
         }
@@ -190,11 +210,9 @@ impl<'a> LineRenderer<'a> {
              if EffectEngine::should_trigger(effect, &line_ctx) {
                  let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
                  if (0.0..=1.0).contains(&progress) {
-                     // [Bolt Optimization] Pre-calculate partial hash
-                     let mut hasher = DefaultHasher::new();
-                     line_idx.hash(&mut hasher);
-                     hasher.write_u64(resolved_effect.name_hash);
-                     scratch.active_particle_indices.push((i, progress, hasher));
+                     // [Bolt Optimization] Pre-calculate partial hash prefix
+                     let prefix = fast_hash_prefix(line_idx, resolved_effect.name_hash);
+                     scratch.active_particle_indices.push((i, progress, prefix));
                  }
              }
         }
@@ -508,15 +526,13 @@ impl<'a> LineRenderer<'a> {
 
                      // --- DISINTEGRATION EFFECT ---
                      // [Bolt Optimization] Iterate active effects only
-                     for (idx, _progress, base_hasher) in &scratch.active_disintegrate_indices {
+                     for (idx, _progress, base_prefix) in &scratch.active_disintegrate_indices {
                          let (_name, resolved_effect) = &effects.disintegrate_effects[*idx];
                          let effect = &resolved_effect.effect;
                          // progress is already checked to be in range
 
-                         // [Bolt Optimization] Finish hashing using pre-calculated prefix
-                         let mut hasher = base_hasher.clone();
-                         glyph.char_index.hash(&mut hasher);
-                         let key = hasher.finish();
+                         // [Bolt Optimization] Finish hashing using pre-calculated prefix (Zero Alloc)
+                         let key = fast_hash_finish(*base_prefix, glyph.char_index);
 
                          // We need to capture the glyph as an image for the emitter
                          // Create small surface
@@ -578,15 +594,13 @@ impl<'a> LineRenderer<'a> {
                      // --- PARTICLE SPAWNING ---
                      // Process standard particle effects
                      // [Bolt Optimization] Iterate active effects only
-                     for (idx, progress, base_hasher) in &scratch.active_particle_indices {
+                     for (idx, progress, base_prefix) in &scratch.active_particle_indices {
                          let (_name, resolved_effect) = &effects.particle_effects[*idx];
                          let effect = &resolved_effect.effect;
                          let progress = *progress; // Copy f64
 
-                         // [Bolt Optimization] Finish hashing using pre-calculated prefix
-                         let mut hasher = base_hasher.clone();
-                         glyph.char_index.hash(&mut hasher);
-                         let key = hasher.finish();
+                         // [Bolt Optimization] Finish hashing using pre-calculated prefix (Zero Alloc)
+                         let key = fast_hash_finish(*base_prefix, glyph.char_index);
 
                          let bounds_rect = CharBounds {
                              x: draw_x + final_transform.x + bounds.left,
