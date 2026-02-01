@@ -10,7 +10,9 @@ pub use document::KLyricDocumentV2;
 pub use effect::{
     AnimatedValue, Direction, Easing, Effect, EffectTrigger, EffectType, KaraokeMode, Keyframe,
 };
-pub use layout::{Align, Anchor, Justify, Layout, LayoutMode, Position, PositionValue, Transform};
+pub use layout::{
+    Align, Anchor, Justify, Layout, LayoutMode, Position, PositionValue, RenderTransform, Transform,
+};
 pub use line::{Char, Line};
 pub use project::{Project, Resolution};
 pub use style::{FillStroke, Font, FontStyle, Glow, Shadow, StateColors, Stroke, Style};

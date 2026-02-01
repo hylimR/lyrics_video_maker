@@ -19,6 +19,7 @@ use crate::text::TextRenderer;
 
 use super::particle_system::ParticleRenderSystem;
 use super::utils::parse_color;
+use super::CategorizedLineEffects;
 
 /// Default colors for karaoke states when not specified in style
 const DEFAULT_INACTIVE_COLOR: &str = "#888888"; // Dimmed gray
@@ -43,6 +44,7 @@ impl<'a> LineRenderer<'a> {
         line_idx: usize,
         style: &Style,
         glyphs: &[GlyphInfo],
+        effects: &CategorizedLineEffects,
     ) -> Result<()> {
         // Compute Line Position
         let (base_x, base_y) = self.compute_line_position(line);
@@ -80,61 +82,6 @@ impl<'a> LineRenderer<'a> {
             .unwrap_or(DEFAULT_COMPLETE_COLOR);
         let complete_color = parse_color(complete_hex).unwrap_or(Color::WHITE);
 
-        // --- OPTIMIZATION: Hoist Effect Resolution & Categorization ---
-        // We resolve and categorize in a single pass to avoid intermediate allocations.
-        // We use Cow<Effect> directly in specialized vectors.
-
-        let empty_vec = Vec::new();
-        let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
-        let line_effects = &line.effects;
-        let total_effects = style_effects.len() + line_effects.len();
-
-        let mut transform_effects_base: Vec<Cow<Effect>> = Vec::with_capacity(total_effects);
-        let mut particle_effects_base: Vec<(&str, Cow<Effect>)> =
-            Vec::with_capacity(total_effects / 2);
-        let mut disintegrate_effects_base: Vec<(&str, Cow<Effect>)> = Vec::with_capacity(1);
-        let mut stroke_reveal_effects: Vec<Cow<Effect>> = Vec::with_capacity(1);
-
-        // Collect all effect names: Style effects first (base), then Line effects (override/stack)
-        let all_effects_names = style_effects.iter().chain(line_effects.iter());
-
-        for effect_name in all_effects_names {
-            let effect_cow = if let Some(effect) = self.doc.effects.get(effect_name) {
-                if let Some(preset_name) = &effect.preset {
-                    if let Some(mut generated) =
-                        crate::presets::transitions::get_transition(preset_name)
-                    {
-                        if let Some(d) = effect.duration {
-                            generated.duration = Some(d);
-                        }
-                        if effect.easing != Easing::Linear {
-                            generated.easing = effect.easing.clone();
-                        }
-                        Cow::Owned(generated)
-                    } else {
-                        Cow::Borrowed(effect)
-                    }
-                } else {
-                    Cow::Borrowed(effect)
-                }
-            } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
-                Cow::Owned(preset)
-            } else {
-                continue;
-            };
-
-            match effect_cow.effect_type {
-                EffectType::Particle => {
-                    particle_effects_base.push((effect_name.as_str(), effect_cow))
-                }
-                EffectType::Disintegrate => {
-                    disintegrate_effects_base.push((effect_name.as_str(), effect_cow))
-                }
-                EffectType::StrokeReveal => stroke_reveal_effects.push(effect_cow),
-                _ => transform_effects_base.push(effect_cow),
-            }
-        }
-
         // --- OPTIMIZATION: Hoist Paint Creation ---
         let mut paint = Paint::default();
         paint.set_anti_alias(true);
@@ -164,10 +111,11 @@ impl<'a> LineRenderer<'a> {
         // --- OPTIMIZATION: Hoist Line-Level Effects (Prefix) ---
         // Find the longest prefix of effects that are character-independent.
         // We can precompute their result once per line.
-        let split_idx = transform_effects_base
+        let split_idx = effects
+            .transform_effects
             .iter()
             .position(|e| is_char_dependent(e))
-            .unwrap_or(transform_effects_base.len());
+            .unwrap_or(effects.transform_effects.len());
 
         let prefix_delta = if split_idx > 0 {
             let ctx = TriggerContext {
@@ -182,7 +130,7 @@ impl<'a> LineRenderer<'a> {
             Some(EffectEngine::compute_transform(
                 self.time,
                 Transform::default(),
-                &transform_effects_base[0..split_idx],
+                &effects.transform_effects[0..split_idx],
                 &ctx,
             ))
         } else {
@@ -203,7 +151,7 @@ impl<'a> LineRenderer<'a> {
         // --- OPTIMIZATION: Hoist Independent Effect Progress ---
         // 1. Stroke Reveal
         let mut stroke_reveal_progress_base = None;
-        for effect in &stroke_reveal_effects {
+        for effect in &effects.stroke_reveal_effects {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 let clamped = p.clamp(0.0, 1.0);
@@ -218,7 +166,7 @@ impl<'a> LineRenderer<'a> {
 
         // 2. Disintegration (for opacity)
         let mut disintegration_progress_base = 0.0;
-        if let Some((_name, effect)) = disintegrate_effects_base.first() {
+        if let Some((_name, effect)) = effects.disintegrate_effects.first() {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 disintegration_progress_base = p.clamp(0.0, 1.0);
@@ -248,11 +196,11 @@ impl<'a> LineRenderer<'a> {
 
         // --- OPTIMIZATION: Pre-calculate Active Effects ---
         // 1. Dependent Transform Effects
-        let dependent_count = transform_effects_base.len().saturating_sub(split_idx);
+        let dependent_count = effects.transform_effects.len().saturating_sub(split_idx);
         let mut active_dependent_effects_raw: Vec<(&Effect, f64)> =
             Vec::with_capacity(dependent_count);
-        if split_idx < transform_effects_base.len() {
-            for effect in &transform_effects_base[split_idx..] {
+        if split_idx < effects.transform_effects.len() {
+            for effect in &effects.transform_effects[split_idx..] {
                 if EffectEngine::should_trigger(effect, &ctx) {
                     let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                     if (0.0..=1.0).contains(&p) {
@@ -264,12 +212,13 @@ impl<'a> LineRenderer<'a> {
         }
 
         // COMPILE OPS (Optimization: Pre-calculate constants for dependent effects)
-        let compiled_ops = EffectEngine::compile_active_effects(&active_dependent_effects_raw, &ctx);
+        let compiled_ops =
+            EffectEngine::compile_active_effects(&active_dependent_effects_raw, &ctx);
 
         // 2. Disintegrate Effects
         let mut active_disintegrate_effects: Vec<(&str, &Effect, f64, DefaultHasher)> =
-            Vec::with_capacity(disintegrate_effects_base.len());
-        for (name, effect) in &disintegrate_effects_base {
+            Vec::with_capacity(effects.disintegrate_effects.len());
+        for (name, effect) in &effects.disintegrate_effects {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 if (0.0..=1.0).contains(&p) {
@@ -283,8 +232,8 @@ impl<'a> LineRenderer<'a> {
 
         // 3. Particle Effects
         let mut active_particle_effects: Vec<(&str, &Effect, f64, DefaultHasher)> =
-            Vec::with_capacity(particle_effects_base.len());
-        for (name, effect) in &particle_effects_base {
+            Vec::with_capacity(effects.particle_effects.len());
+        for (name, effect) in &effects.particle_effects {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 if (0.0..=1.0).contains(&p) {
@@ -666,8 +615,7 @@ impl<'a> LineRenderer<'a> {
                         };
 
                         if self.particle_system.has_emitter(key) {
-                            self.particle_system
-                                .update_emitter_bounds(key, bounds_rect);
+                            self.particle_system.update_emitter_bounds(key, bounds_rect);
                         } else {
                             let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
 

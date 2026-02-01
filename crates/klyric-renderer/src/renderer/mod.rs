@@ -7,7 +7,7 @@ use skia_safe::{surfaces, AlphaType, Canvas, Color, ColorType, ImageInfo, Surfac
 use std::collections::{HashMap, HashSet};
 
 use crate::layout::{GlyphInfo, LayoutEngine};
-use crate::model::{KLyricDocumentV2, Line, Style};
+use crate::model::{Easing, Effect, EffectType, KLyricDocumentV2, Line, Style};
 use crate::presets::{CharBounds, EffectPreset};
 use crate::style::StyleResolver;
 use crate::text::TextRenderer;
@@ -15,6 +15,14 @@ use crate::text::TextRenderer;
 use self::line_renderer::LineRenderer;
 use self::particle_system::ParticleRenderSystem;
 use self::utils::parse_color;
+
+#[derive(Clone)]
+pub struct CategorizedLineEffects {
+    pub transform_effects: Vec<Effect>,
+    pub particle_effects: Vec<(String, Effect)>,
+    pub disintegrate_effects: Vec<(String, Effect)>,
+    pub stroke_reveal_effects: Vec<Effect>,
+}
 
 pub struct Renderer {
     width: u32,
@@ -31,6 +39,8 @@ pub struct Renderer {
     last_doc_ptr: usize,
     /// Cache for text layouts: content_hash -> Vec<GlyphInfo>
     layout_cache: HashMap<u64, Vec<GlyphInfo>>,
+    /// Cache for pre-categorized effects per line: line_ptr -> CategorizedLineEffects
+    line_effect_cache: HashMap<usize, CategorizedLineEffects>,
     /// Reusable set for active emitter keys
     active_emitter_keys: HashSet<u64>,
 }
@@ -47,6 +57,7 @@ impl Renderer {
             style_cache: HashMap::new(),
             last_doc_ptr: 0,
             layout_cache: HashMap::new(),
+            line_effect_cache: HashMap::new(),
             active_emitter_keys: HashSet::new(),
         }
     }
@@ -80,6 +91,7 @@ impl Renderer {
             // We also clear layout cache on doc change to avoid unbounded growth
             // even though hashing protects against stale content.
             self.layout_cache.clear();
+            self.line_effect_cache.clear();
             self.last_doc_ptr = current_doc_ptr;
         }
 
@@ -111,6 +123,14 @@ impl Renderer {
                 }
                 let glyphs = self.layout_cache.get(&layout_hash).unwrap();
 
+                // Effects (Cached via Line Ptr)
+                let line_ptr = line as *const _ as usize;
+                if !self.line_effect_cache.contains_key(&line_ptr) {
+                    let effects = Self::resolve_line_effects(doc, line, style);
+                    self.line_effect_cache.insert(line_ptr, effects);
+                }
+                let effects = self.line_effect_cache.get(&line_ptr).unwrap();
+
                 let mut line_renderer = LineRenderer {
                     canvas,
                     doc,
@@ -122,7 +142,7 @@ impl Renderer {
                     height: self.height,
                 };
 
-                line_renderer.render_line(line, line_idx, style, glyphs)?;
+                line_renderer.render_line(line, line_idx, style, glyphs, effects)?;
             }
         }
 
@@ -132,6 +152,79 @@ impl Renderer {
         self.particle_system.render(canvas);
 
         Ok(())
+    }
+
+    /// Resolve and categorize effects for a line.
+    /// This resolves presets and creates owned Effect copies for caching.
+    fn resolve_line_effects(
+        doc: &KLyricDocumentV2,
+        line: &Line,
+        style: &Style,
+    ) -> CategorizedLineEffects {
+        let empty_vec = Vec::new();
+        let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
+        let line_effects = &line.effects;
+        let total_effects = style_effects.len() + line_effects.len();
+
+        let mut transform_effects: Vec<Effect> = Vec::with_capacity(total_effects);
+        let mut particle_effects: Vec<(String, Effect)> = Vec::with_capacity(total_effects / 2);
+        let mut disintegrate_effects: Vec<(String, Effect)> = Vec::with_capacity(1);
+        let mut stroke_reveal_effects: Vec<Effect> = Vec::with_capacity(1);
+
+        // Collect all effect names: Style effects first (base), then Line effects (override/stack)
+        let all_effects_names = style_effects.iter().chain(line_effects.iter());
+
+        for effect_name in all_effects_names {
+            // Resolve effect (handling presets and references)
+            let effect_resolved: Option<Effect> = if let Some(effect) = doc.effects.get(effect_name)
+            {
+                if let Some(preset_name) = &effect.preset {
+                    if let Some(mut generated) =
+                        crate::presets::transitions::get_transition(preset_name)
+                    {
+                        if let Some(d) = effect.duration {
+                            generated.duration = Some(d);
+                        }
+                        if effect.easing != Easing::Linear {
+                            generated.easing = effect.easing.clone();
+                        }
+                        Some(generated)
+                    } else {
+                        Some(effect.clone())
+                    }
+                } else {
+                    Some(effect.clone())
+                }
+            } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
+                Some(preset)
+            } else {
+                None
+            };
+
+            if let Some(effect) = effect_resolved {
+                match effect.effect_type {
+                    EffectType::Particle => {
+                        particle_effects.push((effect_name.clone(), effect));
+                    }
+                    EffectType::Disintegrate => {
+                        disintegrate_effects.push((effect_name.clone(), effect));
+                    }
+                    EffectType::StrokeReveal => {
+                        stroke_reveal_effects.push(effect);
+                    }
+                    _ => {
+                        transform_effects.push(effect);
+                    }
+                }
+            }
+        }
+
+        CategorizedLineEffects {
+            transform_effects,
+            particle_effects,
+            disintegrate_effects,
+            stroke_reveal_effects,
+        }
     }
 
     /// Render a frame and return raw RGBA pixels

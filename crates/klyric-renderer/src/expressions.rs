@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Result};
-use evalexpr::{eval_with_context, Context, EvalexprError, EvalexprResult, Value};
+use evalexpr::{
+    eval_with_context, Context, DefaultNumericTypes, EvalexprError, EvalexprResult, Value,
+};
 
 #[derive(Debug, Clone)]
 pub struct EvaluationContext {
@@ -56,6 +58,8 @@ impl FastEvaluationContext {
 }
 
 impl Context for FastEvaluationContext {
+    type NumericTypes = DefaultNumericTypes;
+
     fn get_value(&self, identifier: &str) -> Option<&Value> {
         match identifier {
             "t" => Some(&self.t),

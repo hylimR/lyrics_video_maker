@@ -343,7 +343,7 @@ impl EffectEngine {
                     match ExpressionEvaluator::evaluate(expr, &local_ctx) {
                         Ok(v) => apply_property_enum(&mut transform, op.prop, v as f32),
                         Err(e) => {
-                             log::trace!("Expr error: {}", e);
+                            log::trace!("Expr error: {}", e);
                         }
                     }
                 }
