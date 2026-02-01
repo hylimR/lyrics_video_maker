@@ -665,25 +665,30 @@ impl<'a> LineRenderer<'a> {
                             height: h * final_transform.scale,
                         };
 
-                        let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+                        if self.particle_system.has_emitter(key) {
+                            self.particle_system
+                                .update_emitter_bounds(key, bounds_rect);
+                        } else {
+                            let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
 
-                        // Clone config and apply overrides
-                        let mut p_config = effect.particle_config.clone();
-                        if let (Some(config), Some(overrides)) =
-                            (&mut p_config, &effect.particle_override)
-                        {
-                            crate::particle::config::apply_particle_overrides(
-                                config, overrides, &eval_ctx,
+                            // Clone config and apply overrides
+                            let mut p_config = effect.particle_config.clone();
+                            if let (Some(config), Some(overrides)) =
+                                (&mut p_config, &effect.particle_override)
+                            {
+                                crate::particle::config::apply_particle_overrides(
+                                    config, overrides, &eval_ctx,
+                                );
+                            }
+
+                            self.particle_system.ensure_emitter(
+                                key,
+                                effect.preset.clone(),
+                                p_config,
+                                bounds_rect,
+                                seed,
                             );
                         }
-
-                        self.particle_system.ensure_emitter(
-                            key,
-                            effect.preset.clone(),
-                            p_config,
-                            bounds_rect,
-                            seed,
-                        );
                     }
                 }
             }

@@ -77,6 +77,37 @@ impl ParticleRenderSystem {
         self.particle_emitters.insert(key, emitter);
     }
 
+    pub fn has_emitter(&self, key: u64) -> bool {
+        self.particle_emitters.contains_key(&key)
+    }
+
+    pub fn update_emitter_bounds(&mut self, key: u64, bounds: CharBounds) {
+        if let Some(emitter) = self.particle_emitters.get_mut(&key) {
+            emitter.active = true;
+
+            // Update spawn pattern based on new bounds
+            match &mut emitter.spawn_pattern {
+                crate::particle::SpawnPattern::Point { x, y } => {
+                    *x = bounds.x + bounds.width / 2.0;
+                    *y = bounds.y + bounds.height / 2.0;
+                }
+                crate::particle::SpawnPattern::Rect { x, y, w, h } => {
+                    *x = bounds.x;
+                    *y = bounds.y;
+                    *w = bounds.width;
+                    *h = bounds.height;
+                }
+                crate::particle::SpawnPattern::Line { x1, y1, x2, y2 } => {
+                    let _width_diff = bounds.width - (*x2 - *x1);
+                    *x1 = bounds.x;
+                    *x2 = bounds.x + bounds.width;
+                    *y1 = bounds.y - 50.0;
+                    *y2 = bounds.y - 50.0;
+                }
+            }
+        }
+    }
+
     pub fn ensure_emitter(
         &mut self,
         key: u64,
@@ -110,30 +141,7 @@ impl ParticleRenderSystem {
             }
         } else {
             // Update existing emitter bounds
-            if let Some(emitter) = self.particle_emitters.get_mut(&key) {
-                emitter.active = true;
-
-                // Update spawn pattern based on new bounds
-                match &mut emitter.spawn_pattern {
-                    crate::particle::SpawnPattern::Point { x, y } => {
-                        *x = bounds.x + bounds.width / 2.0;
-                        *y = bounds.y + bounds.height / 2.0;
-                    }
-                    crate::particle::SpawnPattern::Rect { x, y, w, h } => {
-                        *x = bounds.x;
-                        *y = bounds.y;
-                        *w = bounds.width;
-                        *h = bounds.height;
-                    }
-                    crate::particle::SpawnPattern::Line { x1, y1, x2, y2 } => {
-                        let _width_diff = bounds.width - (*x2 - *x1);
-                        *x1 = bounds.x;
-                        *x2 = bounds.x + bounds.width;
-                        *y1 = bounds.y - 50.0;
-                        *y2 = bounds.y - 50.0;
-                    }
-                }
-            }
+            self.update_emitter_bounds(key, bounds);
         }
     }
 
