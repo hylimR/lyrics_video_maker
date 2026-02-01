@@ -5,3 +5,7 @@ Action: Implement a cache for resolved values (like `skia_safe::Color`) at the `
 ## 2024-05-24 - [Performance] StrokeReveal Overhead on Start Delay
 Learning: The `StrokeReveal` effect performs expensive `PathMeasure` calculations (O(N) where N is path verbs) every frame for every character, even when the effect hasn't visually started yet (progress 0.0) due to delays.
 Action: Short-circuit the effect logic when progress is effectively zero (<= 0.001) by returning an empty path, skipping the expensive `PathMeasure` initialization and segmentation.
+
+## 2024-05-25 - [Performance] Vector Allocation Churn in Render Loop
+Learning: `LineRenderer::render_line` allocated 4 new `Vec`s per call (per line, per frame) to track active effects. While small, these allocations add up (e.g., 240+ allocs/sec at 60fps).
+Action: Introduced `LineRenderScratch` struct in `Renderer` to hold persistent `Vec` buffers. Passed this scratch struct to `render_line` to reuse capacity, replacing allocations with `clear()` and `push()`. Refactored `CompiledRenderOp` to use `Arc` instead of lifetimes to allow persistent storage.

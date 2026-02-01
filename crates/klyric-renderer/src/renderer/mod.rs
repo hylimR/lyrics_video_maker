@@ -101,6 +101,8 @@ pub struct Renderer {
     style_color_cache: HashMap<String, ResolvedStyleColors>,
     /// Cached paint objects to avoid allocation per frame
     render_paints: line_renderer::RenderPaints,
+    /// Scratch buffers for line rendering
+    line_render_scratch: line_renderer::LineRenderScratch,
 }
 
 impl Renderer {
@@ -119,6 +121,7 @@ impl Renderer {
             line_effect_cache: HashMap::new(),
             style_color_cache: HashMap::new(),
             render_paints: line_renderer::RenderPaints::new(),
+            line_render_scratch: line_renderer::LineRenderScratch::new(),
         }
     }
 
@@ -224,7 +227,7 @@ impl Renderer {
                     paints: &mut self.render_paints,
                 };
 
-                line_renderer.render_line(line, glyphs, line_idx, style, style_colors, effects)?;
+                line_renderer.render_line(line, glyphs, line_idx, style, style_colors, effects, &mut self.line_render_scratch)?;
             }
         }
 
