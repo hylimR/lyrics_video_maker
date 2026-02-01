@@ -236,11 +236,16 @@ impl<'a> LineRenderer<'a> {
 
                      // Compute Transform (Base + Effects)
                      // [Bolt Optimization] Use RenderTransform and compiled ops
+                     // Optimization: Eliminates 1 allocation and 1 deep copy (96 bytes) per character per frame
+                     // by using reference to char transform or falling back to pre-calculated line transform.
                      let mut final_transform = if let Some(c) = char_data {
-                         let char_transform = c.transform.as_ref().cloned().unwrap_or_default();
-                         RenderTransform::new(&line_transform, &char_transform)
+                         if let Some(t) = &c.transform {
+                             RenderTransform::new(&line_transform, t)
+                         } else {
+                             line_render_transform
+                         }
                      } else {
-                         line_render_transform.clone() // RenderTransform is Copy
+                         line_render_transform // RenderTransform is Copy
                      };
 
                      // Update context
