@@ -65,6 +65,21 @@ cargo build -p klyric-renderer
 *   `src/effects.rs`: Processes animation logic and easing functions.
 *   `src/particle`: Particle system implementation.
 
+## Expression System
+
+The renderer supports dynamic expressions for particle overrides and effect properties.
+
+**Available Variables:**
+*   `t`: Current time in seconds.
+*   `progress`: Effect progress (0.0 to 1.0).
+*   `width`: Canvas width.
+*   `height`: Canvas height.
+*   `index` / `i`: Current character index.
+*   `count`: Total character count.
+*   `char_width`: Width of the current character (if available).
+*   `char_height`: Height of the current character (if available).
+*   `PI`: Mathematical constant PI.
+
 ## Usage (Native)
 
 ```rust
