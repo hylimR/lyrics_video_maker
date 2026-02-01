@@ -388,22 +388,30 @@ impl<'a> LineRenderer<'a> {
                      let draw_x = char_absolute_x;
                      let draw_y = char_absolute_y;
                      
-                     self.canvas.save();
-                     
                      // Check for StrokeReveal
                      // [Bolt Optimization] Use pre-calculated progress
                      let stroke_reveal_progress = active_stroke_reveal_progress;
 
-                     // Apply Transforms
-                     self.canvas.translate((draw_x + final_transform.x, draw_y + final_transform.y));
-                     
-                     let path_center_x = bounds.center_x();
-                     let path_center_y = bounds.center_y();
-                     
-                     self.canvas.translate((path_center_x, path_center_y));
-                     self.canvas.rotate(final_transform.rotation, None);
-                     self.canvas.scale((final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y));
-                     self.canvas.translate((-path_center_x, -path_center_y));
+                     // [Bolt Optimization] Fast path for translation-only transforms
+                     // Skip expensive save/restore if we only have translation (no rotate/scale)
+                     let is_simple_transform = final_transform.is_simple_translation();
+                     let tx = draw_x + final_transform.x;
+                     let ty = draw_y + final_transform.y;
+
+                     if is_simple_transform {
+                         self.canvas.translate((tx, ty));
+                     } else {
+                         self.canvas.save();
+                         self.canvas.translate((tx, ty));
+
+                         let path_center_x = bounds.center_x();
+                         let path_center_y = bounds.center_y();
+
+                         self.canvas.translate((path_center_x, path_center_y));
+                         self.canvas.rotate(final_transform.rotation, None);
+                         self.canvas.scale((final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y));
+                         self.canvas.translate((-path_center_x, -path_center_y));
+                     }
                      
                      // Modify path if StrokeReveal is active
                      // [Bolt Optimization] COW path: avoid clone unless modified
@@ -522,7 +530,11 @@ impl<'a> LineRenderer<'a> {
                          }
                      }
                      
-                     self.canvas.restore(); // Restore transform for next glyph/effects
+                     if is_simple_transform {
+                         self.canvas.translate((-tx, -ty));
+                     } else {
+                         self.canvas.restore(); // Restore transform for next glyph/effects
+                     }
 
                      // --- DISINTEGRATION EFFECT ---
                      // [Bolt Optimization] Iterate active effects only
