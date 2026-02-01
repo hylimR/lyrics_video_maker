@@ -124,7 +124,7 @@ impl Renderer {
                     let g = LayoutEngine::layout_line(line, style, &mut self.text_renderer);
                     self.layout_cache.insert(layout_hash, g);
                 }
-                let glyphs = self.layout_cache.get(&layout_hash).unwrap();
+                let _glyphs = self.layout_cache.get(&layout_hash).unwrap();
 
                 // Effects (Cached via Line Ptr)
                 let line_ptr = line as *const _ as usize;
@@ -132,7 +132,7 @@ impl Renderer {
                     let effects = Self::resolve_line_effects(doc, line, style);
                     self.line_effect_cache.insert(line_ptr, effects);
                 }
-                let effects = self.line_effect_cache.get(&line_ptr).unwrap();
+                let _effects = self.line_effect_cache.get(&line_ptr).unwrap();
 
                 let mut line_renderer = LineRenderer {
                     canvas,
@@ -145,7 +145,7 @@ impl Renderer {
                     height: self.height,
                 };
 
-                line_renderer.render_line(line, line_idx, style, glyphs, effects)?;
+                line_renderer.render_line(line, line_idx)?;
             }
         }
 

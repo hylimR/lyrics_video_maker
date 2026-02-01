@@ -1,7 +1,7 @@
-use crate::utils::font_loader::FontInfo;
-use klyric_renderer::model::document::KLyricDocumentV2;
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use std::hash::{Hash, Hasher};
+use klyric_renderer::model::document::KLyricDocumentV2;
+use crate::utils::font_loader::FontInfo;
 
 /// A wrapper around Arc<KLyricDocumentV2> that implements Hash and PartialEq
 /// based on the Arc pointer. This is used for Iced lazy widgets to detect
