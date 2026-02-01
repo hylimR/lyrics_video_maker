@@ -3,8 +3,8 @@ use crate::model::{KLyricDocumentV2, Line, PositionValue, Style};
 use ab_glyph::{Font, FontArc, ScaleFont};
 use anyhow::{anyhow, Result};
 use fontdb::{Database, ID};
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use tiny_skia::{Color, Pixmap};
 
@@ -311,10 +311,7 @@ impl Renderer {
             if time >= start_time - 1.0 && time <= end_time + 1.0 {
                 // Resolve line-specific style if present
                 let line_style_name = line.style.as_deref().unwrap_or("base");
-                let line_style = doc
-                    .styles
-                    .get(line_style_name)
-                    .unwrap_or(base_style);
+                let line_style = doc.styles.get(line_style_name).unwrap_or(base_style);
 
                 // Layout (Cached)
                 let layout_hash = compute_layout_hash(line, line_style);
@@ -403,11 +400,7 @@ impl Renderer {
             .and_then(|fs| fs.stroke.as_ref())
             .and_then(|s| parse_color(s));
 
-        let stroke_width = style
-            .stroke
-            .as_ref()
-            .and_then(|s| s.width)
-            .unwrap_or(0.0);
+        let stroke_width = style.stroke.as_ref().and_then(|s| s.width).unwrap_or(0.0);
         let default_stroke_color = style
             .stroke
             .as_ref()
@@ -421,6 +414,13 @@ impl Renderer {
         let shadow_offset = shadow_opt
             .map(|s| (s.x.unwrap_or(0.0), s.y.unwrap_or(0.0)))
             .unwrap_or((0.0, 0.0));
+
+        // Hoist Base Font Resolution
+        let line_font = line.font.as_ref().or(style.font.as_ref());
+        let line_family = line_font
+            .and_then(|f| f.family.as_deref())
+            .unwrap_or("Noto Sans SC");
+        let line_size = line_font.and_then(|f| f.size).unwrap_or(72.0);
 
         let mut cached_family_id: Option<(&str, ID)> = None;
 
@@ -443,20 +443,19 @@ impl Renderer {
                 inactive_stroke_color.or(default_stroke_color)
             };
 
-            let font_spec = char_data
-                .font
-                .as_ref()
-                .or(line.font.as_ref())
-                .or(style.font.as_ref());
+            // Resolve Font Params (Optimized)
+            let (family, size) = if let Some(font) = &char_data.font {
+                (
+                    font.family.as_deref().unwrap_or(line_family),
+                    font.size.unwrap_or(line_size),
+                )
+            } else {
+                (line_family, line_size)
+            };
 
-            let family = font_spec
-                .and_then(|f| f.family.as_deref())
-                .unwrap_or("Noto Sans SC");
-            let size = font_spec.and_then(|f| f.size).unwrap_or(72.0);
-
-            // Resolve Font ID (Optimized with local cache)
+            // Resolve Font ID (Optimized with local cache + pointer check)
             let font_id = if let Some((cached_name, cached_id)) = &cached_family_id {
-                if *cached_name == family {
+                if std::ptr::eq(*cached_name, family) || *cached_name == family {
                     *cached_id
                 } else if let Some(id) = text_renderer.resolve_font_id(family) {
                     cached_family_id = Some((family, id));
