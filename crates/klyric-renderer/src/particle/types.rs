@@ -117,18 +117,8 @@ pub fn color_to_rgba(color: u32) -> (u8, u8, u8, u8) {
 
 /// Parse hex color string to RGBA u32
 pub fn parse_hex_color(hex: &str) -> u32 {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() == 6 {
-        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-        (r as u32) << 24 | (g as u32) << 16 | (b as u32) << 8 | 255
-    } else if hex.len() == 8 {
-        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255);
-        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255);
-        let a = u8::from_str_radix(&hex[6..8], 16).unwrap_or(255);
-        (r as u32) << 24 | (g as u32) << 16 | (b as u32) << 8 | a as u32
+    if let Some((r, g, b, a)) = crate::utils::parse_hex_color(hex) {
+        (r as u32) << 24 | (g as u32) << 16 | (b as u32) << 8 | (a as u32)
     } else {
         0xFFFFFFFF // Default white
     }
