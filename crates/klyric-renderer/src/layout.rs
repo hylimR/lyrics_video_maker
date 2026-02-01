@@ -56,6 +56,9 @@ impl LayoutEngine {
             .get_typeface(line_family_def)
             .or_else(|| renderer.get_default_typeface());
 
+        // Optimization: Hoist line font size resolution
+        let line_font_size = line.font.as_ref().and_then(|f| f.size).unwrap_or(style_size);
+
         // Cache for ResolvedFont to avoid recreation overhead
         #[cfg(not(target_arch = "wasm32"))]
         let mut cached_font: Option<ResolvedFont> = None;
@@ -94,8 +97,7 @@ impl LayoutEngine {
                 .font
                 .as_ref()
                 .and_then(|f| f.size)
-                .or_else(|| line.font.as_ref().and_then(|f| f.size))
-                .unwrap_or(style_size);
+                .unwrap_or(line_font_size);
 
             #[cfg(not(target_arch = "wasm32"))]
             {
@@ -173,7 +175,7 @@ impl LayoutEngine {
         let align = line
             .layout
             .as_ref()
-            .map(|l| l.align.clone())
+            .map(|l| l.align)
             .unwrap_or(Align::Center);
 
         let align_offset = match align {
@@ -182,9 +184,11 @@ impl LayoutEngine {
             Align::Left => 0.0,
         };
 
-        // Apply alignment offset
-        for glyph in &mut glyphs {
-            glyph.x += align_offset;
+        // Apply alignment offset (Optimized: skip if zero)
+        if align_offset.abs() > f32::EPSILON {
+            for glyph in &mut glyphs {
+                glyph.x += align_offset;
+            }
         }
 
         glyphs

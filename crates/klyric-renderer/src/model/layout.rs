@@ -97,7 +97,7 @@ impl<'de> Deserialize<'de> for PositionValue {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum Anchor {
     TopLeft,
@@ -213,7 +213,7 @@ impl Transform {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Layout {
     /// Text layout mode
@@ -241,7 +241,7 @@ pub struct Layout {
     pub max_width: Option<f32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LayoutMode {
     #[default]
@@ -250,7 +250,7 @@ pub enum LayoutMode {
     Path,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Align {
     Left,
@@ -259,7 +259,7 @@ pub enum Align {
     Right,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Justify {
     Top,
