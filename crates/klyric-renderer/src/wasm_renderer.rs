@@ -160,38 +160,42 @@ impl TextRenderer {
     }
 
     pub fn get_glyph_path_by_id_ref(&mut self, id: ID, ch: char) -> Option<&tiny_skia::Path> {
-        if self.path_cache.contains_key(&(id, ch)) {
-            return self.path_cache.get(&(id, ch));
-        }
+        // Split borrows to allow independent access to cache and db
+        let path_cache = &mut self.path_cache;
+        let db = &self.db;
 
-        // Cache miss: generate path
-        let mut path_opt = None;
-        self.db.with_face_data(id, |data, index| {
-            if let Ok(face) = Face::parse(data, index) {
-                if let Some(gid) = face.glyph_index(ch) {
-                    let units_per_em = face.units_per_em() as f32;
-                    let scale_factor = 1.0 / units_per_em;
+        match path_cache.entry((id, ch)) {
+            std::collections::hash_map::Entry::Occupied(o) => Some(o.into_mut()),
+            std::collections::hash_map::Entry::Vacant(v) => {
+                // Cache miss: generate path
+                let mut path_opt = None;
+                db.with_face_data(id, |data, index| {
+                    if let Ok(face) = Face::parse(data, index) {
+                        if let Some(gid) = face.glyph_index(ch) {
+                            let units_per_em = face.units_per_em() as f32;
+                            let scale_factor = 1.0 / units_per_em;
 
-                    let mut builder = tiny_skia::PathBuilder::new();
-                    let mut visitor = TtfPathVisitor {
-                        builder: &mut builder,
-                        scale: scale_factor,
-                        offset_x: 0.0,
-                        offset_y: 0.0,
-                    };
+                            let mut builder = tiny_skia::PathBuilder::new();
+                            let mut visitor = TtfPathVisitor {
+                                builder: &mut builder,
+                                scale: scale_factor,
+                                offset_x: 0.0,
+                                offset_y: 0.0,
+                            };
 
-                    if face.outline_glyph(gid, &mut visitor).is_some() {
-                        path_opt = builder.finish();
+                            if face.outline_glyph(gid, &mut visitor).is_some() {
+                                path_opt = builder.finish();
+                            }
+                        }
                     }
+                });
+
+                if let Some(path) = path_opt {
+                    Some(v.insert(path))
+                } else {
+                    None
                 }
             }
-        });
-
-        if let Some(path) = path_opt {
-            self.path_cache.insert((id, ch), path);
-            self.path_cache.get(&(id, ch))
-        } else {
-            None
         }
     }
 
