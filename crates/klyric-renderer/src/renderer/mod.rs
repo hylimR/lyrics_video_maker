@@ -99,6 +99,8 @@ pub struct Renderer {
     line_effect_cache: HashMap<usize, CategorizedLineEffects>,
     /// Cache for resolved style colors: style_name -> ResolvedStyleColors
     style_color_cache: HashMap<String, ResolvedStyleColors>,
+    /// Cached paint objects to avoid allocation per frame
+    render_paints: line_renderer::RenderPaints,
 }
 
 impl Renderer {
@@ -116,6 +118,7 @@ impl Renderer {
             line_hash_cache: HashMap::new(),
             line_effect_cache: HashMap::new(),
             style_color_cache: HashMap::new(),
+            render_paints: line_renderer::RenderPaints::new(),
         }
     }
 
@@ -218,6 +221,7 @@ impl Renderer {
                     particle_system: &mut self.particle_system,
                     width: self.width,
                     height: self.height,
+                    paints: &mut self.render_paints,
                 };
 
                 line_renderer.render_line(line, glyphs, line_idx, style, style_colors, effects)?;
