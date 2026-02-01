@@ -19,6 +19,56 @@ use self::line_renderer::LineRenderer;
 use self::particle_system::ParticleRenderSystem;
 use self::utils::parse_color;
 
+/// Default colors for karaoke states when not specified in style
+const DEFAULT_INACTIVE_COLOR: &str = "#888888";  // Dimmed gray
+const DEFAULT_ACTIVE_COLOR: &str = "#FFFF00";    // Bright yellow
+const DEFAULT_COMPLETE_COLOR: &str = "#FFFFFF";  // White
+
+#[derive(Clone, Debug)]
+pub struct ResolvedStyleColors {
+    pub inactive: Color,
+    pub active: Color,
+    pub complete: Color,
+    pub shadow: Option<Color>,
+    pub stroke: Option<Color>,
+}
+
+fn resolve_style_colors(style: &Style) -> ResolvedStyleColors {
+    let inactive_hex = style.colors.as_ref()
+        .and_then(|c| c.inactive.as_ref())
+        .and_then(|fs| fs.fill.as_deref())
+        .unwrap_or(DEFAULT_INACTIVE_COLOR);
+    let inactive = parse_color(inactive_hex).unwrap_or(Color::WHITE);
+
+    let active_hex = style.colors.as_ref()
+        .and_then(|c| c.active.as_ref())
+        .and_then(|fs| fs.fill.as_deref())
+        .unwrap_or(DEFAULT_ACTIVE_COLOR);
+    let active = parse_color(active_hex).unwrap_or(Color::WHITE);
+
+    let complete_hex = style.colors.as_ref()
+        .and_then(|c| c.complete.as_ref())
+        .and_then(|fs| fs.fill.as_deref())
+        .unwrap_or(DEFAULT_COMPLETE_COLOR);
+    let complete = parse_color(complete_hex).unwrap_or(Color::WHITE);
+
+    let shadow = style.shadow.as_ref()
+        .and_then(|s| s.color.as_deref())
+        .and_then(parse_color);
+
+    let stroke = style.stroke.as_ref()
+        .and_then(|s| s.color.as_deref())
+        .and_then(parse_color);
+
+    ResolvedStyleColors {
+        inactive,
+        active,
+        complete,
+        shadow,
+        stroke,
+    }
+}
+
 #[derive(Clone)]
 pub struct CategorizedLineEffects {
     pub transform_effects: Vec<ResolvedEffect>,
@@ -47,6 +97,8 @@ pub struct Renderer {
     line_hash_cache: HashMap<(usize, usize), u64>,
     /// Cache for pre-categorized effects per line: line_ptr -> CategorizedLineEffects
     line_effect_cache: HashMap<usize, CategorizedLineEffects>,
+    /// Cache for resolved style colors: style_name -> ResolvedStyleColors
+    style_color_cache: HashMap<String, ResolvedStyleColors>,
 }
 
 impl Renderer {
@@ -63,6 +115,7 @@ impl Renderer {
             layout_cache: HashMap::new(),
             line_hash_cache: HashMap::new(),
             line_effect_cache: HashMap::new(),
+            style_color_cache: HashMap::new(),
         }
     }
 
@@ -97,6 +150,7 @@ impl Renderer {
             self.layout_cache.clear();
             self.line_hash_cache.clear();
             self.line_effect_cache.clear();
+            self.style_color_cache.clear();
             self.last_doc_ptr = current_doc_ptr;
         }
 
@@ -148,6 +202,14 @@ impl Renderer {
                 }
                 let effects = self.line_effect_cache.get(&line_ptr).unwrap();
 
+                // [Bolt Optimization] Resolve colors (cached)
+                if !self.style_color_cache.contains_key(style_name) {
+                    let colors = resolve_style_colors(style);
+                    self.style_color_cache
+                        .insert(style_name.to_string(), colors);
+                }
+                let style_colors = self.style_color_cache.get(style_name).unwrap();
+
                 let mut line_renderer = LineRenderer {
                     canvas,
                     doc,
@@ -158,7 +220,7 @@ impl Renderer {
                     height: self.height,
                 };
 
-                line_renderer.render_line(line, glyphs, line_idx, style, effects)?;
+                line_renderer.render_line(line, glyphs, line_idx, style, style_colors, effects)?;
             }
         }
 
