@@ -1,46 +1,44 @@
 # Codebase Health Check Report
 
-**Date:** 2024-05-23
+**Date:** 2024-05-27
 **Scope:** `crates/klyric-renderer`, `crates/klyric-gui`
+**Review Focus:** "Bolt" Optimization PRs (Commit #126)
 
 ## Executive Summary
 
-The codebase is generally in a healthy state, with recent rendering optimizations significantly improving performance. The architecture is sound, but there are known limitations regarding WASM support and some areas where documentation was slightly outdated (now addressed).
+The codebase is in a healthy state. The recent "Bolt" optimizations (merged in PR #126) have been reviewed and verified. These changes significantly reduce allocation overhead and improve rendering performance for the native target. The architecture remains sound, though the WASM target remains broken as expected.
 
 ## 1. Rendering Engine (`klyric-renderer`)
 
-### Optimizations
-Recent changes have successfully hoisted several expensive operations out of the character rendering loop in `LineRenderer::render_line`:
-- **Shadow/Stroke Fallback:** Logic now correctly resolves line-level vs style-level properties outside the loop.
-- **Paint Object Reuse:** `skia_safe::Paint` objects are reused, reducing allocation overhead.
-- **Effect Compilation:** Transform and particle effects are pre-calculated per line where possible.
-- **Verification:** These optimizations (internally tagged as "Bolt") have been verified in the codebase review. The implementation correctly handles state tracking for reused paint objects (e.g., blur sigma checks).
+### "Bolt" Optimization Review
+The recent optimizations in `LineRenderer::render_line` and `Renderer` were inspected and verified:
 
-### Caching Strategy
-The `Renderer` employs a pointer-based caching strategy for layouts and effects:
-- **Mechanism:** It caches layout and effect resolution based on the memory address (`ptr`) of the `Line` and `Style` objects.
-- **Correctness:** This relies on the document being either immutable or replaced (new address) upon modification. The `klyric-gui` implementation correctly uses `Arc::make_mut` when modifying the document, which ensures a new allocation/address, triggering a cache refresh.
-- **Risk:** If `KLyricDocumentV2` were modified in-place without changing its address, caches would serve stale data. Current usage in `klyric-gui` avoids this.
+*   **Scratch Buffers:** `LineRenderScratch` is correctly implemented and passed from `Renderer` to `LineRenderer`, ensuring reuse of vectors for active effects and indices.
+*   **Paint Object Reuse:** `RenderPaints` struct effectively persists `skia_safe::Paint` objects. State tracking for blur sigma (`current_paint_blur`, etc.) prevents redundant native calls.
+*   **Loop Hoisting:**
+    *   **Effect Compilation:** Transform and particle effect resolution is correctly moved outside the character loop.
+    *   **Fallback Resolution:** Shadow and Stroke color fallback logic (Line > Style) is computed once per line.
+    *   **Transforms:** Base line transforms are pre-calculated.
+*   **Zero-Alloc Particles:** The `apply_emitter_overrides` path allows updating existing emitters without reallocation.
+*   **Hashing:** The `line_hash_cache` correctly uses pointer addresses (`line as *const _`) to avoid O(N) hashing when the document structure is stable.
 
-### WASM Support
-- **Status:** **Broken / Unavailable**
-- **Cause:** The renderer currently depends on native `skia-safe` bindings which are not compatible with `wasm32-unknown-unknown`.
-- **Recommendation:** If WASM support is required, a significant refactor to decouple the renderer from native Skia types or a separate WASM backend (e.g., using `tiny-skia` or `canvas` API) is needed.
+### Issues & Risks
+*   **WASM Support:** Remains broken due to direct dependency on `skia-safe` native bindings. This is a known limitation.
+*   **Memory Safety:** The pointer-based caching (`last_doc_ptr`, `line_hash_cache`) is generally safe given `klyric-gui`'s usage of `Arc` and copy-on-write, but requires strict adherence to immutable data patterns to avoid stale caches.
 
-## 2. Documentation
+## 2. Code Quality
 
-- **Status:** **Improved**
-- **Action Taken:** The `crates/klyric-renderer/README.md` contained incorrect usage examples which have been corrected to match the actual API (`Renderer::new(width, height)` and `render_frame(&doc, time)`).
-- **Recommendation:** Keep `README.md` in sync with API changes, especially for the public `klyric-renderer` crate.
+*   **Readability:** The optimized code in `line_renderer.rs` is complex but well-commented, with clear markers (`[Bolt Optimization]`) explaining the rationale.
+*   **Safety:** `unsafe` usage is minimal and justifiable (pointer casting for cache keys).
+*   **Consistency:** Naming conventions and error handling are consistent across the crate.
 
-## 3. Dependencies & Environment
+## 3. Documentation
 
-- **Linux:** There is a known version conflict between `ashpd` and `zbus` which may cause warnings.
-- **Skia:** The project uses `skia-safe` 0.75. Building requires LLVM/Clang.
-- **Tests:** Unit tests exist but require a correctly set up environment with `skia-bindings` to run. Visual verification via the GUI preview is currently the primary integration test.
+*   **Status:** Up-to-date.
+*   **README:** The root and crate-level READMEs accurately reflect the current architecture and known issues.
+*   **Comments:** Inline comments in `line_renderer.rs` provide excellent context for the optimizations.
 
-## 4. Code Quality
+## 4. Recommendations
 
-- **Style:** Code follows standard Rust conventions.
-- **Safety:** Usage of `unsafe` is minimal (mostly FFI related or pointer casting for caching).
-- **Error Handling:** `Result` types are used appropriately, though some rendering errors (like surface creation failure) are handled by skipping the effect frame, which is acceptable for a media renderer.
+*   **Maintain:** Continue using `HEALTH_CHECK.md` to track major architectural changes.
+*   **Future Work:** If WASM support becomes a priority, consider abstracting the drawing context behind a trait to support a non-Skia backend (e.g. `tiny-skia` or HTML5 Canvas).
