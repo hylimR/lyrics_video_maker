@@ -335,10 +335,9 @@ fn compute_layout_hash(line: &Line, style: &Style) -> u64 {
 
     // Line Layout
     if let Some(l) = &line.layout {
-        // Enums don't derive Hash, use debug string
-        format!("{:?}", l.mode).hash(&mut hasher);
-        format!("{:?}", l.align).hash(&mut hasher);
-        format!("{:?}", l.justify).hash(&mut hasher);
+        l.mode.hash(&mut hasher);
+        l.align.hash(&mut hasher);
+        l.justify.hash(&mut hasher);
         l.gap.to_bits().hash(&mut hasher);
         l.wrap.hash(&mut hasher);
         if let Some(mw) = l.max_width {
