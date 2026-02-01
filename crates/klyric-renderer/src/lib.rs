@@ -56,6 +56,8 @@ pub mod style;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod text;
 
+pub mod utils;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_renderer;
 

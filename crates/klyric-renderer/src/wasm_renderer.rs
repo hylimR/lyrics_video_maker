@@ -477,8 +477,8 @@ fn resolve_position_value(val: &Option<PositionValue>, total: f32, default: f32)
     match val {
         Some(PositionValue::Pixels(v)) => *v,
         Some(PositionValue::Percentage(s)) => {
-            if let Ok(p) = s.trim_end_matches('%').parse::<f32>() {
-                total * (p / 100.0)
+            if let Some(p) = crate::utils::parse_percentage(s) {
+                total * p
             } else {
                 default
             }
@@ -488,21 +488,6 @@ fn resolve_position_value(val: &Option<PositionValue>, total: f32, default: f32)
 }
 
 fn parse_color(hex: &str) -> Option<Color> {
-    let hex = hex.trim_start_matches('#');
-    let (r, g, b, a) = match hex.len() {
-        6 => (
-            u8::from_str_radix(&hex[0..2], 16).ok()?,
-            u8::from_str_radix(&hex[2..4], 16).ok()?,
-            u8::from_str_radix(&hex[4..6], 16).ok()?,
-            255,
-        ),
-        8 => (
-            u8::from_str_radix(&hex[0..2], 16).ok()?,
-            u8::from_str_radix(&hex[2..4], 16).ok()?,
-            u8::from_str_radix(&hex[4..6], 16).ok()?,
-            u8::from_str_radix(&hex[6..8], 16).ok()?,
-        ),
-        _ => return None,
-    };
+    let (r, g, b, a) = crate::utils::parse_hex_color(hex)?;
     Some(Color::from_rgba8(r, g, b, a))
 }
