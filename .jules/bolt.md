@@ -22,3 +22,8 @@ Action: Refactored `ParticleRenderSystem::update_emitter_bounds` to return `bool
 Learning: Confirmed `clang++` Segmentation Fault (exit code 139) when compiling `skia-bindings` with `cargo check -p klyric-renderer` on native target.
 Insight: The environment's `clang` (version 18.1.3) is incompatible with the current project/system configuration for Skia. This reinforces the need to target optimizations in `wasm32` code paths (like `wasm_renderer.rs`) which use `tiny-skia` and compile successfully.
 Action: Pivoted optimization strategy to focus on `wasm_renderer.rs` Paint reuse, which can be verified with `cargo check --target wasm32-unknown-unknown`.
+
+## 2024-05-24 - Style Cloning in Render Loop
+Learning: `Style` struct in `klyric-renderer` is a deep tree of `Option<String>` and nested structs, making `clone()` expensive.
+Insight: The `wasm_renderer` was cloning `Style` twice per line per frame (once in `render_frame` fallback logic, once in `render_line`). Since `Style` is immutable during rendering, references `&Style` should be passed instead.
+Action: Refactored `render_frame` and `render_line` to pass `&Style`, removing deep clones. Also optimized font family caching to use `&str` instead of `String` to avoid allocation on font switch.

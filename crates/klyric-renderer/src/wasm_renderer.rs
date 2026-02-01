@@ -283,7 +283,8 @@ impl Renderer {
         pixmap.fill(Color::TRANSPARENT);
 
         // Get base style or default
-        let base_style = doc.styles.get("base").cloned().unwrap_or_default();
+        let base_style_owned = doc.styles.get("base").cloned().unwrap_or_default();
+        let base_style = &base_style_owned;
 
         for line in &doc.lines {
             let start_time = line.start;
@@ -294,10 +295,9 @@ impl Renderer {
                 let line_style = doc
                     .styles
                     .get(line_style_name)
-                    .cloned()
-                    .unwrap_or(base_style.clone());
+                    .unwrap_or(base_style);
 
-                self.render_line(&mut pixmap, line, &line_style, time)?;
+                self.render_line(&mut pixmap, line, line_style, time)?;
             }
         }
 
@@ -311,14 +311,17 @@ impl Renderer {
         style: &Style,
         time: f64,
     ) -> Result<()> {
-        let resolved_style = style.clone();
-        let glyphs = LayoutEngine::layout_line(line, &resolved_style, &mut self.text_renderer);
+        let glyphs = LayoutEngine::layout_line(line, style, &mut self.text_renderer);
 
         // Pre-allocate paints to avoid allocation per glyph
-        let mut paint = tiny_skia::Paint::default();
-        paint.anti_alias = true;
-        let mut stroke_paint = tiny_skia::Paint::default();
-        stroke_paint.anti_alias = true;
+        let mut paint = tiny_skia::Paint {
+            anti_alias: true,
+            ..tiny_skia::Paint::default()
+        };
+        let mut stroke_paint = tiny_skia::Paint {
+            anti_alias: true,
+            ..tiny_skia::Paint::default()
+        };
 
         let cx = self.width as f32 / 2.0;
         let cy = self.height as f32 / 2.0;
@@ -335,46 +338,46 @@ impl Renderer {
         let default_fill = Color::from_rgba8(255, 255, 255, 255);
 
         // Resolve Style Properties
-        let inactive_fill = resolved_style
+        let inactive_fill = style
             .colors
             .as_ref()
             .and_then(|c| c.inactive.as_ref())
             .and_then(|fs| fs.fill.as_ref())
             .and_then(|s| parse_color(s));
 
-        let active_fill = resolved_style
+        let active_fill = style
             .colors
             .as_ref()
             .and_then(|c| c.active.as_ref())
             .and_then(|fs| fs.fill.as_ref())
             .and_then(|s| parse_color(s));
 
-        let inactive_stroke_color = resolved_style
+        let inactive_stroke_color = style
             .colors
             .as_ref()
             .and_then(|c| c.inactive.as_ref())
             .and_then(|fs| fs.stroke.as_ref())
             .and_then(|s| parse_color(s));
 
-        let active_stroke_color = resolved_style
+        let active_stroke_color = style
             .colors
             .as_ref()
             .and_then(|c| c.active.as_ref())
             .and_then(|fs| fs.stroke.as_ref())
             .and_then(|s| parse_color(s));
 
-        let stroke_width = resolved_style
+        let stroke_width = style
             .stroke
             .as_ref()
             .and_then(|s| s.width)
             .unwrap_or(0.0);
-        let default_stroke_color = resolved_style
+        let default_stroke_color = style
             .stroke
             .as_ref()
             .and_then(|s| s.color.as_ref())
             .and_then(|s| parse_color(s));
 
-        let shadow_opt = resolved_style.shadow.as_ref();
+        let shadow_opt = style.shadow.as_ref();
         let shadow_color = shadow_opt
             .and_then(|s| s.color.as_ref())
             .and_then(|c| parse_color(c));
@@ -382,7 +385,7 @@ impl Renderer {
             .map(|s| (s.x.unwrap_or(0.0), s.y.unwrap_or(0.0)))
             .unwrap_or((0.0, 0.0));
 
-        let mut cached_family_id: Option<(String, ID)> = None;
+        let mut cached_family_id: Option<(&str, ID)> = None;
 
         for glyph_info in glyphs {
             let char_data = &line.chars[glyph_info.char_index];
@@ -407,7 +410,7 @@ impl Renderer {
                 .font
                 .as_ref()
                 .or(line.font.as_ref())
-                .or(resolved_style.font.as_ref());
+                .or(style.font.as_ref());
 
             let family = font_spec
                 .and_then(|f| f.family.as_deref())
@@ -416,16 +419,16 @@ impl Renderer {
 
             // Resolve Font ID (Optimized with local cache)
             let font_id = if let Some((cached_name, cached_id)) = &cached_family_id {
-                if cached_name == family {
+                if *cached_name == family {
                     *cached_id
                 } else if let Some(id) = self.text_renderer.resolve_font_id(family) {
-                    cached_family_id = Some((family.to_string(), id));
+                    cached_family_id = Some((family, id));
                     id
                 } else {
                     continue; // Skip drawing if font not found
                 }
             } else if let Some(id) = self.text_renderer.resolve_font_id(family) {
-                cached_family_id = Some((family.to_string(), id));
+                cached_family_id = Some((family, id));
                 id
             } else {
                 continue; // Skip drawing if font not found
