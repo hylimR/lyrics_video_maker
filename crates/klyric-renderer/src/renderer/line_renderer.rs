@@ -181,10 +181,6 @@ impl<'a> LineRenderer<'a> {
         // Pre-calculate base render transform for line (without char overrides)
         let line_render_transform = RenderTransform::new(&line_transform, &Transform::default());
 
-        // [Bolt Optimization] Cache font resolution per-line to avoid redundant lookups
-        let mut last_family: Option<&str> = None;
-        let mut last_typeface: Option<skia_safe::Typeface> = None;
-
         // [Bolt Optimization] Pre-calculate Shadow/Stroke colors to avoid parsing inside loop
         let style_shadow_color = style.shadow.as_ref()
             .and_then(|s| s.color.as_deref())
@@ -209,24 +205,11 @@ impl<'a> LineRenderer<'a> {
              
              // Resolve Font for THIS glyph (matches layout logic)
              let char_data = line.chars.get(glyph.char_index);
-             
-             let family = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.family.as_deref()))
-                .or_else(|| line.font.as_ref().and_then(|f| f.family.as_deref()))
-                .unwrap_or(style_family);
 
-             let size = char_data.and_then(|c| c.font.as_ref().and_then(|f| f.size))
-                .or_else(|| line.font.as_ref().and_then(|f| f.size))
-                .unwrap_or(style_size);
-
-             // Get typeface and path
-             // Optimized font resolution: reuse typeface if family matches last iteration
-             if last_family != Some(family) {
-                 last_typeface = self.text_renderer.get_typeface(family)
-                     .or_else(|| self.text_renderer.get_default_typeface());
-                 last_family = Some(family);
-             }
+             // [Bolt Optimization] Use pre-resolved font from layout
+             let size = glyph.font_size;
              
-             if let Some(typeface) = &last_typeface {
+             if let Some(typeface) = &glyph.typeface {
                  // Get path
                  // [Bolt Optimization] Use cached path by ID instead of resolving by char/Font object
                  if let Some(path) = self.text_renderer.get_path_cached(typeface, size, glyph.glyph_id) {

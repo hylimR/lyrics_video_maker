@@ -21,6 +21,10 @@ pub struct GlyphInfo {
     pub char_index: usize,
     /// The glyph ID in the font
     pub glyph_id: u16,
+    /// [Bolt Optimization] Resolved font size for this glyph
+    pub font_size: f32,
+    /// [Bolt Optimization] Resolved typeface for this glyph
+    pub typeface: Option<Typeface>,
 }
 
 pub struct LayoutEngine;
@@ -161,6 +165,8 @@ impl LayoutEngine {
                         advance,
                         char_index: i,
                         glyph_id,
+                        font_size: size,
+                        typeface: font_ref.clone(),
                     });
 
                     cursor_x += advance;
