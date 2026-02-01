@@ -83,14 +83,17 @@ impl<'a> LineRenderer<'a> {
         // --- OPTIMIZATION: Hoist Effect Resolution & Categorization ---
         // We resolve and categorize in a single pass to avoid intermediate allocations.
         // We use Cow<Effect> directly in specialized vectors.
-        let mut transform_effects_base: Vec<Cow<Effect>> = Vec::new();
-        let mut particle_effects_base: Vec<(&str, Cow<Effect>)> = Vec::new();
-        let mut disintegrate_effects_base: Vec<(&str, Cow<Effect>)> = Vec::new();
-        let mut stroke_reveal_effects: Vec<Cow<Effect>> = Vec::new();
 
         let empty_vec = Vec::new();
         let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
         let line_effects = &line.effects;
+        let total_effects = style_effects.len() + line_effects.len();
+
+        let mut transform_effects_base: Vec<Cow<Effect>> = Vec::with_capacity(total_effects);
+        let mut particle_effects_base: Vec<(&str, Cow<Effect>)> =
+            Vec::with_capacity(total_effects / 2);
+        let mut disintegrate_effects_base: Vec<(&str, Cow<Effect>)> = Vec::with_capacity(1);
+        let mut stroke_reveal_effects: Vec<Cow<Effect>> = Vec::with_capacity(1);
 
         // Collect all effect names: Style effects first (base), then Line effects (override/stack)
         let all_effects_names = style_effects.iter().chain(line_effects.iter());
@@ -244,7 +247,9 @@ impl<'a> LineRenderer<'a> {
 
         // --- OPTIMIZATION: Pre-calculate Active Effects ---
         // 1. Dependent Transform Effects
-        let mut active_dependent_effects_raw: Vec<(&Effect, f64)> = Vec::new();
+        let dependent_count = transform_effects_base.len().saturating_sub(split_idx);
+        let mut active_dependent_effects_raw: Vec<(&Effect, f64)> =
+            Vec::with_capacity(dependent_count);
         if split_idx < transform_effects_base.len() {
             for effect in &transform_effects_base[split_idx..] {
                 if EffectEngine::should_trigger(effect, &ctx) {
@@ -261,7 +266,8 @@ impl<'a> LineRenderer<'a> {
         let compiled_ops = EffectEngine::compile_active_effects(&active_dependent_effects_raw, &ctx);
 
         // 2. Disintegrate Effects
-        let mut active_disintegrate_effects: Vec<(&str, &Effect, f64, DefaultHasher)> = Vec::new();
+        let mut active_disintegrate_effects: Vec<(&str, &Effect, f64, DefaultHasher)> =
+            Vec::with_capacity(disintegrate_effects_base.len());
         for (name, effect) in &disintegrate_effects_base {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
@@ -275,7 +281,8 @@ impl<'a> LineRenderer<'a> {
         }
 
         // 3. Particle Effects
-        let mut active_particle_effects: Vec<(&str, &Effect, f64, DefaultHasher)> = Vec::new();
+        let mut active_particle_effects: Vec<(&str, &Effect, f64, DefaultHasher)> =
+            Vec::with_capacity(particle_effects_base.len());
         for (name, effect) in &particle_effects_base {
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
