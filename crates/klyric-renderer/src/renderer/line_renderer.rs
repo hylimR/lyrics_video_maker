@@ -18,7 +18,7 @@ use crate::presets::CharBounds;
 use crate::text::TextRenderer;
 
 use super::particle_system::ParticleRenderSystem;
-use super::utils::{parse_color, parse_percentage};
+use super::utils::parse_color;
 
 /// Default colors for karaoke states when not specified in style
 const DEFAULT_INACTIVE_COLOR: &str = "#888888"; // Dimmed gray
@@ -705,13 +705,13 @@ impl<'a> LineRenderer<'a> {
             if let Some(px) = &pos.x {
                 x = match px {
                     PositionValue::Pixels(v) => *v,
-                    PositionValue::Percentage(s) => parse_percentage(s) * self.width as f32,
+                    PositionValue::Percentage(v) => *v * self.width as f32,
                 };
             }
             if let Some(py) = &pos.y {
                 y = match py {
                     PositionValue::Pixels(v) => *v,
-                    PositionValue::Percentage(s) => parse_percentage(s) * self.height as f32,
+                    PositionValue::Percentage(v) => *v * self.height as f32,
                 };
             }
         }
