@@ -139,12 +139,23 @@ impl ParticleRenderSystem {
             };
 
             if let Some(mut e) = emitter {
+                // Apply config override if present during creation
+                if let Some(cfg) = &config {
+                    e.update_config(cfg.clone());
+                }
                 e.frame_driven = true; // Text effects are frame driven
                 self.particle_emitters.insert(key, e);
             }
         } else {
             // Update existing emitter bounds
             self.update_emitter_bounds(key, bounds);
+
+            // Update configuration if dynamic override provided
+            if let Some(cfg) = config {
+                if let Some(emitter) = self.particle_emitters.get_mut(&key) {
+                    emitter.update_config(cfg);
+                }
+            }
         }
     }
 
