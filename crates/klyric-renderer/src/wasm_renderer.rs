@@ -356,6 +356,10 @@ impl Renderer {
             anti_alias: true,
             ..tiny_skia::Paint::default()
         };
+        let mut shadow_paint = tiny_skia::Paint {
+            anti_alias: true,
+            ..tiny_skia::Paint::default()
+        };
 
         let cx = width as f32 / 2.0;
         let cy = height as f32 / 2.0;
@@ -415,6 +419,10 @@ impl Renderer {
             .map(|s| (s.x.unwrap_or(0.0), s.y.unwrap_or(0.0)))
             .unwrap_or((0.0, 0.0));
 
+        if let Some(sc) = shadow_color {
+            shadow_paint.set_color(sc);
+        }
+
         // Hoist Base Font Resolution
         let line_font = line.font.as_ref().or(style.font.as_ref());
         let line_family = line_font
@@ -423,6 +431,8 @@ impl Renderer {
         let line_size = line_font.and_then(|f| f.size).unwrap_or(72.0);
 
         let mut cached_family_id: Option<(&str, ID)> = None;
+        let mut last_fill_color: Option<Color> = None;
+        let mut last_stroke_color: Option<Color> = None;
 
         for glyph_info in glyphs {
             let char_data = &line.chars[glyph_info.char_index];
@@ -435,12 +445,31 @@ impl Renderer {
                 inactive_fill.unwrap_or(default_fill)
             };
 
+            if last_fill_color != Some(fill_color) {
+                paint.set_color(fill_color);
+                last_fill_color = Some(fill_color);
+            }
+
             // 2. Stroke Color
             // Priority: State Stroke > Global Stroke > None
             let stroke_color = if is_active {
                 active_stroke_color.or(default_stroke_color)
             } else {
                 inactive_stroke_color.or(default_stroke_color)
+            };
+
+            let has_stroke = if let Some(sc) = stroke_color {
+                if stroke_width > 0.0 {
+                    if last_stroke_color != Some(sc) {
+                        stroke_paint.set_color(sc);
+                        last_stroke_color = Some(sc);
+                    }
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
             };
 
             // Resolve Font Params (Optimized)
@@ -481,13 +510,13 @@ impl Renderer {
                 size,
                 render_x,
                 render_y,
-                fill_color,
-                stroke_color,
+                has_stroke,
                 stroke_width,
-                shadow_color,
+                shadow_color.is_some(),
                 shadow_offset,
                 &mut paint,
                 &mut stroke_paint,
+                &mut shadow_paint,
             );
         }
 
@@ -503,26 +532,27 @@ impl Renderer {
         size: f32,
         x: f32,
         y: f32,
-        fill_color: Color,
-        stroke_color: Option<Color>,
+        has_stroke: bool,
         stroke_width: f32,
-        shadow_color: Option<Color>,
+        has_shadow: bool,
         shadow_offset: (f32, f32),
         paint: &mut tiny_skia::Paint,
         stroke_paint: &mut tiny_skia::Paint,
+        shadow_paint: &mut tiny_skia::Paint,
     ) {
         if let Some(path) = text_renderer.get_glyph_path_by_id_ref(font_id, glyph_id) {
             // Transform: Scale (size), Translate (x, y)
-            let transform = tiny_skia::Transform::from_translate(x, y).pre_scale(size, size);
+            // Optimization: Create matrix directly to avoid chaining overhead
+            // from_row(sx, ky, kx, sy, tx, ty)
+            let transform = tiny_skia::Transform::from_row(size, 0.0, 0.0, size, x, y);
 
             // 1. Shadow
-            if let Some(sc) = shadow_color {
-                paint.set_color(sc);
+            if has_shadow {
                 // paint.anti_alias is already true
                 let shadow_transform = transform.post_translate(shadow_offset.0, shadow_offset.1);
                 pixmap.fill_path(
                     path,
-                    paint,
+                    shadow_paint,
                     tiny_skia::FillRule::Winding,
                     shadow_transform,
                     None,
@@ -530,22 +560,18 @@ impl Renderer {
             }
 
             // 2. Stroke
-            if let Some(st_color) = stroke_color {
-                if stroke_width > 0.0 {
-                    stroke_paint.set_color(st_color);
-                    // stroke_paint.anti_alias is already true
+            if has_stroke {
+                // stroke_paint color is already set
+                let stroke = tiny_skia::Stroke {
+                    width: stroke_width / size, // Stroke width must be inverse scaled because transform scales everything!
+                    ..tiny_skia::Stroke::default()
+                };
 
-                    let stroke = tiny_skia::Stroke {
-                        width: stroke_width / size, // Stroke width must be inverse scaled because transform scales everything!
-                        ..tiny_skia::Stroke::default()
-                    };
-
-                    pixmap.stroke_path(path, stroke_paint, &stroke, transform, None);
-                }
+                pixmap.stroke_path(path, stroke_paint, &stroke, transform, None);
             }
 
             // 3. Fill
-            paint.set_color(fill_color);
+            // paint color is already set
             pixmap.fill_path(path, paint, tiny_skia::FillRule::Winding, transform, None);
         }
     }

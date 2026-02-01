@@ -32,3 +32,8 @@ Action: Refactored `render_frame` and `render_line` to pass `&Style`, removing d
 Learning: `TextRenderer::get_glyph_path_by_id` used `(ID, char)` as cache key, causing redundant `char -> GlyphId` lookups and larger map keys.
 Insight: The layout engine already calculates `GlyphId` (u16) for every character. Using `(ID, u16)` as the cache key avoids re-calculating the glyph ID and uses a smaller, faster key for hashing.
 Action: Updated `path_cache` to use `u16` instead of `char`. Modified `render_line` to pass the pre-calculated `glyph_info.glyph_id`, removing the need for `face.glyph_index(ch)` in the hot path.
+
+## 2024-05-24 - Hoist Paint Updates and Transform Optimization
+Learning: `tiny_skia::Paint::set_color` and `Transform` chaining are small but frequent operations in the render loop.
+Insight: By tracking the current color state in the loop, we can avoid calling `set_color` when the color hasn't changed (which is common for text). Also, `Transform::from_row` allows direct matrix construction, bypassing the overhead of chaining `from_translate` and `pre_scale`.
+Action: Optimized `wasm_renderer.rs` to track `last_fill_color` and `last_stroke_color`, hoist `shadow_paint` setup, and use `Transform::from_row` for direct matrix construction. Verified with `wasm32-unknown-unknown` target.
