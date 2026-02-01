@@ -109,6 +109,43 @@ impl<'a> LineRenderer<'a> {
 
         let compiled_ops = EffectEngine::compile_active_effects(&active_effects_progress, &line_ctx);
 
+        // [Bolt Optimization] Hoist Disintegration Effect Resolution
+        // Safety: We use `line_ctx` (no char_index) because `calculate_progress` strictly depends on
+        // line start/end times and scalar delay, making it invariant per line.
+        // Per-character variation (staggering) must use Expressions or different Effect types.
+        let mut active_disintegrate_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64)> = Vec::with_capacity(effects.disintegrate_effects.len());
+        for (name, resolved_effect) in &effects.disintegrate_effects {
+             let effect = &resolved_effect.effect;
+             if EffectEngine::should_trigger(effect, &line_ctx) {
+                 let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
+                 if (0.0..=1.0).contains(&progress) {
+                     active_disintegrate_effects.push((name, resolved_effect, progress));
+                 }
+             }
+        }
+
+        // [Bolt Optimization] Hoist Particle Effect Resolution
+        let mut active_particle_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64)> = Vec::with_capacity(effects.particle_effects.len());
+        for (name, resolved_effect) in &effects.particle_effects {
+             let effect = &resolved_effect.effect;
+             if EffectEngine::should_trigger(effect, &line_ctx) {
+                 let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
+                 if (0.0..=1.0).contains(&progress) {
+                     active_particle_effects.push((name, resolved_effect, progress));
+                 }
+             }
+        }
+
+        // [Bolt Optimization] Hoist Stroke Reveal Resolution
+        let mut active_stroke_reveal_progress: Option<f64> = None;
+        for effect in &effects.stroke_reveal_effects {
+             if EffectEngine::should_trigger(effect, &line_ctx) {
+                 let p = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
+                 active_stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
+                 break; // Only one stroke reveal supported
+             }
+        }
+
         // Reusable context for expression evaluation
         let eval_ctx = EvaluationContext {
             t: self.time,
@@ -231,13 +268,10 @@ impl<'a> LineRenderer<'a> {
                      }
 
                      // Disintegrate Effect Progress
+                     // [Bolt Optimization] Use pre-calculated progress
                      let mut disintegration_progress = 0.0;
-                     if let Some((_name, resolved_effect)) = effects.disintegrate_effects.first() {
-                         let effect = &resolved_effect.effect;
-                         if EffectEngine::should_trigger(effect, &ctx) {
-                             disintegration_progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                             disintegration_progress = disintegration_progress.clamp(0.0, 1.0);
-                         }
+                     if let Some((_name, _resolved, progress)) = active_disintegrate_effects.first() {
+                         disintegration_progress = progress.clamp(0.0, 1.0);
                      }
 
                      // Setup Paint
@@ -279,14 +313,8 @@ impl<'a> LineRenderer<'a> {
                      self.canvas.save();
                      
                      // Check for StrokeReveal
-                     let mut stroke_reveal_progress = None;
-                     for effect in &effects.stroke_reveal_effects {
-                         if EffectEngine::should_trigger(effect, &ctx) {
-                             let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                             stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
-                             break; // Only one stroke reveal supported
-                         }
-                     }
+                     // [Bolt Optimization] Use pre-calculated progress
+                     let stroke_reveal_progress = active_stroke_reveal_progress;
 
                      // Apply Transforms
                      self.canvas.translate((draw_x + final_transform.x, draw_y + final_transform.y));
@@ -427,12 +455,10 @@ impl<'a> LineRenderer<'a> {
                      self.canvas.restore(); // Restore transform for next glyph/effects
 
                      // --- DISINTEGRATION EFFECT ---
-                     for (name, resolved_effect) in &effects.disintegrate_effects {
+                     // [Bolt Optimization] Iterate active effects only
+                     for (name, resolved_effect, _progress) in &active_disintegrate_effects {
                          let effect = &resolved_effect.effect;
-                         if !EffectEngine::should_trigger(effect, &ctx) { continue; }
-
-                         let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                         if !(0.0..=1.0).contains(&progress) { continue; }
+                         // progress is already checked to be in range
 
                          let key = hash_emitter_key(line_idx, glyph.char_index, name);
                          self.active_keys.insert(key);
@@ -498,12 +524,10 @@ impl<'a> LineRenderer<'a> {
                      
                      // --- PARTICLE SPAWNING ---
                      // Process standard particle effects
-                     for (name, resolved_effect) in &effects.particle_effects {
+                     // [Bolt Optimization] Iterate active effects only
+                     for (name, resolved_effect, progress) in &active_particle_effects {
                          let effect = &resolved_effect.effect;
-                         if !EffectEngine::should_trigger(effect, &ctx) { continue; }
-                         
-                         let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
-                         if !(0.0..=1.0).contains(&progress) { continue; }
+                         let progress = *progress; // Copy f64
 
                          let key = hash_emitter_key(line_idx, glyph.char_index, name);
                          self.active_keys.insert(key);
