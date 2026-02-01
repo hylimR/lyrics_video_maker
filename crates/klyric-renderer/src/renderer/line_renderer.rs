@@ -253,6 +253,10 @@ impl<'a> LineRenderer<'a> {
             }
         }
 
+        // Local cache for override typeface to avoid repeated lookups
+        let mut cached_override_family: Option<&str> = None;
+        let mut cached_override_typeface: Option<Typeface> = None;
+
         // Loop:
         for glyph in glyphs.iter() {
             // Update context
@@ -274,9 +278,17 @@ impl<'a> LineRenderer<'a> {
 
             // Get typeface (avoid cloning default)
             let override_typeface = if let Some(fam) = family_override {
-                self.text_renderer
-                    .get_typeface(fam)
-                    .or_else(|| self.text_renderer.get_default_typeface())
+                if cached_override_family == Some(fam) {
+                    cached_override_typeface.clone()
+                } else {
+                    let tf = self
+                        .text_renderer
+                        .get_typeface(fam)
+                        .or_else(|| self.text_renderer.get_default_typeface());
+                    cached_override_family = Some(fam);
+                    cached_override_typeface = tf.clone();
+                    tf
+                }
             } else {
                 None
             };
