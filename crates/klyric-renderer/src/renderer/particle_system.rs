@@ -81,7 +81,7 @@ impl ParticleRenderSystem {
         self.particle_emitters.contains_key(&key)
     }
 
-    pub fn update_emitter_bounds(&mut self, key: u64, bounds: CharBounds) {
+    pub fn update_emitter_bounds(&mut self, key: u64, bounds: CharBounds) -> bool {
         if let Some(emitter) = self.particle_emitters.get_mut(&key) {
             emitter.active = true;
 
@@ -105,6 +105,9 @@ impl ParticleRenderSystem {
                     *y2 = bounds.y - 50.0;
                 }
             }
+            true
+        } else {
+            false
         }
     }
 

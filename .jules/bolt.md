@@ -12,3 +12,8 @@ Action: Proceed with extreme caution on logical changes. Document the inability 
 Learning: `wasm_renderer.rs` resolves font families to IDs via string hashing and `HashMap` lookups for *every character* in `render_line`.
 Insight: While `line_renderer.rs` (native) has some optimizations, the WASM path was missing local caching for font IDs in the hot loop. Since font family rarely changes within a line (unless overridden), we can cache the resolved ID locally.
 Action: Implemented a local `cached_family_id` in `render_line` to bypass `TextRenderer::resolve_font_id` overhead for consecutive characters with the same font.
+
+## 2024-05-24 - Hash Map Double Lookup Elimination
+Learning: The `if map.contains_key(k) { map.get_mut(k) }` pattern performs hashing and bucket lookup twice.
+Insight: Rust's `HashMap` API allows combining these into a single operation using `if let Some(v) = map.get_mut(k)`. For complex updates, helper methods can return `bool` or `Option` to indicate success, allowing the caller to handle the "not found" case without a redundant lookup.
+Action: Refactored `ParticleRenderSystem::update_emitter_bounds` to return `bool`, saving one lookup per active particle emitter per frame in the hot render loop.

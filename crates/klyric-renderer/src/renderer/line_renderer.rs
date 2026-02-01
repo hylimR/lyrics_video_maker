@@ -566,11 +566,9 @@ impl<'a> LineRenderer<'a> {
                         }
 
                         // Check if emitter exists already
-                        if self.particle_system.particle_emitters.contains_key(&key) {
-                            if let Some(e) = self.particle_system.particle_emitters.get_mut(&key) {
-                                e.active = true;
-                                continue;
-                            }
+                        if let Some(e) = self.particle_system.particle_emitters.get_mut(&key) {
+                            e.active = true;
+                            continue;
                         }
 
                         if let Some(mut surface) =
@@ -643,8 +641,8 @@ impl<'a> LineRenderer<'a> {
                             height: h * final_transform.scale,
                         };
 
-                        if self.particle_system.has_emitter(key) {
-                            self.particle_system.update_emitter_bounds(key, bounds_rect);
+                        if self.particle_system.update_emitter_bounds(key, bounds_rect) {
+                            // Emitter updated, nothing more to do
                         } else {
                             let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
 
