@@ -247,11 +247,9 @@ impl Renderer {
         }
         // Check particle overrides
         if let Some(overrides) = &effect.particle_override {
-            for value in overrides.values() {
-                if let AnimatedValue::Expression(expr) = value {
-                    if let Ok(node) = ExpressionEvaluator::compile(expr) {
-                        map.insert(expr.clone(), Arc::new(node));
-                    }
+            for expr in overrides.values() {
+                if let Ok(node) = ExpressionEvaluator::compile(expr) {
+                    map.insert(expr.clone(), Arc::new(node));
                 }
             }
         }

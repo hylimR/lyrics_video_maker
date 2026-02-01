@@ -153,12 +153,33 @@ impl SpawnPattern {
 pub fn apply_particle_overrides(
     config: &mut ParticleConfig,
     overrides: &std::collections::HashMap<String, String>,
-    ctx: &crate::expressions::EvaluationContext,
+    compiled_nodes: Option<&std::collections::HashMap<String, std::sync::Arc<evalexpr::Node>>>,
+    ctx: &crate::expressions::FastEvaluationContext,
 ) {
     use crate::expressions::ExpressionEvaluator;
 
     for (key, expr_str) in overrides {
-        if let Ok(val) = ExpressionEvaluator::evaluate(expr_str, ctx) {
+        let val_res = if let Some(nodes) = compiled_nodes {
+            if let Some(node) = nodes.get(expr_str) {
+                ExpressionEvaluator::evaluate_node_fast(node, ctx)
+            } else {
+                // Fallback: compile and evaluate
+                if let Ok(node) = ExpressionEvaluator::compile(expr_str) {
+                    ExpressionEvaluator::evaluate_node_fast(&node, ctx)
+                } else {
+                    Err(anyhow::anyhow!("Failed to compile expression"))
+                }
+            }
+        } else {
+             // Fallback: compile and evaluate
+             if let Ok(node) = ExpressionEvaluator::compile(expr_str) {
+                 ExpressionEvaluator::evaluate_node_fast(&node, ctx)
+             } else {
+                 Err(anyhow::anyhow!("Failed to compile expression"))
+             }
+        };
+
+        if let Ok(val) = val_res {
             match key.as_str() {
                 "count" => config.count = val as u32,
                 "spawn_rate" | "rate" => config.spawn_rate = val as f32,
