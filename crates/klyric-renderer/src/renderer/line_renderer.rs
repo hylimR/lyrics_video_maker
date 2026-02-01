@@ -257,6 +257,14 @@ impl<'a> LineRenderer<'a> {
         let mut cached_override_family: Option<&str> = None;
         let mut cached_override_typeface: Option<Typeface> = None;
 
+        // --- OPTIMIZATION: Hoist Prefix Application ---
+        // Pre-apply prefix delta to the base transform.
+        // This avoids applying the delta (12 branches) inside the loop for the common case (no char override).
+        let mut base_render_transform_with_prefix = base_render_transform;
+        if let Some(delta) = &prefix_delta {
+            base_render_transform_with_prefix.apply_delta(delta);
+        }
+
         // Loop:
         for glyph in glyphs.iter() {
             // Update context
@@ -326,17 +334,18 @@ impl<'a> LineRenderer<'a> {
                     let char_transform_ref = char_data.and_then(|c| c.transform.as_ref());
 
                     // Use optimized RenderTransform (dense)
-                    // If no char transform, use the pre-calculated base transform (Copy)
+                    // If no char transform, use the pre-calculated base+prefix transform (Copy)
                     let mut final_transform = if let Some(ct) = char_transform_ref {
-                        RenderTransform::new(line_transform_ref, ct)
+                        let mut t = RenderTransform::new(line_transform_ref, ct);
+                        // If we have a char transform, we must re-apply prefix delta on top of it
+                        // because we couldn't use the pre-calculated one (it lacks the char transform component)
+                        if let Some(delta) = &prefix_delta {
+                            t.apply_delta(delta);
+                        }
+                        t
                     } else {
-                        base_render_transform
+                        base_render_transform_with_prefix
                     };
-
-                    // Apply precomputed independent effects
-                    if let Some(delta) = &prefix_delta {
-                        final_transform.apply_delta(delta);
-                    }
 
                     // Apply remaining dependent effects (if any)
                     if !compiled_ops.is_empty() {
