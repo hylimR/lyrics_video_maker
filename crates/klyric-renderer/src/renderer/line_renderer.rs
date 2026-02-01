@@ -129,6 +129,23 @@ impl<'a> LineRenderer<'a> {
         let mut last_family: Option<&str> = None;
         let mut last_typeface: Option<skia_safe::Typeface> = None;
 
+        // [Bolt Optimization] Pre-calculate Shadow/Stroke colors to avoid parsing inside loop
+        let style_shadow_color = style.shadow.as_ref()
+            .and_then(|s| s.color.as_deref())
+            .and_then(parse_color);
+
+        let line_shadow_color = line.shadow.as_ref()
+            .and_then(|s| s.color.as_deref())
+            .and_then(parse_color);
+
+        let style_stroke_color = style.stroke.as_ref()
+            .and_then(|s| s.color.as_deref())
+            .and_then(parse_color);
+
+        let line_stroke_color = line.stroke.as_ref()
+            .and_then(|s| s.color.as_deref())
+            .and_then(parse_color);
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -297,58 +314,58 @@ impl<'a> LineRenderer<'a> {
 
                      
                      // --- 1. SHADOW ---
-                     let shadow_opts = if let Some(c) = char_data.and_then(|c| c.shadow.as_ref()) { Some(c) } 
-                                       else if let Some(l) = &line.shadow { Some(l) } 
-                                       else { style.shadow.as_ref() };
+                     let (active_shadow, active_shadow_color) = if let Some(c_shadow) = char_data.and_then(|c| c.shadow.as_ref()) {
+                         (Some(c_shadow), c_shadow.color.as_deref().and_then(parse_color))
+                     } else if let Some(l_shadow) = line.shadow.as_ref() {
+                         (Some(l_shadow), line_shadow_color)
+                     } else {
+                         (style.shadow.as_ref(), style_shadow_color)
+                     };
 
-                     if let Some(shadow) = shadow_opts {
-                         if let Some(color_hex) = &shadow.color {
-                             if let Some(shadow_color) = parse_color(color_hex) {
-                                 shadow_paint.reset();
-                                 shadow_paint.set_color(shadow_color);
-                                 shadow_paint.set_alpha_f(final_opacity);
-                                 shadow_paint.set_anti_alias(true);
-                                 
-                                 // Apply blur to shadow if needed
-                                 if final_transform.blur > 0.0 {
-                                     if let Some((_, ref filter)) = cached_blur_filter {
-                                         shadow_paint.set_mask_filter(Some(filter.clone()));
-                                     }
-                                 }
-                                 
-                                 self.canvas.save();
-                                 self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
-                                 self.canvas.draw_path(path, &shadow_paint);
-                                 self.canvas.restore();
+                     if let (Some(shadow), Some(shadow_color)) = (active_shadow, active_shadow_color) {
+                         shadow_paint.reset();
+                         shadow_paint.set_color(shadow_color);
+                         shadow_paint.set_alpha_f(final_opacity);
+                         shadow_paint.set_anti_alias(true);
+
+                         // Apply blur to shadow if needed
+                         if final_transform.blur > 0.0 {
+                             if let Some((_, ref filter)) = cached_blur_filter {
+                                 shadow_paint.set_mask_filter(Some(filter.clone()));
                              }
                          }
+
+                         self.canvas.save();
+                         self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
+                         self.canvas.draw_path(path, &shadow_paint);
+                         self.canvas.restore();
                      }
 
                      // --- 2. STROKE ---
-                     let stroke_opts = if let Some(c) = char_data.and_then(|c| c.stroke.as_ref()) { Some(c) } 
-                                       else if let Some(l) = &line.stroke { Some(l) } 
-                                       else { style.stroke.as_ref() };
+                     let (active_stroke, active_stroke_color) = if let Some(c_stroke) = char_data.and_then(|c| c.stroke.as_ref()) {
+                         (Some(c_stroke), c_stroke.color.as_deref().and_then(parse_color))
+                     } else if let Some(l_stroke) = line.stroke.as_ref() {
+                         (Some(l_stroke), line_stroke_color)
+                     } else {
+                         (style.stroke.as_ref(), style_stroke_color)
+                     };
 
-                     if let Some(stroke) = stroke_opts {
+                     if let (Some(stroke), Some(stroke_color)) = (active_stroke, active_stroke_color) {
                          if stroke.width_or_default() > 0.0 {
-                             if let Some(color_hex) = &stroke.color {
-                                 if let Some(stroke_color) = parse_color(color_hex) {
-                                     stroke_paint.reset();
-                                     stroke_paint.set_style(PaintStyle::Stroke);
-                                     stroke_paint.set_stroke_width(stroke.width_or_default());
-                                     stroke_paint.set_color(stroke_color);
-                                     stroke_paint.set_alpha_f(final_opacity);
-                                     stroke_paint.set_anti_alias(true);
-                                     
-                                     if final_transform.blur > 0.0 {
-                                         if let Some((_, ref filter)) = cached_blur_filter {
-                                             stroke_paint.set_mask_filter(Some(filter.clone()));
-                                         }
-                                     }
+                             stroke_paint.reset();
+                             stroke_paint.set_style(PaintStyle::Stroke);
+                             stroke_paint.set_stroke_width(stroke.width_or_default());
+                             stroke_paint.set_color(stroke_color);
+                             stroke_paint.set_alpha_f(final_opacity);
+                             stroke_paint.set_anti_alias(true);
 
-                                     self.canvas.draw_path(path, &stroke_paint);
+                             if final_transform.blur > 0.0 {
+                                 if let Some((_, ref filter)) = cached_blur_filter {
+                                     stroke_paint.set_mask_filter(Some(filter.clone()));
                                  }
                              }
+
+                             self.canvas.draw_path(path, &stroke_paint);
                          }
                      }
 
