@@ -11,3 +11,7 @@ Action: When optimizing, first check if existing caches are actually being used.
 ## 2024-05-24 - Skia Bindings Segfault on Linux
 Learning: Native compilation of `klyric-renderer` (specifically `skia-bindings`) can fail due to Clang/GCC header conflicts in certain environments (e.g., SEGFAULTs in `string_view`), preventing local verification of native-only code paths.
 Action: When working on native renderers in this codebase, rely on static analysis and partial verification (wasm target if available) if the local environment is broken. Ensure strict adherence to existing patterns.
+
+## 2024-05-24 - Context Reuse in Particle Loop
+Learning: Inner loops (like particle spawning inside glyph rendering) were allocating `EvaluationContext` (via `Default::default()`) which not only caused allocation overhead but also used incorrect default dimensions (1920x1080) instead of actual canvas dimensions.
+Action: Reuse context objects (`FastEvaluationContext`) from outer scopes whenever possible, updating only the changed fields (`progress`, `index`). This improves performance and ensures consistency (correct dimensions).
