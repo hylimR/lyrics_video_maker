@@ -444,28 +444,11 @@ impl<'a> LineRenderer<'a> {
                          let capture_h = h.ceil() as i32 + 20;
                          if capture_w <= 0 || capture_h <= 0 { continue; }
                          
-                         // Create offscreen surface
-                         // Note: creating surfaces every frame is expensive. 
-                         // But disintegration usually only triggers ONCE per char.
-                         // Optimization: Check if emitter exists already? 
-                         // ParticleSystem does checks, but we shouldn't create surface if not needed.
-                         // But we can't easily check particle system state from here without mutable borrow conflict?
-                         // Actually active_keys insertion handles liveness.
-                         // We should only generate if self.time is close to start?
-                         // EffectEngine handles trigger/progress.
-                         
-                         // "ensure_disintegration_emitter" checks existence.
-                         // But ideally we don't construct the Image if it exists.
-                         // Let's rely on loose check or just pay the cost (it's fine for export).
+                         // Create offscreen surface for disintegration effect.
+                         // TODO: Optimization - Avoid creating surface if emitter already exists.
+                         // Current implementation relies on `ensure_disintegration_emitter` to handle existence checks.
                          
                          if self.particle_system.has_emitter(key) {
-                             // Just update active
-                             // But we can't access it here easily because self.particle_system is borrowed?
-                             // No, we have &mut self in render_line.
-                             // Actually we have separate borrows in Mod.rs.
-                             // LineRenderer struct holds &mut separate fields.
-                             // So yes we can check.
-                             // Emitter exists - ensure_disintegration_emitter handles the active state internally
                               continue;
                          }
 

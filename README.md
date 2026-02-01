@@ -33,7 +33,7 @@ crates/
 │
 ├── klyric-renderer/     # Core Rendering Engine
 │   └── Pure Rust library. Handles parsing, layout, effects, and drawing.
-│   └── Supports dual targets: Native (skia-safe) and WASM (tiny-skia).
+│   └── Native rendering via skia-safe. (WASM support is currently experimental/broken).
 │
 └── klyric-preview/      # Standalone Previewer
     └── Lightweight OpenGL preview window using winit + glutin.
@@ -103,7 +103,8 @@ cargo test -p klyric-renderer
 ### Known Issues
 - **Linux Dependencies:** A version conflict exists between `ashpd` (0.11.0) and `zbus` (5.13.1) which may cause compilation warnings or errors.
 - **Windows File Locks:** If you encounter "file in use" errors with `skia-bindings` during build, it may be due to `rust-analyzer` locking files. Solution: Clean the package with `cargo clean -p skia-bindings` or restart the analyzer.
+- **WASM Support:** WASM compilation is currently broken due to dependency on native `skia-safe` types in the shared renderer code.
 
 ### Notes
 - **Font Discovery:** The application currently relies on embedded fonts or specific system fonts.
-- **WASM Support:** The renderer has a WASM target for potential web-based previews, utilizing `tiny-skia`.
+- **WASM Support:** The renderer previously targeted WASM via `tiny-skia`, but recent changes have introduced tight coupling with native `skia-safe`, temporarily breaking WASM compatibility.
