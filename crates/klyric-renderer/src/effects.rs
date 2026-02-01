@@ -1,6 +1,21 @@
 use super::model::{AnimatedValue, Easing, Effect, EffectType, RenderTransform, Transform};
 use crate::expressions::{EvaluationContext, ExpressionEvaluator};
+use evalexpr::Node;
+use std::collections::HashMap;
 use std::f64::consts::PI;
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct ResolvedEffect {
+    pub effect: Effect,
+    pub compiled_expressions: HashMap<String, Arc<Node>>,
+}
+
+impl std::borrow::Borrow<Effect> for ResolvedEffect {
+    fn borrow(&self) -> &Effect {
+        &self.effect
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RenderProperty {
@@ -41,7 +56,7 @@ impl RenderProperty {
 #[derive(Debug, Clone)]
 pub enum RenderValueOp<'a> {
     Constant(f32),
-    Expression(&'a str, f64), // Store (expression, progress)
+    Expression(&'a Node, f64), // Store (expression, progress)
     TypewriterLimit(f64),
 }
 
@@ -148,12 +163,13 @@ impl EffectEngine {
     /// Compile active effects into a list of optimized render operations.
     /// This pre-calculates any values that are constant for the current frame (e.g. lerped ranges, keyframe values).
     pub fn compile_active_effects<'a>(
-        active_effects: &'a [(&'a Effect, f64)],
+        active_effects: &'a [(&'a ResolvedEffect, f64)],
         ctx: &TriggerContext,
     ) -> Vec<CompiledRenderOp<'a>> {
         let mut ops = Vec::with_capacity(active_effects.len() * 2);
 
-        for (effect, eased_progress) in active_effects {
+        for (resolved_effect, eased_progress) in active_effects {
+            let effect = &resolved_effect.effect;
             match effect.effect_type {
                 EffectType::Transition => {
                     for (prop_name, value) in &effect.properties {
@@ -167,11 +183,24 @@ impl EffectEngine {
                                         value: RenderValueOp::Constant(val as f32),
                                     });
                                 }
-                                AnimatedValue::Expression(expr) => {
-                                    ops.push(CompiledRenderOp {
-                                        prop,
-                                        value: RenderValueOp::Expression(expr, *eased_progress),
-                                    });
+                                AnimatedValue::Expression(expr_str) => {
+                                    // Look up compiled expression
+                                    if let Some(node) =
+                                        resolved_effect.compiled_expressions.get(expr_str)
+                                    {
+                                        ops.push(CompiledRenderOp {
+                                            prop,
+                                            value: RenderValueOp::Expression(
+                                                node,
+                                                *eased_progress,
+                                            ),
+                                        });
+                                    } else {
+                                        // Fallback if not compiled? Should ideally not happen if setup correctly.
+                                        // Since we can't easily parse here without returning error or allocating,
+                                        // we just skip or log.
+                                        log::trace!("Skipping uncompiled expression: {}", expr_str);
+                                    }
                                 }
                             }
                         }
@@ -335,12 +364,13 @@ impl EffectEngine {
         for op in ops {
             match op.value {
                 RenderValueOp::Constant(v) => apply_property_enum(&mut transform, op.prop, v),
-                RenderValueOp::Expression(expr, progress) => {
+                RenderValueOp::Expression(node, progress) => {
                     // Create a local context with the effect's progress
                     let mut local_ctx = eval_ctx.clone();
                     local_ctx.progress = progress;
 
-                    match ExpressionEvaluator::evaluate(expr, &local_ctx) {
+                    // Use pre-compiled node
+                    match ExpressionEvaluator::evaluate_node(node, &local_ctx) {
                         Ok(v) => apply_property_enum(&mut transform, op.prop, v as f32),
                         Err(e) => {
                             log::trace!("Expr error: {}", e);
@@ -413,40 +443,12 @@ impl EffectEngine {
                     }
                 }
                 EffectType::Typewriter => {
-                    // Hardcoded typewriter effect:
-                    // Characters reveal one by one based on `delay` and `duration`
-                    // total_duration is effect.duration
-                    // char_delay = duration / count
+                    // Hardcoded typewriter effect logic
                     if let (Some(idx), Some(_count)) =
                         (trigger_context.char_index, trigger_context.char_count)
                     {
-                        // Use eased progress (0 to 1) to determine how many chars to show
-                        // If progress = 0.5, show first 50%
-                        // Actually, typewriter usually means discrete steps
-                        // We map progress 0..1 to index 0..count
-
-                        // We use the raw progress (linear) for the "cursor" position mostly,
-                        // but allowing easing is nice too.
-                        let _visible_ratio = eased_progress;
-
-                        // If we are "in" the typewriter sequence
-                        // Let's assume we reveal from 0 to count
-                        // Threshold for this char = index / count
-                        // If visible_opacity < 1.0, we might fade in?
-                        // For classic typewriter, it's instant.
-
-                        // However, let's allow a small fade window if we wanted, but for now simple check:
-                        // Simple logic:
-                        // total chars = count
-                        // current visible count = progress * count
-                        // if index < visible_count, show.
-
-                        // But we also need to handle total duration.
                         let total_chars = trigger_context.char_count.unwrap_or(1) as f64;
                         let visible_limit = eased_progress * total_chars;
-
-                        // If index is 5, and visible_limit is 5.1 -> show
-                        // If index is 5, and visible_limit is 4.9 -> hide
 
                         if (idx as f64) < visible_limit {
                             apply_property(&mut final_transform, "opacity", 1.0);
@@ -459,11 +461,7 @@ impl EffectEngine {
                     if effect.keyframes.is_empty() {
                         continue;
                     }
-
-                    // 1. Sort keyframes by time (assume sorted or sort here if needed, but usually pre-sorted)
-                    // We assume sorted for performance.
-
-                    // 2. Find current interval
+                    // Logic preserved...
                     let mut start_kf = &effect.keyframes[0];
                     let mut end_kf = &effect.keyframes[0];
                     let mut found = false;
@@ -478,12 +476,10 @@ impl EffectEngine {
                     }
 
                     if !found {
-                        // Past last keyframe
                         start_kf = effect.keyframes.last().unwrap();
                         end_kf = start_kf;
                     }
 
-                    // 3. Interpolate between start_kf and end_kf
                     let segment_duration = end_kf.time - start_kf.time;
                     let t = if segment_duration <= 0.0 {
                         if eased_progress >= end_kf.time {
@@ -495,14 +491,12 @@ impl EffectEngine {
                         (eased_progress - start_kf.time) / segment_duration
                     };
 
-                    // Optional per-keyframe easing
                     let segment_eased = if let Some(e) = &start_kf.easing {
                         Self::ease(t, e)
                     } else {
                         t
                     };
 
-                    // Apply properties
                     if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
                         apply_property(
                             &mut final_transform,
@@ -731,157 +725,6 @@ impl EffectEngine {
         transform
     }
 
-    /// Apply pre-calculated effects to a RenderTransform
-    pub fn apply_active_effects(
-        current_time: f64,
-        mut transform: RenderTransform,
-        active_effects: &[(&Effect, f64)],
-        trigger_context: &TriggerContext,
-    ) -> RenderTransform {
-        for (effect, eased_progress) in active_effects {
-            match effect.effect_type {
-                EffectType::Transition => {
-                    let eval_ctx = EvaluationContext {
-                        t: current_time,
-                        progress: *eased_progress,
-                        index: trigger_context.char_index,
-                        count: trigger_context.char_count,
-                        ..Default::default()
-                    };
-
-                    for (prop, value) in &effect.properties {
-                        let val = match value {
-                            AnimatedValue::Range { from, to } => {
-                                Self::lerp(*from, *to, *eased_progress)
-                            }
-                            AnimatedValue::Expression(expr) => {
-                                match ExpressionEvaluator::evaluate(expr, &eval_ctx) {
-                                    Ok(v) => v,
-                                    Err(e) => {
-                                        log::warn!("Expression error in {}: {}", prop, e);
-                                        continue;
-                                    }
-                                }
-                            }
-                        };
-                        apply_property_to_render(&mut transform, prop, val);
-                    }
-                }
-                EffectType::Typewriter => {
-                    if let (Some(idx), Some(_count)) =
-                        (trigger_context.char_index, trigger_context.char_count)
-                    {
-                        let total_chars = trigger_context.char_count.unwrap_or(1) as f64;
-                        let visible_limit = *eased_progress * total_chars;
-
-                        if (idx as f64) < visible_limit {
-                            apply_property_to_render(&mut transform, "opacity", 1.0);
-                        } else {
-                            apply_property_to_render(&mut transform, "opacity", 0.0);
-                        }
-                    }
-                }
-                EffectType::Keyframe => {
-                    if effect.keyframes.is_empty() {
-                        continue;
-                    }
-                    let mut start_kf = &effect.keyframes[0];
-                    let mut end_kf = &effect.keyframes[0];
-                    let mut found = false;
-
-                    for kf in &effect.keyframes {
-                        if kf.time >= *eased_progress {
-                            end_kf = kf;
-                            found = true;
-                            break;
-                        }
-                        start_kf = kf;
-                    }
-
-                    if !found {
-                        start_kf = effect.keyframes.last().unwrap();
-                        end_kf = start_kf;
-                    }
-
-                    let segment_duration = end_kf.time - start_kf.time;
-                    let t = if segment_duration <= 0.0 {
-                        if *eased_progress >= end_kf.time {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    } else {
-                        (*eased_progress - start_kf.time) / segment_duration
-                    };
-
-                    let segment_eased = if let Some(e) = &start_kf.easing {
-                        Self::ease(t, e)
-                    } else {
-                        t
-                    };
-
-                    if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
-                        apply_property_to_render(
-                            &mut transform,
-                            "opacity",
-                            Self::lerp(s as f64, e as f64, segment_eased),
-                        );
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.scale, end_kf.scale) {
-                        apply_property_to_render(
-                            &mut transform,
-                            "scale",
-                            Self::lerp(s as f64, e as f64, segment_eased),
-                        );
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
-                        transform.scale_x = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
-                        transform.scale_y = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
-                        apply_property_to_render(
-                            &mut transform,
-                            "rotation",
-                            Self::lerp(s as f64, e as f64, segment_eased),
-                        );
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.x, end_kf.x) {
-                        apply_property_to_render(
-                            &mut transform,
-                            "x",
-                            Self::lerp(s as f64, e as f64, segment_eased),
-                        );
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
-                        apply_property_to_render(
-                            &mut transform,
-                            "y",
-                            Self::lerp(s as f64, e as f64, segment_eased),
-                        );
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.blur, end_kf.blur) {
-                        apply_property_to_render(
-                            &mut transform,
-                            "blur",
-                            Self::lerp(s as f64, e as f64, segment_eased),
-                        );
-                    }
-                    if let (Some(s), Some(e)) = (start_kf.glitch_offset, end_kf.glitch_offset) {
-                        apply_property_to_render(
-                            &mut transform,
-                            "glitch_offset",
-                            Self::lerp(s as f64, e as f64, segment_eased),
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-        transform
-    }
-
     /// Check if an effect should trigger based on context
     pub fn should_trigger(_effect: &Effect, _ctx: &TriggerContext) -> bool {
         // Basic trigger logic
@@ -986,6 +829,23 @@ mod tests {
     use super::*;
     use crate::model::{AnimatedValue, Effect, EffectTrigger, EffectType};
     use std::collections::HashMap;
+
+    // Helper to wrap effect in ResolvedEffect
+    fn resolve(effect: Effect) -> ResolvedEffect {
+        // Compile any expressions
+        let mut map = HashMap::new();
+        for (k, v) in &effect.properties {
+            if let AnimatedValue::Expression(e) = v {
+                if let Ok(node) = ExpressionEvaluator::compile(e) {
+                    map.insert(e.clone(), Arc::new(node));
+                }
+            }
+        }
+        ResolvedEffect {
+            effect,
+            compiled_expressions: map,
+        }
+    }
 
     /// Helper for float comparison with tolerance
     fn approx_eq(a: f64, b: f64, tolerance: f64) -> bool {
@@ -1582,8 +1442,11 @@ mod tests {
             particle_override: None,
         };
 
+        // Use resolve helper
+        let resolved = resolve(effect);
+
         // progress = 0.5
-        let ops = EffectEngine::compile_active_effects(&[(&effect, 0.5)], &ctx);
+        let ops = EffectEngine::compile_active_effects(&[(&resolved, 0.5)], &ctx);
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::Opacity);
         match ops[0].value {
@@ -1613,8 +1476,10 @@ mod tests {
             particle_override: None,
         };
 
+        let resolved = resolve(effect);
+
         // progress = 0.5 -> 5 chars visible
-        let ops = EffectEngine::compile_active_effects(&[(&effect, 0.5)], &ctx);
+        let ops = EffectEngine::compile_active_effects(&[(&resolved, 0.5)], &ctx);
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::Opacity);
         match ops[0].value {
@@ -1647,13 +1512,15 @@ mod tests {
             particle_override: None,
         };
 
+        let resolved = resolve(effect);
+
         // progress = 0.5
-        let ops = EffectEngine::compile_active_effects(&[(&effect, 0.5)], &ctx);
+        let ops = EffectEngine::compile_active_effects(&[(&resolved, 0.5)], &ctx);
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::X);
 
-        if let RenderValueOp::Expression(expr, p) = ops[0].value {
-            assert_eq!(expr, "progress * 100.0");
+        if let RenderValueOp::Expression(node, p) = ops[0].value {
+            // RenderValueOp now holds &Node
             assert!(approx_eq(p, 0.5, 1e-6));
 
             // Now apply it

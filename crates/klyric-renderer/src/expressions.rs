@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use evalexpr::{
-    eval_with_context, Context, DefaultNumericTypes, EvalexprError, EvalexprResult, Value,
+    build_operator_tree, eval_with_context, Context, DefaultNumericTypes, EvalexprError,
+    EvalexprResult, Node, Value,
 };
 
 #[derive(Debug, Clone)]
@@ -92,6 +93,28 @@ impl Context for FastEvaluationContext {
 pub struct ExpressionEvaluator;
 
 impl ExpressionEvaluator {
+    /// Pre-compile an expression for reuse
+    pub fn compile(expression: &str) -> Result<Node> {
+        build_operator_tree(expression).map_err(|e| anyhow!("Compilation error: {}", e))
+    }
+
+    /// Evaluate a pre-compiled node
+    pub fn evaluate_node(node: &Node, context: &EvaluationContext) -> Result<f64> {
+        // Optimization: Use FastEvaluationContext to avoid HashMap allocation
+        let ctx = FastEvaluationContext::new(context);
+
+        match node.eval_with_context(&ctx) {
+            Ok(Value::Float(f)) => Ok(f),
+            Ok(Value::Int(val)) => {
+                let i: i64 = val;
+                Ok(i as f64)
+            }
+            Ok(Value::Boolean(b)) => Ok(if b { 1.0 } else { 0.0 }),
+            Ok(v) => Err(anyhow!("Expression returned non-numeric value: {:?}", v)),
+            Err(e) => Err(anyhow!("Evaluation error: {}", e)),
+        }
+    }
+
     pub fn evaluate(expression: &str, context: &EvaluationContext) -> Result<f64> {
         // Optimization: Use FastEvaluationContext to avoid HashMap allocation
         let ctx = FastEvaluationContext::new(context);
@@ -127,6 +150,16 @@ mod tests {
         assert_eq!(
             ExpressionEvaluator::evaluate("10 * 0.5", &ctx).unwrap(),
             5.0
+        );
+    }
+
+    #[test]
+    fn test_compiled_math() {
+        let ctx = EvaluationContext::default();
+        let node = ExpressionEvaluator::compile("1 + 1").unwrap();
+        assert_eq!(
+            ExpressionEvaluator::evaluate_node(&node, &ctx).unwrap(),
+            2.0
         );
     }
 

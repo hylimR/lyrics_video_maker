@@ -12,7 +12,7 @@ use crate::model::{
     RenderTransform, Style, Transform,
 };
 // use crate::style::StyleResolver; // Removed
-use crate::effects::{EffectEngine, TriggerContext};
+use crate::effects::{EffectEngine, ResolvedEffect, TriggerContext};
 use crate::layout::GlyphInfo;
 use crate::presets::CharBounds;
 use crate::text::TextRenderer;
@@ -122,7 +122,7 @@ impl<'a> LineRenderer<'a> {
         let split_idx = effects
             .transform_effects
             .iter()
-            .position(|e| is_char_dependent(e))
+            .position(|e| is_char_dependent(&e.effect))
             .unwrap_or(effects.transform_effects.len());
 
         let prefix_delta = if split_idx > 0 {
@@ -174,7 +174,8 @@ impl<'a> LineRenderer<'a> {
 
         // 2. Disintegration (for opacity)
         let mut disintegration_progress_base = 0.0;
-        if let Some((_name, effect)) = effects.disintegrate_effects.first() {
+        if let Some((_name, resolved)) = effects.disintegrate_effects.first() {
+            let effect = &resolved.effect;
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 disintegration_progress_base = p.clamp(0.0, 1.0);
@@ -205,15 +206,16 @@ impl<'a> LineRenderer<'a> {
         // --- OPTIMIZATION: Pre-calculate Active Effects ---
         // 1. Dependent Transform Effects
         let dependent_count = effects.transform_effects.len().saturating_sub(split_idx);
-        let mut active_dependent_effects_raw: Vec<(&Effect, f64)> =
+        let mut active_dependent_effects_raw: Vec<(&ResolvedEffect, f64)> =
             Vec::with_capacity(dependent_count);
         if split_idx < effects.transform_effects.len() {
-            for effect in &effects.transform_effects[split_idx..] {
+            for resolved in &effects.transform_effects[split_idx..] {
+                let effect = &resolved.effect;
                 if EffectEngine::should_trigger(effect, &ctx) {
                     let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                     if (0.0..=1.0).contains(&p) {
                         let eased = EffectEngine::ease(p, &effect.easing);
-                        active_dependent_effects_raw.push((effect, eased));
+                        active_dependent_effects_raw.push((resolved, eased));
                     }
                 }
             }
@@ -226,7 +228,8 @@ impl<'a> LineRenderer<'a> {
         // 2. Disintegrate Effects
         let mut active_disintegrate_effects: Vec<(&str, &Effect, f64, DefaultHasher)> =
             Vec::with_capacity(effects.disintegrate_effects.len());
-        for (name, effect) in &effects.disintegrate_effects {
+        for (name, resolved) in &effects.disintegrate_effects {
+            let effect = &resolved.effect;
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 if (0.0..=1.0).contains(&p) {
@@ -241,7 +244,8 @@ impl<'a> LineRenderer<'a> {
         // 3. Particle Effects
         let mut active_particle_effects: Vec<(&str, &Effect, f64, DefaultHasher)> =
             Vec::with_capacity(effects.particle_effects.len());
-        for (name, effect) in &effects.particle_effects {
+        for (name, resolved) in &effects.particle_effects {
+            let effect = &resolved.effect;
             if EffectEngine::should_trigger(effect, &ctx) {
                 let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                 if (0.0..=1.0).contains(&p) {
