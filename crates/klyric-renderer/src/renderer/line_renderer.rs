@@ -579,15 +579,8 @@ impl<'a> LineRenderer<'a> {
                              // Only apply overrides if base config exists (matching legacy behavior) and overrides are present
                              if let Some(base_config) = &effect.particle_config {
                                  if let Some(overrides) = &effect.particle_override {
-                                     // Create context only if needed
-                                     let eval_ctx = crate::expressions::EvaluationContext {
-                                         t: self.time,
-                                         progress,
-                                         index: Some(glyph.char_index),
-                                         count: Some(glyphs.len()),
-                                         ..Default::default()
-                                     };
-                                     let fast_ctx = crate::expressions::FastEvaluationContext::new(&eval_ctx);
+                                     // Reuse context (fixing width/height usage)
+                                     fast_ctx.set_progress(progress);
 
                                      self.particle_system.apply_emitter_overrides(
                                          key,
@@ -602,20 +595,14 @@ impl<'a> LineRenderer<'a> {
                          }
 
                          // New Emitter Path (Allocation Path)
-                         let eval_ctx = crate::expressions::EvaluationContext {
-                             t: self.time,
-                             progress,
-                             index: Some(glyph.char_index),
-                             count: Some(glyphs.len()),
-                             ..Default::default()
-                         };
-                         
                          let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
                          
                          // Clone config and apply overrides
                          let mut p_config = effect.particle_config.clone();
                          if let (Some(config), Some(overrides)) = (&mut p_config, &effect.particle_override) {
-                             let fast_ctx = crate::expressions::FastEvaluationContext::new(&eval_ctx);
+                             // Reuse context
+                             fast_ctx.set_progress(progress);
+
                              // [Bolt Optimization] Use pre-compiled expressions
                              crate::particle::config::apply_particle_overrides(
                                  config,
