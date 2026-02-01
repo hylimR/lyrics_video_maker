@@ -79,6 +79,25 @@ impl<'a> LineRenderer<'a> {
         let mut shadow_paint = Paint::default();
         let mut stroke_paint = Paint::default();
 
+        // [Bolt Optimization] Hoist Glitch Effect Paints to avoid 3x clones per char
+        let mut r_paint = Paint::default();
+        r_paint.set_color(Color::RED);
+        r_paint.set_blend_mode(BlendMode::Plus);
+        r_paint.set_anti_alias(true);
+        r_paint.set_style(PaintStyle::Fill);
+
+        let mut g_paint = Paint::default();
+        g_paint.set_color(Color::GREEN);
+        g_paint.set_blend_mode(BlendMode::Plus);
+        g_paint.set_anti_alias(true);
+        g_paint.set_style(PaintStyle::Fill);
+
+        let mut b_paint = Paint::default();
+        b_paint.set_color(Color::BLUE);
+        b_paint.set_blend_mode(BlendMode::Plus);
+        b_paint.set_anti_alias(true);
+        b_paint.set_style(PaintStyle::Fill);
+
         // Cache: (sigma, filter)
         let mut cached_blur_filter: Option<(f32, MaskFilter)> = None;
 
@@ -408,20 +427,40 @@ impl<'a> LineRenderer<'a> {
                              // Glitch Effect: Draw channels separately
                              let offset = final_transform.glitch_offset;
 
-                             // Red Channel
-                             let mut r_paint = paint.clone();
-                             r_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 255, 0, 0));
-                             r_paint.set_blend_mode(BlendMode::Plus); // Additive blending for RGB separation
+                             // Update shared properties for all channels
+                             // [Bolt Optimization] Update hoisted paints instead of cloning.
+                             // Note: We strictly use Fill style here as this block is for the main text fill.
+                             // Strokes are handled in a separate block below.
 
-                             // Green Channel
-                             let mut g_paint = paint.clone();
-                             g_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 0, 255, 0));
-                             g_paint.set_blend_mode(BlendMode::Plus);
+                             // Red Channel Update
+                             r_paint.set_alpha_f(final_opacity);
+                             if final_transform.blur > 0.0 {
+                                 if let Some((_, ref filter)) = cached_blur_filter {
+                                     r_paint.set_mask_filter(Some(filter.clone()));
+                                 }
+                             } else {
+                                 r_paint.set_mask_filter(None);
+                             }
 
-                             // Blue Channel
-                             let mut b_paint = paint.clone();
-                             b_paint.set_color(Color::from_argb((final_opacity * 255.0) as u8, 0, 0, 255));
-                             b_paint.set_blend_mode(BlendMode::Plus);
+                             // Green Channel Update
+                             g_paint.set_alpha_f(final_opacity);
+                             if final_transform.blur > 0.0 {
+                                 if let Some((_, ref filter)) = cached_blur_filter {
+                                     g_paint.set_mask_filter(Some(filter.clone()));
+                                 }
+                             } else {
+                                 g_paint.set_mask_filter(None);
+                             }
+
+                             // Blue Channel Update
+                             b_paint.set_alpha_f(final_opacity);
+                             if final_transform.blur > 0.0 {
+                                 if let Some((_, ref filter)) = cached_blur_filter {
+                                     b_paint.set_mask_filter(Some(filter.clone()));
+                                 }
+                             } else {
+                                 b_paint.set_mask_filter(None);
+                             }
 
                              self.canvas.save();
                              self.canvas.translate((-offset, -offset));
@@ -429,22 +468,14 @@ impl<'a> LineRenderer<'a> {
                              self.canvas.restore();
 
                              self.canvas.save();
-                             self.canvas.translate((offset, -offset)); // Different offset for G? Or just offset?
-                             // Standard Chromatic Aberration: R: -off, B: +off, G: 0
-                             self.canvas.draw_path(path, &g_paint); // Maybe G is at 0?
-                             // Actually let's do: R at -offset, B at +offset, G at 0.
-                             // But let's try to match glitch logic: jittery offsets.
+                             self.canvas.translate((offset, -offset));
+                             self.canvas.draw_path(path, &g_paint);
                              self.canvas.restore();
 
                              self.canvas.save();
                              self.canvas.translate((offset, offset));
                              self.canvas.draw_path(path, &b_paint);
                              self.canvas.restore();
-
-                             // Re-draw original white core? No, RGB additive makes white.
-                             // But we need to handle non-white colors properly.
-                             // If text is NOT white, splitting RGB is complex.
-                             // For now assuming white text for glitch effect or simple displacement.
 
                          } else {
                              // Normal Draw
