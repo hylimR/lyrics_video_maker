@@ -265,11 +265,12 @@ impl<'a> LineRenderer<'a> {
              
              if let Some(typeface) = &glyph.typeface {
                  // Get path
-                 // [Bolt Optimization] Use cached path by ID instead of resolving by char/Font object
-                 if let Some(path) = self.text_renderer.get_path_cached(typeface, size, glyph.glyph_id) {
+                 // [Bolt Optimization] Use cached path from GlyphInfo (populated during layout)
+                 // This avoids FFI calls and HashMap lookups per frame.
+                 if let Some(path) = glyph.path.as_ref() {
                      // Dimensions for effects
-                     // Skia path bounds
-                     let bounds = path.bounds();
+                     // [Bolt Optimization] Use cached bounds from GlyphInfo
+                     let bounds = glyph.bounds.unwrap_or_else(|| path.bounds());
                      let w = bounds.width();
                      let h = bounds.height();
                      // Helper midpoint
@@ -393,24 +394,24 @@ impl<'a> LineRenderer<'a> {
                      let path_to_draw: &skia_safe::Path = if let Some(progress) = stroke_reveal_progress {
                          // [Bolt Optimization] Short-circuit if effectively complete to avoid PathMeasure
                          if progress >= 0.999 {
-                             &path
+                             path
                          } else if progress <= 0.001 {
                              // [Bolt Optimization] Avoid PathMeasure if progress is effectively zero (e.g. delay).
                              // Returns an empty path to skip drawing.
                              modified_path_storage = Some(skia_safe::Path::new());
                              modified_path_storage.as_ref().unwrap()
                          } else {
-                             let mut measure = skia_safe::PathMeasure::new(&path, false, None);
+                             let mut measure = skia_safe::PathMeasure::new(path, false, None);
                              let length = measure.length();
                              if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
                                  modified_path_storage = Some(partial_path);
                                  modified_path_storage.as_ref().unwrap()
                              } else {
-                                 &path
+                                 path
                              }
                          }
                      } else {
-                         &path
+                         path
                      };
                      let path = path_to_draw; // Shadow original path with the one to draw
 
