@@ -133,7 +133,7 @@ impl TextRenderer {
         (advance, height, glyph_id.0)
     }
 
-    fn resolve_font_id(&mut self, family: &str) -> Option<ID> {
+    pub fn resolve_font_id(&mut self, family: &str) -> Option<ID> {
         if let Some(id) = self.id_cache.get(family) {
             return Some(*id);
         }
@@ -159,9 +159,7 @@ impl TextRenderer {
         }
     }
 
-    pub fn get_glyph_path(&mut self, family: &str, ch: char) -> Option<tiny_skia::Path> {
-        let id = self.resolve_font_id(family)?;
-
+    pub fn get_glyph_path_by_id(&mut self, id: ID, ch: char) -> Option<tiny_skia::Path> {
         if let Some(path) = self.path_cache.get(&(id, ch)) {
             return Some(path.clone());
         }
@@ -195,6 +193,11 @@ impl TextRenderer {
         } else {
             None
         }
+    }
+
+    pub fn get_glyph_path(&mut self, family: &str, ch: char) -> Option<tiny_skia::Path> {
+        let id = self.resolve_font_id(family)?;
+        self.get_glyph_path_by_id(id, ch)
     }
 }
 
@@ -365,6 +368,8 @@ impl Renderer {
             .map(|s| (s.x.unwrap_or(0.0), s.y.unwrap_or(0.0)))
             .unwrap_or((0.0, 0.0));
 
+        let mut cached_family_id: Option<(String, ID)> = None;
+
         for glyph_info in glyphs {
             let char_data = &line.chars[glyph_info.char_index];
             let is_active = time >= char_data.start;
@@ -395,12 +400,29 @@ impl Renderer {
                 .unwrap_or("Noto Sans SC");
             let size = font_spec.and_then(|f| f.size).unwrap_or(72.0);
 
+            // Resolve Font ID (Optimized with local cache)
+            let font_id = if let Some((cached_name, cached_id)) = &cached_family_id {
+                if cached_name == family {
+                    *cached_id
+                } else if let Some(id) = self.text_renderer.resolve_font_id(family) {
+                    cached_family_id = Some((family.to_string(), id));
+                    id
+                } else {
+                    continue; // Skip drawing if font not found
+                }
+            } else if let Some(id) = self.text_renderer.resolve_font_id(family) {
+                cached_family_id = Some((family.to_string(), id));
+                id
+            } else {
+                continue; // Skip drawing if font not found
+            };
+
             let render_x = lx + glyph_info.x;
             let render_y = ly + glyph_info.y;
 
-            self.draw_glyph_path(
+            self.draw_glyph_path_by_id(
                 pixmap,
-                family,
+                font_id,
                 glyph_info.char,
                 size,
                 render_x,
@@ -416,10 +438,10 @@ impl Renderer {
         Ok(())
     }
 
-    fn draw_glyph_path(
+    fn draw_glyph_path_by_id(
         &mut self,
         pixmap: &mut Pixmap,
-        family: &str,
+        font_id: ID,
         ch: char,
         size: f32,
         x: f32,
@@ -430,7 +452,7 @@ impl Renderer {
         shadow_color: Option<Color>,
         shadow_offset: (f32, f32),
     ) {
-        if let Some(path) = self.text_renderer.get_glyph_path(family, ch) {
+        if let Some(path) = self.text_renderer.get_glyph_path_by_id(font_id, ch) {
             let mut paint = tiny_skia::Paint::default();
             paint.anti_alias = true;
 
