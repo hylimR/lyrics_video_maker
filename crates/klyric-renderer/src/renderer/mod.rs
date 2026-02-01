@@ -5,9 +5,12 @@ pub mod utils;
 use anyhow::Result;
 use skia_safe::{surfaces, AlphaType, Canvas, Color, ColorType, ImageInfo, Surface};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
+use crate::effects::{EffectEngine, ResolvedEffect};
+use crate::expressions::ExpressionEvaluator;
 use crate::layout::{GlyphInfo, LayoutEngine};
-use crate::model::{Easing, Effect, EffectType, KLyricDocumentV2, Line, Style};
+use crate::model::{AnimatedValue, Easing, Effect, EffectType, KLyricDocumentV2, Line, Style};
 use crate::presets::{CharBounds, EffectPreset};
 use crate::style::StyleResolver;
 use crate::text::TextRenderer;
@@ -18,9 +21,9 @@ use self::utils::parse_color;
 
 #[derive(Clone)]
 pub struct CategorizedLineEffects {
-    pub transform_effects: Vec<Effect>,
-    pub particle_effects: Vec<(String, Effect)>,
-    pub disintegrate_effects: Vec<(String, Effect)>,
+    pub transform_effects: Vec<ResolvedEffect>,
+    pub particle_effects: Vec<(String, ResolvedEffect)>,
+    pub disintegrate_effects: Vec<(String, ResolvedEffect)>,
     pub stroke_reveal_effects: Vec<Effect>,
 }
 
@@ -166,9 +169,10 @@ impl Renderer {
         let line_effects = &line.effects;
         let total_effects = style_effects.len() + line_effects.len();
 
-        let mut transform_effects: Vec<Effect> = Vec::with_capacity(total_effects);
-        let mut particle_effects: Vec<(String, Effect)> = Vec::with_capacity(total_effects / 2);
-        let mut disintegrate_effects: Vec<(String, Effect)> = Vec::with_capacity(1);
+        let mut transform_effects: Vec<ResolvedEffect> = Vec::with_capacity(total_effects);
+        let mut particle_effects: Vec<(String, ResolvedEffect)> =
+            Vec::with_capacity(total_effects / 2);
+        let mut disintegrate_effects: Vec<(String, ResolvedEffect)> = Vec::with_capacity(1);
         let mut stroke_reveal_effects: Vec<Effect> = Vec::with_capacity(1);
 
         // Collect all effect names: Style effects first (base), then Line effects (override/stack)
@@ -204,16 +208,19 @@ impl Renderer {
             if let Some(effect) = effect_resolved {
                 match effect.effect_type {
                     EffectType::Particle => {
-                        particle_effects.push((effect_name.clone(), effect));
+                        let resolved = Self::resolve_expressions(effect);
+                        particle_effects.push((effect_name.clone(), resolved));
                     }
                     EffectType::Disintegrate => {
-                        disintegrate_effects.push((effect_name.clone(), effect));
+                        let resolved = Self::resolve_expressions(effect);
+                        disintegrate_effects.push((effect_name.clone(), resolved));
                     }
                     EffectType::StrokeReveal => {
                         stroke_reveal_effects.push(effect);
                     }
                     _ => {
-                        transform_effects.push(effect);
+                        let resolved = Self::resolve_expressions(effect);
+                        transform_effects.push(resolved);
                     }
                 }
             }
@@ -224,6 +231,34 @@ impl Renderer {
             particle_effects,
             disintegrate_effects,
             stroke_reveal_effects,
+        }
+    }
+
+    /// Helper to compile expressions in an Effect
+    fn resolve_expressions(effect: Effect) -> ResolvedEffect {
+        let mut map = HashMap::new();
+        // Check standard properties
+        for value in effect.properties.values() {
+            if let AnimatedValue::Expression(expr) = value {
+                if let Ok(node) = ExpressionEvaluator::compile(expr) {
+                    map.insert(expr.clone(), Arc::new(node));
+                }
+            }
+        }
+        // Check particle overrides
+        if let Some(overrides) = &effect.particle_override {
+            for value in overrides.values() {
+                if let AnimatedValue::Expression(expr) = value {
+                    if let Ok(node) = ExpressionEvaluator::compile(expr) {
+                        map.insert(expr.clone(), Arc::new(node));
+                    }
+                }
+            }
+        }
+
+        ResolvedEffect {
+            effect,
+            compiled_expressions: map,
         }
     }
 
