@@ -31,15 +31,6 @@ pub struct LineRenderer<'a> {
     pub height: u32,
 }
 
-/// Hash an emitter key from components to produce u64 for particle system
-fn hash_emitter_key_fast(line_idx: usize, char_idx: usize, name_hash: u64) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    line_idx.hash(&mut hasher);
-    char_idx.hash(&mut hasher);
-    hasher.write_u64(name_hash);
-    hasher.finish()
-}
-
 impl<'a> LineRenderer<'a> {
     pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, effects: &'a CategorizedLineEffects) -> Result<()> {
         // Compute Line Position
@@ -129,25 +120,33 @@ impl<'a> LineRenderer<'a> {
         // Safety: We use `line_ctx` (no char_index) because `calculate_progress` strictly depends on
         // line start/end times and scalar delay, making it invariant per line.
         // Per-character variation (staggering) must use Expressions or different Effect types.
-        let mut active_disintegrate_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64)> = Vec::with_capacity(effects.disintegrate_effects.len());
+        let mut active_disintegrate_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64, DefaultHasher)> = Vec::with_capacity(effects.disintegrate_effects.len());
         for (name, resolved_effect) in &effects.disintegrate_effects {
              let effect = &resolved_effect.effect;
              if EffectEngine::should_trigger(effect, &line_ctx) {
                  let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
                  if (0.0..=1.0).contains(&progress) {
-                     active_disintegrate_effects.push((name, resolved_effect, progress));
+                     // [Bolt Optimization] Pre-calculate partial hash
+                     let mut hasher = DefaultHasher::new();
+                     line_idx.hash(&mut hasher);
+                     hasher.write_u64(resolved_effect.name_hash);
+                     active_disintegrate_effects.push((name, resolved_effect, progress, hasher));
                  }
              }
         }
 
         // [Bolt Optimization] Hoist Particle Effect Resolution
-        let mut active_particle_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64)> = Vec::with_capacity(effects.particle_effects.len());
+        let mut active_particle_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64, DefaultHasher)> = Vec::with_capacity(effects.particle_effects.len());
         for (name, resolved_effect) in &effects.particle_effects {
              let effect = &resolved_effect.effect;
              if EffectEngine::should_trigger(effect, &line_ctx) {
                  let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
                  if (0.0..=1.0).contains(&progress) {
-                     active_particle_effects.push((name, resolved_effect, progress));
+                     // [Bolt Optimization] Pre-calculate partial hash
+                     let mut hasher = DefaultHasher::new();
+                     line_idx.hash(&mut hasher);
+                     hasher.write_u64(resolved_effect.name_hash);
+                     active_particle_effects.push((name, resolved_effect, progress, hasher));
                  }
              }
         }
@@ -288,7 +287,7 @@ impl<'a> LineRenderer<'a> {
                      // Disintegrate Effect Progress
                      // [Bolt Optimization] Use pre-calculated progress
                      let mut disintegration_progress = 0.0;
-                     if let Some((_name, _resolved, progress)) = active_disintegrate_effects.first() {
+                     if let Some((_name, _resolved, progress, _)) = active_disintegrate_effects.first() {
                          disintegration_progress = progress.clamp(0.0, 1.0);
                      }
 
@@ -484,11 +483,15 @@ impl<'a> LineRenderer<'a> {
 
                      // --- DISINTEGRATION EFFECT ---
                      // [Bolt Optimization] Iterate active effects only
-                     for (_name, resolved_effect, _progress) in &active_disintegrate_effects {
+                     for (_name, resolved_effect, _progress, base_hasher) in &active_disintegrate_effects {
                          let effect = &resolved_effect.effect;
                          // progress is already checked to be in range
 
-                         let key = hash_emitter_key_fast(line_idx, glyph.char_index, resolved_effect.name_hash);
+                         // [Bolt Optimization] Finish hashing using pre-calculated prefix
+                         let mut hasher = base_hasher.clone();
+                         glyph.char_index.hash(&mut hasher);
+                         let key = hasher.finish();
+
                          self.active_keys.insert(key);
 
                          // We need to capture the glyph as an image for the emitter
@@ -551,11 +554,15 @@ impl<'a> LineRenderer<'a> {
                      // --- PARTICLE SPAWNING ---
                      // Process standard particle effects
                      // [Bolt Optimization] Iterate active effects only
-                     for (_name, resolved_effect, progress) in &active_particle_effects {
+                     for (_name, resolved_effect, progress, base_hasher) in &active_particle_effects {
                          let effect = &resolved_effect.effect;
                          let progress = *progress; // Copy f64
 
-                         let key = hash_emitter_key_fast(line_idx, glyph.char_index, resolved_effect.name_hash);
+                         // [Bolt Optimization] Finish hashing using pre-calculated prefix
+                         let mut hasher = base_hasher.clone();
+                         glyph.char_index.hash(&mut hasher);
+                         let key = hasher.finish();
+
                          self.active_keys.insert(key);
                          
                          let bounds_rect = CharBounds {
