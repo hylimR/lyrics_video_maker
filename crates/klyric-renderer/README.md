@@ -68,17 +68,14 @@ cargo build -p klyric-renderer
 ## Usage (Native)
 
 ```rust
-use klyric_renderer::{Renderer, model::Project};
+use klyric_renderer::{Renderer, model::KLyricDocumentV2};
 
-let project: Project = serde_json::from_str(json_str)?;
-let mut renderer = Renderer::new(project);
-
-// Initialize (loads fonts, resources)
-renderer.initialize()?;
-
-// Render a frame at specific time (seconds)
+let doc: KLyricDocumentV2 = serde_json::from_str(json_str)?;
 let width = 1920;
 let height = 1080;
-// Returns a Vec<u8> (RGBA pixel data)
-let buffer = renderer.render_frame(time_in_seconds, width, height)?;
+let mut renderer = Renderer::new(width, height);
+
+// Render a frame at specific time (seconds)
+// Returns a Result<Vec<u8>> (RGBA pixel data)
+let buffer = renderer.render_frame(&doc, time_in_seconds)?;
 ```

@@ -499,9 +499,7 @@ impl<'a> LineRenderer<'a> {
                          if capture_w <= 0 || capture_h <= 0 { continue; }
                          
                          // Create offscreen surface for disintegration effect.
-                         // TODO: Optimization - Avoid creating surface if emitter already exists.
-                         // Current implementation relies on `ensure_disintegration_emitter` to handle existence checks.
-                         
+                         // Optimization: Skip surface creation if emitter already exists.
                          if self.particle_system.has_emitter(key) {
                               continue;
                          }
