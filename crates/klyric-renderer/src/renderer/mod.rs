@@ -145,7 +145,7 @@ impl Renderer {
                     height: self.height,
                 };
 
-                line_renderer.render_line(line, line_idx, effects)?;
+                line_renderer.render_line(line, line_idx, style, effects)?;
             }
         }
 
