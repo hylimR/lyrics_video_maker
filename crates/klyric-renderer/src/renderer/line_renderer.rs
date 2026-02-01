@@ -142,6 +142,8 @@ impl<'a> LineRenderer<'a> {
                 .unwrap_or(style_size);
 
              // Get typeface and path
+             // TODO: Optimize font resolution by caching the family->typeface lookup per-line,
+             // similar to LayoutEngine. Currently this hashes the family string for every glyph.
              let typeface = self.text_renderer.get_typeface(family)
                  .or_else(|| self.text_renderer.get_default_typeface());
              
