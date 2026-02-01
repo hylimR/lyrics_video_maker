@@ -78,6 +78,14 @@ impl<'a> LineRenderer<'a> {
         // Hoist Line Transform
         let line_transform = line.transform.clone().unwrap_or_default();
 
+        // [Bolt Optimization] Hoist Paint and MaskFilter to avoid per-glyph allocation
+        let mut paint = Paint::default();
+        let mut shadow_paint = Paint::default();
+        let mut stroke_paint = Paint::default();
+
+        // Cache: (sigma, filter)
+        let mut cached_blur_filter: Option<(f32, MaskFilter)> = None;
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -179,16 +187,34 @@ impl<'a> LineRenderer<'a> {
                      }
 
                      // Setup Paint
-                     let mut paint = Paint::default();
+                     paint.reset(); // Reuse
                      paint.set_color(text_color);
                      paint.set_anti_alias(true);
                      
                      let final_opacity = final_transform.opacity_val() * (1.0 - disintegration_progress as f32);
                      paint.set_alpha_f(final_opacity);
 
-                     // Apply Blur
-                     if final_transform.blur_val() > 0.0 {
-                         paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
+                     // Apply Blur with caching
+                     let blur = final_transform.blur_val();
+                     if blur > 0.0 {
+                         let use_cached = if let Some((last_sigma, _)) = cached_blur_filter.as_ref() {
+                             (last_sigma - blur).abs() < 0.001
+                         } else {
+                             false
+                         };
+
+                         if !use_cached {
+                             // Create new filter
+                             if let Some(filter) = MaskFilter::blur(BlurStyle::Normal, blur, false) {
+                                 cached_blur_filter = Some((blur, filter));
+                             } else {
+                                 cached_blur_filter = None;
+                             }
+                         }
+
+                         if let Some((_, ref filter)) = cached_blur_filter {
+                             paint.set_mask_filter(Some(filter.clone()));
+                         }
                      }
 
                      // --- DRAWING ---
@@ -242,15 +268,16 @@ impl<'a> LineRenderer<'a> {
                      if let Some(shadow) = shadow_opts {
                          if let Some(color_hex) = &shadow.color {
                              if let Some(shadow_color) = parse_color(color_hex) {
-                                 let mut shadow_paint = Paint::default();
+                                 shadow_paint.reset();
                                  shadow_paint.set_color(shadow_color);
                                  shadow_paint.set_alpha_f(final_opacity);
                                  shadow_paint.set_anti_alias(true);
                                  
-                                 // Apply blur to shadow if needed (or inherit from transform?)
-                                 // For now, if there's global blur, apply it to shadow too
+                                 // Apply blur to shadow if needed
                                  if final_transform.blur_val() > 0.0 {
-                                     shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
+                                     if let Some((_, ref filter)) = cached_blur_filter {
+                                         shadow_paint.set_mask_filter(Some(filter.clone()));
+                                     }
                                  }
                                  
                                  self.canvas.save();
@@ -270,7 +297,7 @@ impl<'a> LineRenderer<'a> {
                          if stroke.width_or_default() > 0.0 {
                              if let Some(color_hex) = &stroke.color {
                                  if let Some(stroke_color) = parse_color(color_hex) {
-                                     let mut stroke_paint = Paint::default();
+                                     stroke_paint.reset();
                                      stroke_paint.set_style(PaintStyle::Stroke);
                                      stroke_paint.set_stroke_width(stroke.width_or_default());
                                      stroke_paint.set_color(stroke_color);
@@ -278,7 +305,9 @@ impl<'a> LineRenderer<'a> {
                                      stroke_paint.set_anti_alias(true);
                                      
                                      if final_transform.blur_val() > 0.0 {
-                                         stroke_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, final_transform.blur_val(), false));
+                                         if let Some((_, ref filter)) = cached_blur_filter {
+                                             stroke_paint.set_mask_filter(Some(filter.clone()));
+                                         }
                                      }
 
                                      self.canvas.draw_path(path, &stroke_paint);
