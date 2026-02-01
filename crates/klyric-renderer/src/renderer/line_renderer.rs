@@ -77,6 +77,14 @@ impl<'a> LineRenderer<'a> {
         // Cache: (sigma, filter)
         let mut cached_blur_filter: Option<(f32, MaskFilter)> = None;
 
+        // [Bolt Optimization] Track current mask filter sigma on paints to avoid redundant ref-counting updates
+        let mut current_paint_blur: f32 = 0.0;
+        let mut current_shadow_blur: f32 = 0.0;
+        let mut current_stroke_blur: f32 = 0.0;
+        let mut current_r_blur: f32 = 0.0;
+        let mut current_g_blur: f32 = 0.0;
+        let mut current_b_blur: f32 = 0.0;
+
         // [Bolt Optimization] Hoist effect compilation and context creation
         // Calculate active effects and progress once per line.
         // Safety: Progress depends on (time, line.start, effect.delay).
@@ -299,13 +307,10 @@ impl<'a> LineRenderer<'a> {
                                  cached_blur_filter = None;
                              }
                          }
-
-                         if let Some((_, ref filter)) = cached_blur_filter {
-                             paint.set_mask_filter(Some(filter.clone()));
-                         }
-                     } else {
-                         paint.set_mask_filter(None);
                      }
+
+                     // [Bolt Optimization] Only update paint mask filter if blur changed
+                     apply_paint_blur(&mut paint, &mut current_paint_blur, blur, &cached_blur_filter);
 
                      // --- DRAWING ---
                      // Calculate position context
@@ -366,14 +371,8 @@ impl<'a> LineRenderer<'a> {
                          shadow_paint.set_color(shadow_color);
                          shadow_paint.set_alpha_f(final_opacity);
 
-                         // Apply blur to shadow if needed
-                         if final_transform.blur > 0.0 {
-                             if let Some((_, ref filter)) = cached_blur_filter {
-                                 shadow_paint.set_mask_filter(Some(filter.clone()));
-                             }
-                         } else {
-                             shadow_paint.set_mask_filter(None);
-                         }
+                         // [Bolt Optimization] Apply blur to shadow with state tracking
+                         apply_paint_blur(&mut shadow_paint, &mut current_shadow_blur, final_transform.blur, &cached_blur_filter);
 
                          self.canvas.save();
                          self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
@@ -396,13 +395,8 @@ impl<'a> LineRenderer<'a> {
                              stroke_paint.set_color(stroke_color);
                              stroke_paint.set_alpha_f(final_opacity);
 
-                             if final_transform.blur > 0.0 {
-                                 if let Some((_, ref filter)) = cached_blur_filter {
-                                     stroke_paint.set_mask_filter(Some(filter.clone()));
-                                 }
-                             } else {
-                                 stroke_paint.set_mask_filter(None);
-                             }
+                             // [Bolt Optimization] Apply blur to stroke with state tracking
+                             apply_paint_blur(&mut stroke_paint, &mut current_stroke_blur, final_transform.blur, &cached_blur_filter);
 
                              self.canvas.draw_path(path, &stroke_paint);
                          }
@@ -421,33 +415,15 @@ impl<'a> LineRenderer<'a> {
 
                              // Red Channel Update
                              r_paint.set_alpha_f(final_opacity);
-                             if final_transform.blur > 0.0 {
-                                 if let Some((_, ref filter)) = cached_blur_filter {
-                                     r_paint.set_mask_filter(Some(filter.clone()));
-                                 }
-                             } else {
-                                 r_paint.set_mask_filter(None);
-                             }
+                             apply_paint_blur(&mut r_paint, &mut current_r_blur, final_transform.blur, &cached_blur_filter);
 
                              // Green Channel Update
                              g_paint.set_alpha_f(final_opacity);
-                             if final_transform.blur > 0.0 {
-                                 if let Some((_, ref filter)) = cached_blur_filter {
-                                     g_paint.set_mask_filter(Some(filter.clone()));
-                                 }
-                             } else {
-                                 g_paint.set_mask_filter(None);
-                             }
+                             apply_paint_blur(&mut g_paint, &mut current_g_blur, final_transform.blur, &cached_blur_filter);
 
                              // Blue Channel Update
                              b_paint.set_alpha_f(final_opacity);
-                             if final_transform.blur > 0.0 {
-                                 if let Some((_, ref filter)) = cached_blur_filter {
-                                     b_paint.set_mask_filter(Some(filter.clone()));
-                                 }
-                             } else {
-                                 b_paint.set_mask_filter(None);
-                             }
+                             apply_paint_blur(&mut b_paint, &mut current_b_blur, final_transform.blur, &cached_blur_filter);
 
                              self.canvas.save();
                              self.canvas.translate((-offset, -offset));
@@ -634,5 +610,30 @@ impl<'a> LineRenderer<'a> {
         }
         
         (x, y)
+    }
+}
+
+/// Helper to apply blur mask filter to a paint object with state tracking.
+/// This prevents redundant ref-counting updates when blur sigma hasn't changed.
+fn apply_paint_blur(
+    paint: &mut Paint,
+    current_blur: &mut f32,
+    target_blur: f32,
+    cached_filter: &Option<(f32, MaskFilter)>
+) {
+    if (target_blur - *current_blur).abs() > 0.001 {
+        if target_blur > 0.0 {
+            if let Some((_, ref filter)) = cached_filter {
+                paint.set_mask_filter(Some(filter.clone()));
+                *current_blur = target_blur;
+            } else {
+                // Fallback if filter creation failed
+                paint.set_mask_filter(None);
+                *current_blur = 0.0;
+            }
+        } else {
+            paint.set_mask_filter(None);
+            *current_blur = 0.0;
+        }
     }
 }
