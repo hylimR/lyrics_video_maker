@@ -114,8 +114,7 @@ impl<'a> LineRenderer<'a> {
 
         // --- OPTIMIZATION: Hoist Base Render Transform ---
         // Avoid repeated RenderTransform::new() calls for chars without overrides
-        let base_render_transform =
-            RenderTransform::new(line_transform_ref, &Transform::default());
+        let base_render_transform = RenderTransform::new(line_transform_ref, &Transform::default());
 
         // --- OPTIMIZATION: Hoist Line-Level Effects (Prefix) ---
         // Find the longest prefix of effects that are character-independent.

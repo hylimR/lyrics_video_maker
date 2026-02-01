@@ -57,7 +57,11 @@ impl LayoutEngine {
             .or_else(|| renderer.get_default_typeface());
 
         // Optimization: Hoist line font size resolution
-        let line_font_size = line.font.as_ref().and_then(|f| f.size).unwrap_or(style_size);
+        let line_font_size = line
+            .font
+            .as_ref()
+            .and_then(|f| f.size)
+            .unwrap_or(style_size);
 
         // Cache for ResolvedFont to avoid recreation overhead
         #[cfg(not(target_arch = "wasm32"))]
