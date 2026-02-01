@@ -415,9 +415,7 @@ impl Renderer {
         let shadow_color = shadow_opt
             .and_then(|s| s.color.as_ref())
             .and_then(|c| parse_color(c));
-        let shadow_offset = shadow_opt
-            .map(|s| (s.x.unwrap_or(0.0), s.y.unwrap_or(0.0)))
-            .unwrap_or((0.0, 0.0));
+        let shadow_offset = shadow_opt.map(|s| (s.x.unwrap_or(0.0), s.y.unwrap_or(0.0)));
 
         if let Some(sc) = shadow_color {
             shadow_paint.set_color(sc);
@@ -433,6 +431,17 @@ impl Renderer {
         let mut cached_family_id: Option<(&str, ID)> = None;
         let mut last_fill_color: Option<Color> = None;
         let mut last_stroke_color: Option<Color> = None;
+
+        // Optimization: Pre-calculate stroke and update only when size changes
+        let mut last_size = line_size;
+        let mut current_stroke = tiny_skia::Stroke {
+            width: if line_size > 0.0 {
+                stroke_width / line_size
+            } else {
+                0.0
+            },
+            ..tiny_skia::Stroke::default()
+        };
 
         for glyph_info in glyphs {
             let char_data = &line.chars[glyph_info.char_index];
@@ -482,6 +491,14 @@ impl Renderer {
                 (line_family, line_size)
             };
 
+            // Update stroke if size changed
+            if size != last_size {
+                if size > 0.0 {
+                    current_stroke.width = stroke_width / size;
+                }
+                last_size = size;
+            }
+
             // Resolve Font ID (Optimized with local cache + pointer check)
             let font_id = if let Some((cached_name, cached_id)) = &cached_family_id {
                 if std::ptr::eq(*cached_name, family) || *cached_name == family {
@@ -510,10 +527,16 @@ impl Renderer {
                 size,
                 render_x,
                 render_y,
-                has_stroke,
-                stroke_width,
-                shadow_color.is_some(),
-                shadow_offset,
+                if has_stroke {
+                    Some(&current_stroke)
+                } else {
+                    None
+                },
+                if shadow_color.is_some() {
+                    shadow_offset
+                } else {
+                    None
+                },
                 &mut paint,
                 &mut stroke_paint,
                 &mut shadow_paint,
@@ -532,10 +555,8 @@ impl Renderer {
         size: f32,
         x: f32,
         y: f32,
-        has_stroke: bool,
-        stroke_width: f32,
-        has_shadow: bool,
-        shadow_offset: (f32, f32),
+        stroke: Option<&tiny_skia::Stroke>,
+        shadow_offset: Option<(f32, f32)>,
         paint: &mut tiny_skia::Paint,
         stroke_paint: &mut tiny_skia::Paint,
         shadow_paint: &mut tiny_skia::Paint,
@@ -547,9 +568,9 @@ impl Renderer {
             let transform = tiny_skia::Transform::from_row(size, 0.0, 0.0, size, x, y);
 
             // 1. Shadow
-            if has_shadow {
+            if let Some(offset) = shadow_offset {
                 // paint.anti_alias is already true
-                let shadow_transform = transform.post_translate(shadow_offset.0, shadow_offset.1);
+                let shadow_transform = transform.post_translate(offset.0, offset.1);
                 pixmap.fill_path(
                     path,
                     shadow_paint,
@@ -560,14 +581,10 @@ impl Renderer {
             }
 
             // 2. Stroke
-            if has_stroke {
+            if let Some(stroke_style) = stroke {
                 // stroke_paint color is already set
-                let stroke = tiny_skia::Stroke {
-                    width: stroke_width / size, // Stroke width must be inverse scaled because transform scales everything!
-                    ..tiny_skia::Stroke::default()
-                };
-
-                pixmap.stroke_path(path, stroke_paint, &stroke, transform, None);
+                // Width is already inverse scaled in the passed stroke struct
+                pixmap.stroke_path(path, stroke_paint, stroke_style, transform, None);
             }
 
             // 3. Fill

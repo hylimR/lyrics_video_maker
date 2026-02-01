@@ -171,12 +171,12 @@ pub fn apply_particle_overrides(
                 }
             }
         } else {
-             // Fallback: compile and evaluate
-             if let Ok(node) = ExpressionEvaluator::compile(expr_str) {
-                 ExpressionEvaluator::evaluate_node_fast(&node, ctx)
-             } else {
-                 Err(anyhow::anyhow!("Failed to compile expression"))
-             }
+            // Fallback: compile and evaluate
+            if let Ok(node) = ExpressionEvaluator::compile(expr_str) {
+                ExpressionEvaluator::evaluate_node_fast(&node, ctx)
+            } else {
+                Err(anyhow::anyhow!("Failed to compile expression"))
+            }
         };
 
         if let Ok(val) = val_res {
