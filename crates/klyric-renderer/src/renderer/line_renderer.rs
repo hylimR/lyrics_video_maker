@@ -496,15 +496,6 @@ impl<'a> LineRenderer<'a> {
                          
                          let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
                          if !(0.0..=1.0).contains(&progress) { continue; }
-                         
-                         // Evaluation Context for Particles
-                         let eval_ctx = crate::expressions::EvaluationContext {
-                             t: self.time,
-                             progress,
-                             index: Some(glyph.char_index),
-                             count: Some(glyphs.len()),
-                             ..Default::default()
-                         };
 
                          let key = hash_emitter_key(line_idx, glyph.char_index, name);
                          self.active_keys.insert(key);
@@ -515,6 +506,23 @@ impl<'a> LineRenderer<'a> {
                              width: w * final_transform.scale,
                              height: h * final_transform.scale,
                          };
+
+                         // [Bolt Optimization] Skip expensive config calculation if emitter exists.
+                         // Note: `ensure_emitter` currently ignores config updates for existing emitters,
+                         // so re-evaluating the config here is redundant work.
+                         if self.particle_system.has_emitter(key) {
+                             self.particle_system.update_emitter_bounds(key, bounds_rect);
+                             continue;
+                         }
+
+                         // Evaluation Context for Particles (only needed for new emitters)
+                         let eval_ctx = crate::expressions::EvaluationContext {
+                             t: self.time,
+                             progress,
+                             index: Some(glyph.char_index),
+                             count: Some(glyphs.len()),
+                             ..Default::default()
+                         };
                          
                          let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
                          
@@ -522,7 +530,13 @@ impl<'a> LineRenderer<'a> {
                          let mut p_config = effect.particle_config.clone();
                          if let (Some(config), Some(overrides)) = (&mut p_config, &effect.particle_override) {
                              let fast_ctx = crate::expressions::FastEvaluationContext::new(&eval_ctx);
-                              crate::particle::config::apply_particle_overrides(config, overrides, None, &fast_ctx);
+                             // [Bolt Optimization] Use pre-compiled expressions
+                             crate::particle::config::apply_particle_overrides(
+                                 config,
+                                 overrides,
+                                 Some(&resolved_effect.compiled_expressions),
+                                 &fast_ctx
+                             );
                          }
 
                          self.particle_system.ensure_emitter(
