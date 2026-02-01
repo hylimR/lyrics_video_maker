@@ -16,37 +16,26 @@ use super::utils::parse_color;
 use super::CategorizedLineEffects;
 use super::ResolvedStyleColors;
 
-pub struct LineRenderer<'a> {
-    pub canvas: &'a Canvas,
-    pub doc: &'a KLyricDocumentV2,
-    pub time: f64,
-    pub text_renderer: &'a mut TextRenderer,
-    pub particle_system: &'a mut ParticleRenderSystem,
-    pub width: u32,
-    pub height: u32,
+pub struct RenderPaints {
+    pub main_paint: Paint,
+    pub shadow_paint: Paint,
+    pub stroke_paint: Paint,
+    pub r_paint: Paint,
+    pub g_paint: Paint,
+    pub b_paint: Paint,
+    pub cached_blur_filter: Option<(f32, MaskFilter)>,
+    pub current_paint_blur: f32,
+    pub current_shadow_blur: f32,
+    pub current_stroke_blur: f32,
+    pub current_r_blur: f32,
+    pub current_g_blur: f32,
+    pub current_b_blur: f32,
 }
 
-impl<'a> LineRenderer<'a> {
-    pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, colors: &ResolvedStyleColors, effects: &'a CategorizedLineEffects) -> Result<()> {
-        // Compute Line Position
-        let (base_x, base_y) = self.compute_line_position(line);
-
-        // Resolve font size for rasterization (Base)
-        let style_family = style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
-        let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
-        
-        // Pre-resolve colors to avoid parsing per-glyph
-        // [Bolt Optimization] Use cached colors passed from Renderer
-        let inactive_color = colors.inactive;
-        let active_color = colors.active;
-        let complete_color = colors.complete;
-
-        // Hoist Line Transform
-        let line_transform = line.transform.clone().unwrap_or_default();
-
-        // [Bolt Optimization] Hoist Paint and MaskFilter to avoid per-glyph allocation
-        let mut paint = Paint::default();
-        paint.set_anti_alias(true);
+impl RenderPaints {
+    pub fn new() -> Self {
+        let mut main_paint = Paint::default();
+        main_paint.set_anti_alias(true);
 
         let mut shadow_paint = Paint::default();
         shadow_paint.set_anti_alias(true);
@@ -55,7 +44,6 @@ impl<'a> LineRenderer<'a> {
         stroke_paint.set_anti_alias(true);
         stroke_paint.set_style(PaintStyle::Stroke);
 
-        // [Bolt Optimization] Hoist Glitch Effect Paints to avoid 3x clones per char
         let mut r_paint = Paint::default();
         r_paint.set_color(Color::RED);
         r_paint.set_blend_mode(BlendMode::Plus);
@@ -74,16 +62,54 @@ impl<'a> LineRenderer<'a> {
         b_paint.set_anti_alias(true);
         b_paint.set_style(PaintStyle::Fill);
 
-        // Cache: (sigma, filter)
-        let mut cached_blur_filter: Option<(f32, MaskFilter)> = None;
+        Self {
+            main_paint,
+            shadow_paint,
+            stroke_paint,
+            r_paint,
+            g_paint,
+            b_paint,
+            cached_blur_filter: None,
+            current_paint_blur: 0.0,
+            current_shadow_blur: 0.0,
+            current_stroke_blur: 0.0,
+            current_r_blur: 0.0,
+            current_g_blur: 0.0,
+            current_b_blur: 0.0,
+        }
+    }
+}
 
-        // [Bolt Optimization] Track current mask filter sigma on paints to avoid redundant ref-counting updates
-        let mut current_paint_blur: f32 = 0.0;
-        let mut current_shadow_blur: f32 = 0.0;
-        let mut current_stroke_blur: f32 = 0.0;
-        let mut current_r_blur: f32 = 0.0;
-        let mut current_g_blur: f32 = 0.0;
-        let mut current_b_blur: f32 = 0.0;
+pub struct LineRenderer<'a> {
+    pub canvas: &'a Canvas,
+    pub doc: &'a KLyricDocumentV2,
+    pub time: f64,
+    pub text_renderer: &'a mut TextRenderer,
+    pub particle_system: &'a mut ParticleRenderSystem,
+    pub width: u32,
+    pub height: u32,
+    pub paints: &'a mut RenderPaints,
+}
+
+impl<'a> LineRenderer<'a> {
+    pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, colors: &ResolvedStyleColors, effects: &'a CategorizedLineEffects) -> Result<()> {
+        // Compute Line Position
+        let (base_x, base_y) = self.compute_line_position(line);
+
+        // Resolve font size for rasterization (Base)
+        let style_family = style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
+        let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
+
+        // Pre-resolve colors to avoid parsing per-glyph
+        // [Bolt Optimization] Use cached colors passed from Renderer
+        let inactive_color = colors.inactive;
+        let active_color = colors.active;
+        let complete_color = colors.complete;
+
+        // Hoist Line Transform
+        let line_transform = line.transform.clone().unwrap_or_default();
+
+        // [Bolt Optimization] Paint objects are now reused from `self.paints` (see RenderPaints)
 
         // [Bolt Optimization] Hoist effect compilation and context creation
         // Calculate active effects and progress once per line.
@@ -285,15 +311,15 @@ impl<'a> LineRenderer<'a> {
 
                      // Setup Paint
                      // [Bolt Optimization] Manual reuse without reset()
-                     paint.set_color(text_color);
+                     self.paints.main_paint.set_color(text_color);
                      
                      let final_opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
-                     paint.set_alpha_f(final_opacity);
+                     self.paints.main_paint.set_alpha_f(final_opacity);
 
                      // Apply Blur with caching
                      let blur = final_transform.blur;
                      if blur > 0.0 {
-                         let use_cached = if let Some((last_sigma, _)) = cached_blur_filter.as_ref() {
+                         let use_cached = if let Some((last_sigma, _)) = self.paints.cached_blur_filter.as_ref() {
                              (last_sigma - blur).abs() < 0.001
                          } else {
                              false
@@ -302,15 +328,15 @@ impl<'a> LineRenderer<'a> {
                          if !use_cached {
                              // Create new filter
                              if let Some(filter) = MaskFilter::blur(BlurStyle::Normal, blur, false) {
-                                 cached_blur_filter = Some((blur, filter));
+                                 self.paints.cached_blur_filter = Some((blur, filter));
                              } else {
-                                 cached_blur_filter = None;
+                                 self.paints.cached_blur_filter = None;
                              }
                          }
                      }
 
                      // [Bolt Optimization] Only update paint mask filter if blur changed
-                     apply_paint_blur(&mut paint, &mut current_paint_blur, blur, &cached_blur_filter);
+                     apply_paint_blur(&mut self.paints.main_paint, &mut self.paints.current_paint_blur, blur, &self.paints.cached_blur_filter);
 
                      // --- DRAWING ---
                      // Calculate position context
@@ -373,15 +399,15 @@ impl<'a> LineRenderer<'a> {
 
                      if let (Some(shadow), Some(shadow_color)) = (active_shadow, active_shadow_color) {
                          // [Bolt Optimization] Reuse shadow paint
-                         shadow_paint.set_color(shadow_color);
-                         shadow_paint.set_alpha_f(final_opacity);
+                         self.paints.shadow_paint.set_color(shadow_color);
+                         self.paints.shadow_paint.set_alpha_f(final_opacity);
 
                          // [Bolt Optimization] Apply blur to shadow with state tracking
-                         apply_paint_blur(&mut shadow_paint, &mut current_shadow_blur, final_transform.blur, &cached_blur_filter);
+                         apply_paint_blur(&mut self.paints.shadow_paint, &mut self.paints.current_shadow_blur, final_transform.blur, &self.paints.cached_blur_filter);
 
                          self.canvas.save();
                          self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
-                         self.canvas.draw_path(path, &shadow_paint);
+                         self.canvas.draw_path(path, &self.paints.shadow_paint);
                          self.canvas.restore();
                      }
 
@@ -396,19 +422,19 @@ impl<'a> LineRenderer<'a> {
                      if let (Some(stroke), Some(stroke_color)) = (active_stroke, active_stroke_color) {
                          if stroke.width_or_default() > 0.0 {
                              // [Bolt Optimization] Reuse stroke paint
-                             stroke_paint.set_stroke_width(stroke.width_or_default());
-                             stroke_paint.set_color(stroke_color);
-                             stroke_paint.set_alpha_f(final_opacity);
+                             self.paints.stroke_paint.set_stroke_width(stroke.width_or_default());
+                             self.paints.stroke_paint.set_color(stroke_color);
+                             self.paints.stroke_paint.set_alpha_f(final_opacity);
 
                              // [Bolt Optimization] Apply blur to stroke with state tracking
-                             apply_paint_blur(&mut stroke_paint, &mut current_stroke_blur, final_transform.blur, &cached_blur_filter);
+                             apply_paint_blur(&mut self.paints.stroke_paint, &mut self.paints.current_stroke_blur, final_transform.blur, &self.paints.cached_blur_filter);
 
-                             self.canvas.draw_path(path, &stroke_paint);
+                             self.canvas.draw_path(path, &self.paints.stroke_paint);
                          }
                      }
 
                      // --- 3. MAIN TEXT (With Glitch Logic) ---
-                     if paint.alpha_f() > 0.001 {
+                     if self.paints.main_paint.alpha_f() > 0.001 {
                          if final_transform.glitch_offset.abs() > 0.01 {
                              // Glitch Effect: Draw channels separately
                              let offset = final_transform.glitch_offset;
@@ -419,35 +445,35 @@ impl<'a> LineRenderer<'a> {
                              // Strokes are handled in a separate block below.
 
                              // Red Channel Update
-                             r_paint.set_alpha_f(final_opacity);
-                             apply_paint_blur(&mut r_paint, &mut current_r_blur, final_transform.blur, &cached_blur_filter);
+                             self.paints.r_paint.set_alpha_f(final_opacity);
+                             apply_paint_blur(&mut self.paints.r_paint, &mut self.paints.current_r_blur, final_transform.blur, &self.paints.cached_blur_filter);
 
                              // Green Channel Update
-                             g_paint.set_alpha_f(final_opacity);
-                             apply_paint_blur(&mut g_paint, &mut current_g_blur, final_transform.blur, &cached_blur_filter);
+                             self.paints.g_paint.set_alpha_f(final_opacity);
+                             apply_paint_blur(&mut self.paints.g_paint, &mut self.paints.current_g_blur, final_transform.blur, &self.paints.cached_blur_filter);
 
                              // Blue Channel Update
-                             b_paint.set_alpha_f(final_opacity);
-                             apply_paint_blur(&mut b_paint, &mut current_b_blur, final_transform.blur, &cached_blur_filter);
+                             self.paints.b_paint.set_alpha_f(final_opacity);
+                             apply_paint_blur(&mut self.paints.b_paint, &mut self.paints.current_b_blur, final_transform.blur, &self.paints.cached_blur_filter);
 
                              self.canvas.save();
                              self.canvas.translate((-offset, -offset));
-                             self.canvas.draw_path(path, &r_paint);
+                             self.canvas.draw_path(path, &self.paints.r_paint);
                              self.canvas.restore();
 
                              self.canvas.save();
                              self.canvas.translate((offset, -offset));
-                             self.canvas.draw_path(path, &g_paint);
+                             self.canvas.draw_path(path, &self.paints.g_paint);
                              self.canvas.restore();
 
                              self.canvas.save();
                              self.canvas.translate((offset, offset));
-                             self.canvas.draw_path(path, &b_paint);
+                             self.canvas.draw_path(path, &self.paints.b_paint);
                              self.canvas.restore();
 
                          } else {
                              // Normal Draw
-                             self.canvas.draw_path(path, &paint);
+                             self.canvas.draw_path(path, &self.paints.main_paint);
                          }
                      }
                      
