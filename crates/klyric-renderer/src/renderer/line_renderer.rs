@@ -172,7 +172,8 @@ impl<'a> LineRenderer<'a> {
              
              if let Some(typeface) = &last_typeface {
                  // Get path
-                 if let Some(path) = self.text_renderer.get_glyph_path(typeface, glyph.char, size) {
+                 // [Bolt Optimization] Use cached path by ID instead of resolving by char/Font object
+                 if let Some(path) = self.text_renderer.get_path_cached(typeface, size, glyph.glyph_id) {
                      // Dimensions for effects
                      // Skia path bounds
                      let bounds = path.bounds();
@@ -299,18 +300,22 @@ impl<'a> LineRenderer<'a> {
                      self.canvas.translate((-path_center_x, -path_center_y));
                      
                      // Modify path if StrokeReveal is active
-                     let draw_path = if let Some(progress) = stroke_reveal_progress {
-                         let mut measure = skia_safe::PathMeasure::new(&path, false, None);
+                     // [Bolt Optimization] COW path: avoid clone unless modified
+                     let mut modified_path_storage: Option<skia_safe::Path> = None;
+
+                     let path_to_draw: &skia_safe::Path = if let Some(progress) = stroke_reveal_progress {
+                         let mut measure = skia_safe::PathMeasure::new(path, false, None);
                          let length = measure.length();
                          if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
-                             partial_path
+                             modified_path_storage = Some(partial_path);
+                             modified_path_storage.as_ref().unwrap()
                          } else {
-                             path.clone()
+                             path
                          }
                      } else {
-                         path.clone() // Clone for drawing to avoid borrow issues? path is local
+                         path
                      };
-                     let path = &draw_path; // Re-bind path to modified version if needed
+                     let path = path_to_draw; // Shadow original path with the one to draw
 
                      
                      // --- 1. SHADOW ---
