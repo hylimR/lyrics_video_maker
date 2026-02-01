@@ -1,5 +1,6 @@
 use super::model::{Align, Line, Style};
 use crate::text::TextRenderer;
+use skia_safe::Typeface;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::text::ResolvedFont;
@@ -71,7 +72,7 @@ impl LayoutEngine {
 
         // Cache for Font Override
         let mut cached_family_override: Option<&str> = None;
-        let mut cached_typeface_override: Option<Option<_>> = None;
+        let mut cached_typeface_override: Option<Option<Typeface>> = None;
 
         // Iterate over character objects in the line
         for (i, char_data) in line.chars.iter().enumerate() {
@@ -82,19 +83,17 @@ impl LayoutEngine {
 
             // Resolve Typeface (Char override or Line default)
             let font_ref = if let Some(fam) = char_family_override {
-                if cached_family_override == Some(fam) {
-                    cached_typeface_override.clone().flatten()
-                } else {
+                if cached_family_override != Some(fam) {
                     let tf = renderer
                         .get_typeface(fam)
                         .or_else(|| renderer.get_default_typeface());
 
                     cached_family_override = Some(fam);
-                    cached_typeface_override = Some(tf.clone());
-                    tf
+                    cached_typeface_override = Some(tf);
                 }
+                cached_typeface_override.as_ref().unwrap()
             } else {
-                line_typeface.clone()
+                &line_typeface
             };
 
             let size = char_data
@@ -141,7 +140,7 @@ impl LayoutEngine {
                     };
 
                     #[cfg(target_arch = "wasm32")]
-                    let (advance, height, glyph_id) = if let Some(tf) = &font_ref {
+                    let (advance, height, glyph_id) = if let Some(tf) = font_ref {
                         renderer.measure_char(tf, ch, size)
                     } else {
                         (0.0, 0.0, 0)
