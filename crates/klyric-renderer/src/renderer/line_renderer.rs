@@ -125,6 +125,10 @@ impl<'a> LineRenderer<'a> {
         // Pre-calculate base render transform for line (without char overrides)
         let line_render_transform = RenderTransform::new(&line_transform, &Transform::default());
 
+        // [Bolt Optimization] Cache font resolution per-line to avoid redundant lookups
+        let mut last_family: Option<&str> = None;
+        let mut last_typeface: Option<skia_safe::Typeface> = None;
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -142,14 +146,16 @@ impl<'a> LineRenderer<'a> {
                 .unwrap_or(style_size);
 
              // Get typeface and path
-             // TODO: Optimize font resolution by caching the family->typeface lookup per-line,
-             // similar to LayoutEngine. Currently this hashes the family string for every glyph.
-             let typeface = self.text_renderer.get_typeface(family)
-                 .or_else(|| self.text_renderer.get_default_typeface());
+             // Optimized font resolution: reuse typeface if family matches last iteration
+             if last_family != Some(family) {
+                 last_typeface = self.text_renderer.get_typeface(family)
+                     .or_else(|| self.text_renderer.get_default_typeface());
+                 last_family = Some(family);
+             }
              
-             if let Some(typeface) = typeface {
+             if let Some(typeface) = &last_typeface {
                  // Get path
-                 if let Some(path) = self.text_renderer.get_glyph_path(&typeface, glyph.char, size) {
+                 if let Some(path) = self.text_renderer.get_glyph_path(typeface, glyph.char, size) {
                      // Dimensions for effects
                      // Skia path bounds
                      let bounds = path.bounds();
