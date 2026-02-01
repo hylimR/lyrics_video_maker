@@ -770,6 +770,26 @@ impl EffectEngine {
         final_transform
     }
 
+    /// Process modifier layers for RenderTransform
+    pub fn apply_layers_to_render(
+        current_time: f64,
+        base_transform: RenderTransform,
+        layers: &[EffectLayer],
+        ctx: &TriggerContext,
+    ) -> RenderTransform {
+        let mut final_transform = base_transform;
+
+        for layer in layers {
+            if Self::matches_selector(&layer.selector, ctx) {
+                for modifier in &layer.modifiers {
+                    Self::apply_modifier_to_render(&mut final_transform, modifier, current_time, ctx);
+                }
+            }
+        }
+
+        final_transform
+    }
+
     fn matches_selector(selector: &Selector, ctx: &TriggerContext) -> bool {
         match selector {
             Selector::All => true,
@@ -887,6 +907,64 @@ impl EffectEngine {
                  match p.mode {
                      AppearMode::Fade => {
                          transform.opacity = Some(progress.clamp(0.0, 1.0));
+                     },
+                     _ => {}
+                 }
+            },
+            _ => {}
+        }
+    }
+
+    fn apply_modifier_to_render(transform: &mut RenderTransform, modifier: &Modifier, time: f64, _ctx: &TriggerContext) {
+        match modifier {
+            Modifier::Move(p) => {
+                let x = DriverManager::evaluate(&p.x, time);
+                let y = DriverManager::evaluate(&p.y, time);
+                transform.x += x;
+                transform.y += y;
+            },
+            Modifier::Scale(p) => {
+                let sx = DriverManager::evaluate(&p.x, time);
+                let sy = DriverManager::evaluate(&p.y, time);
+                transform.scale_x *= sx;
+                transform.scale_y *= sy;
+            },
+            Modifier::Rotate(p) => {
+                let angle = DriverManager::evaluate(&p.angle, time);
+                transform.rotation += angle;
+            },
+            Modifier::Color(_p) => {
+                // Not supported in Transform/RenderTransform for now
+            },
+            Modifier::Fade(p) => {
+                let alpha = DriverManager::evaluate(&p.value, time);
+                transform.opacity *= alpha;
+            },
+            Modifier::Blur(sigma) => {
+                transform.blur = *sigma;
+            },
+            Modifier::Jitter(p) => {
+                let amt = DriverManager::evaluate(&p.amount, time);
+                let speed = DriverManager::evaluate(&p.speed, time);
+                let off_x = (time as f32 * speed).sin() * amt;
+                let off_y = (time as f32 * speed * 1.5).cos() * amt;
+                transform.x += off_x;
+                transform.y += off_y;
+            },
+            Modifier::Wave(p) => {
+                let freq = DriverManager::evaluate(&p.freq, time);
+                let amp = DriverManager::evaluate(&p.amp, time);
+                 let idx = _ctx.char_index.unwrap_or(0) as f32;
+                 let speed = DriverManager::evaluate(&p.speed, time);
+                 let phase = idx * 0.5;
+                 let y = (time as f32 * speed + phase * freq).sin() * amp;
+                 transform.y += y;
+            },
+            Modifier::Appear(p) => {
+                 let progress = DriverManager::evaluate(&p.progress, time);
+                 match p.mode {
+                     AppearMode::Fade => {
+                         transform.opacity = progress.clamp(0.0, 1.0);
                      },
                      _ => {}
                  }

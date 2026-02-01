@@ -4,12 +4,13 @@ use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing};
+use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, RenderTransform};
 use crate::style::StyleResolver;
 use crate::layout::LayoutEngine;
 use crate::text::TextRenderer;
 use crate::effects::{EffectEngine, TriggerContext};
 use crate::presets::CharBounds;
+use crate::expressions::{EvaluationContext, FastEvaluationContext};
 
 use super::particle_system::ParticleRenderSystem;
 use super::utils::parse_color;
@@ -86,6 +87,49 @@ impl<'a> LineRenderer<'a> {
         // Cache: (sigma, filter)
         let mut cached_blur_filter: Option<(f32, MaskFilter)> = None;
 
+        // [Bolt Optimization] Hoist effect compilation and context creation
+        // Calculate active effects and progress once per line.
+        // Safety: Progress depends on (time, line.start, effect.delay).
+        // Since effect.delay is scalar and we use line.start, progress is invariant for the line.
+        // Per-character variations (staggering) are handled via expressions (evaluated per-char)
+        // or specialized ops (like TypewriterLimit) which are preserved in compiled ops.
+        let line_ctx = TriggerContext {
+            start_time: line.start,
+            end_time: line.end,
+            current_time: self.time,
+            active: true,
+            char_index: None,
+            char_count: Some(glyphs.len()),
+        };
+
+        let mut active_effects_progress: Vec<(&crate::effects::ResolvedEffect, f64)> = Vec::with_capacity(effects.transform_effects.len());
+        for resolved in &effects.transform_effects {
+            if EffectEngine::should_trigger(&resolved.effect, &line_ctx) {
+                let p = EffectEngine::calculate_progress(self.time, &resolved.effect, &line_ctx);
+                if (0.0..=1.0).contains(&p) {
+                    active_effects_progress.push((resolved, EffectEngine::ease(p, &resolved.effect.easing)));
+                }
+            }
+        }
+
+        let compiled_ops = EffectEngine::compile_active_effects(&active_effects_progress, &line_ctx);
+
+        // Reusable context for expression evaluation
+        let eval_ctx = EvaluationContext {
+            t: self.time,
+            progress: 0.0, // Updated per effect/op
+            width: self.width as f64,
+            height: self.height as f64,
+            index: None,
+            count: Some(glyphs.len()),
+            char_width: None,
+            char_height: None,
+        };
+        let mut fast_ctx = FastEvaluationContext::new(&eval_ctx);
+
+        // Pre-calculate base render transform for line (without char overrides)
+        let line_render_transform = RenderTransform::new(&line_transform, &Transform::default());
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -131,24 +175,21 @@ impl<'a> LineRenderer<'a> {
                      };
 
                      // Compute Transform (Base + Effects)
-                     // Use hoisted line_transform
-                     let char_transform = char_data.and_then(|c| c.transform.clone()).unwrap_or_default();
-                     
-                     let base_transform = Transform {
-                         x: Some(line_transform.x_val() + char_transform.x_val()),
-                         y: Some(line_transform.y_val() + char_transform.y_val()),
-                         rotation: Some(line_transform.rotation_val() + char_transform.rotation_val()),
-                         scale: Some(line_transform.scale_val() * char_transform.scale_val()),
-                         scale_x: Some(line_transform.scale_x_val() * char_transform.scale_x_val()),
-                         scale_y: Some(line_transform.scale_y_val() * char_transform.scale_y_val()),
-                         opacity: Some(line_transform.opacity_val() * char_transform.opacity_val()),
-                         anchor_x: Some(char_transform.anchor_x_val()),
-                         anchor_y: Some(char_transform.anchor_y_val()), // Anchor is not additive usually, char overrides line
-                         blur: Some(line_transform.blur_val() + char_transform.blur_val()),
-                         glitch_offset: Some(line_transform.glitch_offset_val() + char_transform.glitch_offset_val()),
-                         hue_shift: Some(line_transform.hue_shift_val() + char_transform.hue_shift_val()),
+                     // [Bolt Optimization] Use RenderTransform and compiled ops
+                     let mut final_transform = if let Some(c) = char_data {
+                         let char_transform = c.transform.as_ref().cloned().unwrap_or_default();
+                         RenderTransform::new(&line_transform, &char_transform)
+                     } else {
+                         line_render_transform.clone() // RenderTransform is Copy
                      };
+
+                     // Update context
+                     fast_ctx.set_index(glyph.char_index);
+
+                     // Apply compiled effects
+                     final_transform = EffectEngine::apply_compiled_ops(final_transform, &compiled_ops, &mut fast_ctx);
                      
+                     // Need TriggerContext for layers/other effects
                      let ctx = TriggerContext {
                          start_time: line.start,
                          end_time: line.end,
@@ -157,20 +198,12 @@ impl<'a> LineRenderer<'a> {
                          char_index: Some(glyph.char_index),
                          char_count: Some(glyphs.len()),
                      };
-                     
-                     // Use pre-categorized effects directly
-                     let mut final_transform = EffectEngine::compute_transform(
-                          self.time,
-                          base_transform.clone(),
-                          &effects.transform_effects,
-                          &ctx
-                      );
 
                      // --- 4. MODIFIER LAYERS (New System) ---
                      if let Some(layers) = style.layers.as_ref() {
-                         final_transform = EffectEngine::apply_layers(
+                         final_transform = EffectEngine::apply_layers_to_render(
                              self.time,
-                             &final_transform,
+                             final_transform,
                              layers,
                              &ctx
                          );
@@ -191,11 +224,11 @@ impl<'a> LineRenderer<'a> {
                      paint.set_color(text_color);
                      paint.set_anti_alias(true);
                      
-                     let final_opacity = final_transform.opacity_val() * (1.0 - disintegration_progress as f32);
+                     let final_opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
                      paint.set_alpha_f(final_opacity);
 
                      // Apply Blur with caching
-                     let blur = final_transform.blur_val();
+                     let blur = final_transform.blur;
                      if blur > 0.0 {
                          let use_cached = if let Some((last_sigma, _)) = cached_blur_filter.as_ref() {
                              (last_sigma - blur).abs() < 0.001
@@ -235,14 +268,14 @@ impl<'a> LineRenderer<'a> {
                      }
 
                      // Apply Transforms
-                     self.canvas.translate((draw_x + final_transform.x_val(), draw_y + final_transform.y_val()));
+                     self.canvas.translate((draw_x + final_transform.x, draw_y + final_transform.y));
                      
                      let path_center_x = bounds.center_x();
                      let path_center_y = bounds.center_y();
                      
                      self.canvas.translate((path_center_x, path_center_y));
-                     self.canvas.rotate(final_transform.rotation_val(), None);
-                     self.canvas.scale((final_transform.scale_val() * final_transform.scale_x_val(), final_transform.scale_val() * final_transform.scale_y_val()));
+                     self.canvas.rotate(final_transform.rotation, None);
+                     self.canvas.scale((final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y));
                      self.canvas.translate((-path_center_x, -path_center_y));
                      
                      // Modify path if StrokeReveal is active
@@ -274,7 +307,7 @@ impl<'a> LineRenderer<'a> {
                                  shadow_paint.set_anti_alias(true);
                                  
                                  // Apply blur to shadow if needed
-                                 if final_transform.blur_val() > 0.0 {
+                                 if final_transform.blur > 0.0 {
                                      if let Some((_, ref filter)) = cached_blur_filter {
                                          shadow_paint.set_mask_filter(Some(filter.clone()));
                                      }
@@ -304,7 +337,7 @@ impl<'a> LineRenderer<'a> {
                                      stroke_paint.set_alpha_f(final_opacity);
                                      stroke_paint.set_anti_alias(true);
                                      
-                                     if final_transform.blur_val() > 0.0 {
+                                     if final_transform.blur > 0.0 {
                                          if let Some((_, ref filter)) = cached_blur_filter {
                                              stroke_paint.set_mask_filter(Some(filter.clone()));
                                          }
@@ -318,9 +351,9 @@ impl<'a> LineRenderer<'a> {
 
                      // --- 3. MAIN TEXT (With Glitch Logic) ---
                      if paint.alpha_f() > 0.001 {
-                         if final_transform.glitch_offset_val().abs() > 0.01 {
+                         if final_transform.glitch_offset.abs() > 0.01 {
                              // Glitch Effect: Draw channels separately
-                             let offset = final_transform.glitch_offset_val();
+                             let offset = final_transform.glitch_offset;
 
                              // Red Channel
                              let mut r_paint = paint.clone();
@@ -437,10 +470,10 @@ impl<'a> LineRenderer<'a> {
 
                              // Calculate screen bounds for the emitter
                              let bounds_rect = CharBounds {
-                                 x: draw_x + final_transform.x_val() + bounds_left - 10.0, // Adjust back
-                                 y: draw_y + final_transform.y_val() + bounds_top - 10.0,
-                                 width: capture_w as f32 * final_transform.scale_val(),
-                                 height: capture_h as f32 * final_transform.scale_val(),
+                                 x: draw_x + final_transform.x + bounds_left - 10.0, // Adjust back
+                                 y: draw_y + final_transform.y + bounds_top - 10.0,
+                                 width: capture_w as f32 * final_transform.scale,
+                                 height: capture_h as f32 * final_transform.scale,
                              };
 
                              let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
@@ -477,10 +510,10 @@ impl<'a> LineRenderer<'a> {
                          self.active_keys.insert(key);
                          
                          let bounds_rect = CharBounds {
-                             x: draw_x + final_transform.x_val() + bounds.left, 
-                             y: draw_y + final_transform.y_val() + bounds.top, 
-                             width: w * final_transform.scale_val(), 
-                             height: h * final_transform.scale_val(),
+                             x: draw_x + final_transform.x + bounds.left,
+                             y: draw_y + final_transform.y + bounds.top,
+                             width: w * final_transform.scale,
+                             height: h * final_transform.scale,
                          };
                          
                          let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
