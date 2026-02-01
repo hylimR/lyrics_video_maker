@@ -57,6 +57,10 @@ impl<'a> LineRenderer<'a> {
             .unwrap_or("Noto Sans SC");
         let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
 
+        // --- OPTIMIZATION: Hoist Line Font Size ---
+        let line_font_size = line.font.as_ref().and_then(|f| f.size);
+        let default_size = line_font_size.unwrap_or(style_size);
+
         // Pre-resolve colors to avoid parsing per-glyph
         let inactive_hex = style
             .colors
@@ -107,6 +111,11 @@ impl<'a> LineRenderer<'a> {
         // --- OPTIMIZATION: Hoist Line Transform ---
         let line_transform_default = Transform::default();
         let line_transform_ref = line.transform.as_ref().unwrap_or(&line_transform_default);
+
+        // --- OPTIMIZATION: Hoist Base Render Transform ---
+        // Avoid repeated RenderTransform::new() calls for chars without overrides
+        let base_render_transform =
+            RenderTransform::new(line_transform_ref, &Transform::default());
 
         // --- OPTIMIZATION: Hoist Line-Level Effects (Prefix) ---
         // Find the longest prefix of effects that are character-independent.
@@ -262,8 +271,7 @@ impl<'a> LineRenderer<'a> {
 
             let size = char_data
                 .and_then(|c| c.font.as_ref().and_then(|f| f.size))
-                .or_else(|| line.font.as_ref().and_then(|f| f.size))
-                .unwrap_or(style_size);
+                .unwrap_or(default_size);
 
             // Get typeface (avoid cloning default)
             let override_typeface = if let Some(fam) = family_override {
@@ -304,14 +312,15 @@ impl<'a> LineRenderer<'a> {
                     };
 
                     // Compute Transform (Base + Effects)
-                    let char_transform_default = Transform::default();
-                    let char_transform_ref = char_data
-                        .and_then(|c| c.transform.as_ref())
-                        .unwrap_or(&char_transform_default);
+                    let char_transform_ref = char_data.and_then(|c| c.transform.as_ref());
 
                     // Use optimized RenderTransform (dense)
-                    let mut final_transform =
-                        RenderTransform::new(line_transform_ref, char_transform_ref);
+                    // If no char transform, use the pre-calculated base transform (Copy)
+                    let mut final_transform = if let Some(ct) = char_transform_ref {
+                        RenderTransform::new(line_transform_ref, ct)
+                    } else {
+                        base_render_transform
+                    };
 
                     // Apply precomputed independent effects
                     if let Some(delta) = &prefix_delta {
