@@ -14,11 +14,7 @@ use crate::expressions::{EvaluationContext, FastEvaluationContext};
 use super::particle_system::ParticleRenderSystem;
 use super::utils::parse_color;
 use super::CategorizedLineEffects;
-
-/// Default colors for karaoke states when not specified in style
-const DEFAULT_INACTIVE_COLOR: &str = "#888888";  // Dimmed gray
-const DEFAULT_ACTIVE_COLOR: &str = "#FFFF00";    // Bright yellow
-const DEFAULT_COMPLETE_COLOR: &str = "#FFFFFF";  // White
+use super::ResolvedStyleColors;
 
 pub struct LineRenderer<'a> {
     pub canvas: &'a Canvas,
@@ -31,7 +27,7 @@ pub struct LineRenderer<'a> {
 }
 
 impl<'a> LineRenderer<'a> {
-    pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, effects: &'a CategorizedLineEffects) -> Result<()> {
+    pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, colors: &ResolvedStyleColors, effects: &'a CategorizedLineEffects) -> Result<()> {
         // Compute Line Position
         let (base_x, base_y) = self.compute_line_position(line);
 
@@ -40,23 +36,10 @@ impl<'a> LineRenderer<'a> {
         let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
         
         // Pre-resolve colors to avoid parsing per-glyph
-        let inactive_hex = style.colors.as_ref()
-            .and_then(|c| c.inactive.as_ref())
-            .and_then(|fs| fs.fill.as_deref())
-            .unwrap_or(DEFAULT_INACTIVE_COLOR);
-        let inactive_color = parse_color(inactive_hex).unwrap_or(Color::WHITE);
-
-        let active_hex = style.colors.as_ref()
-            .and_then(|c| c.active.as_ref())
-            .and_then(|fs| fs.fill.as_deref())
-            .unwrap_or(DEFAULT_ACTIVE_COLOR);
-        let active_color = parse_color(active_hex).unwrap_or(Color::WHITE);
-
-        let complete_hex = style.colors.as_ref()
-            .and_then(|c| c.complete.as_ref())
-            .and_then(|fs| fs.fill.as_deref())
-            .unwrap_or(DEFAULT_COMPLETE_COLOR);
-        let complete_color = parse_color(complete_hex).unwrap_or(Color::WHITE);
+        // [Bolt Optimization] Use cached colors passed from Renderer
+        let inactive_color = colors.inactive;
+        let active_color = colors.active;
+        let complete_color = colors.complete;
 
         // Hoist Line Transform
         let line_transform = line.transform.clone().unwrap_or_default();
@@ -183,17 +166,13 @@ impl<'a> LineRenderer<'a> {
         let line_render_transform = RenderTransform::new(&line_transform, &Transform::default());
 
         // [Bolt Optimization] Pre-calculate Shadow/Stroke colors to avoid parsing inside loop
-        let style_shadow_color = style.shadow.as_ref()
-            .and_then(|s| s.color.as_deref())
-            .and_then(parse_color);
+        let style_shadow_color = colors.shadow;
 
         let line_shadow_color = line.shadow.as_ref()
             .and_then(|s| s.color.as_deref())
             .and_then(parse_color);
 
-        let style_stroke_color = style.stroke.as_ref()
-            .and_then(|s| s.color.as_deref())
-            .and_then(parse_color);
+        let style_stroke_color = colors.stroke;
 
         let line_stroke_color = line.stroke.as_ref()
             .and_then(|s| s.color.as_deref())
