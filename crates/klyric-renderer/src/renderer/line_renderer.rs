@@ -13,6 +13,7 @@ use crate::presets::CharBounds;
 
 use super::particle_system::ParticleRenderSystem;
 use super::utils::parse_color;
+use super::CategorizedLineEffects;
 
 /// Default colors for karaoke states when not specified in style
 const DEFAULT_INACTIVE_COLOR: &str = "#888888";  // Dimmed gray
@@ -40,7 +41,7 @@ fn hash_emitter_key(line_idx: usize, char_idx: usize, name: &str) -> u64 {
 }
 
 impl<'a> LineRenderer<'a> {
-    pub fn render_line(&mut self, line: &Line, line_idx: usize) -> Result<()> {
+    pub fn render_line(&mut self, line: &Line, line_idx: usize, effects: &'a CategorizedLineEffects) -> Result<()> {
         let resolver = StyleResolver::new(self.doc);
         let style_name = line.style.as_deref().unwrap_or("base");
         let style = resolver.resolve(style_name);
@@ -73,6 +74,9 @@ impl<'a> LineRenderer<'a> {
             .and_then(|fs| fs.fill.as_deref())
             .unwrap_or(DEFAULT_COMPLETE_COLOR);
         let complete_color = parse_color(complete_hex).unwrap_or(Color::WHITE);
+
+        // Hoist Line Transform
+        let line_transform = line.transform.clone().unwrap_or_default();
 
         // Loop:
         for glyph in glyphs.iter() {
@@ -119,7 +123,7 @@ impl<'a> LineRenderer<'a> {
                      };
 
                      // Compute Transform (Base + Effects)
-                     let line_transform = line.transform.clone().unwrap_or_default();
+                     // Use hoisted line_transform
                      let char_transform = char_data.and_then(|c| c.transform.clone()).unwrap_or_default();
                      
                      let base_transform = Transform {
@@ -137,37 +141,6 @@ impl<'a> LineRenderer<'a> {
                          hue_shift: Some(line_transform.hue_shift_val() + char_transform.hue_shift_val()),
                      };
                      
-                     // ... Effect Resolution Logic ...
-                     let mut active_effects = Vec::new();
-                     
-                     // Collect all effect names: Style effects first (base), then Line effects (override/stack)
-                     // Note: We are just stacking them. If the user wants "Override", they might not want base effects?
-                     // But typically "Global > Line" means Global applies, then Line applies on top.
-                     let empty_vec = Vec::new();
-                     let style_effects = style.effects.as_ref().unwrap_or(&empty_vec);
-                     let line_effects = &line.effects;
-                     
-                     // Helper chain iterator
-                     let all_effects = style_effects.iter().chain(line_effects.iter());
-
-                     for effect_name in all_effects {
-                        if let Some(effect) = self.doc.effects.get(effect_name) {
-                            if let Some(preset_name) = &effect.preset {
-                                if let Some(mut generated) = crate::presets::transitions::get_transition(preset_name) {
-                                     if let Some(d) = effect.duration { generated.duration = Some(d); }
-                                     if effect.easing != Easing::Linear { generated.easing = effect.easing.clone(); }
-                                     active_effects.push((effect_name, generated));
-                                } else {
-                                     active_effects.push((effect_name, effect.clone()));
-                                }
-                            } else {
-                                active_effects.push((effect_name, effect.clone()));
-                            }
-                        } else if let Some(preset) = crate::presets::transitions::get_transition(effect_name) {
-                            active_effects.push((effect_name, preset));
-                        }
-                     }
-
                      let ctx = TriggerContext {
                          start_time: line.start,
                          end_time: line.end,
@@ -177,22 +150,11 @@ impl<'a> LineRenderer<'a> {
                          char_count: Some(glyphs.len()),
                      };
                      
-                     let mut transform_effects = Vec::new();
-                     let mut particle_effects = Vec::new();
-                     let mut disintegrate_effects = Vec::new();
-
-                     for (name, effect) in active_effects {
-                         match effect.effect_type {
-                             EffectType::Particle => particle_effects.push((name, effect)),
-                             EffectType::Disintegrate => disintegrate_effects.push((name, effect)),
-                             _ => transform_effects.push(effect),
-                         }
-                     }
-                     
+                     // Use pre-categorized effects directly
                      let mut final_transform = EffectEngine::compute_transform(
                           self.time,
                           base_transform.clone(),
-                          &transform_effects,
+                          &effects.transform_effects,
                           &ctx
                       );
 
@@ -208,7 +170,8 @@ impl<'a> LineRenderer<'a> {
 
                      // Disintegrate Effect Progress
                      let mut disintegration_progress = 0.0;
-                     if let Some((_name, effect)) = disintegrate_effects.first() {
+                     if let Some((_name, resolved_effect)) = effects.disintegrate_effects.first() {
+                         let effect = &resolved_effect.effect;
                          if EffectEngine::should_trigger(effect, &ctx) {
                              disintegration_progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
                              disintegration_progress = disintegration_progress.clamp(0.0, 1.0);
@@ -237,8 +200,8 @@ impl<'a> LineRenderer<'a> {
                      
                      // Check for StrokeReveal
                      let mut stroke_reveal_progress = None;
-                     for effect in &transform_effects {
-                         if effect.effect_type == EffectType::StrokeReveal && EffectEngine::should_trigger(effect, &ctx) {
+                     for effect in &effects.stroke_reveal_effects {
+                         if EffectEngine::should_trigger(effect, &ctx) {
                              let p = EffectEngine::calculate_progress(self.time, effect, &ctx);
                              stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
                              break; // Only one stroke reveal supported
@@ -377,10 +340,11 @@ impl<'a> LineRenderer<'a> {
                      self.canvas.restore(); // Restore transform for next glyph/effects
 
                      // --- DISINTEGRATION EFFECT ---
-                     for (name, effect) in disintegrate_effects {
-                         if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
+                     for (name, resolved_effect) in &effects.disintegrate_effects {
+                         let effect = &resolved_effect.effect;
+                         if !EffectEngine::should_trigger(effect, &ctx) { continue; }
 
-                         let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
+                         let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
                          if !(0.0..=1.0).contains(&progress) { continue; }
 
                          let key = hash_emitter_key(line_idx, glyph.char_index, name);
@@ -464,10 +428,11 @@ impl<'a> LineRenderer<'a> {
                      
                      // --- PARTICLE SPAWNING ---
                      // Process standard particle effects
-                     for (name, effect) in particle_effects {
-                         if !EffectEngine::should_trigger(&effect, &ctx) { continue; }
+                     for (name, resolved_effect) in &effects.particle_effects {
+                         let effect = &resolved_effect.effect;
+                         if !EffectEngine::should_trigger(effect, &ctx) { continue; }
                          
-                         let progress = EffectEngine::calculate_progress(self.time, &effect, &ctx);
+                         let progress = EffectEngine::calculate_progress(self.time, effect, &ctx);
                          if !(0.0..=1.0).contains(&progress) { continue; }
                          
                          // Evaluation Context for Particles

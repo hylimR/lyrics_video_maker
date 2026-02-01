@@ -132,7 +132,7 @@ impl Renderer {
                     let effects = Self::resolve_line_effects(doc, line, style);
                     self.line_effect_cache.insert(line_ptr, effects);
                 }
-                let _effects = self.line_effect_cache.get(&line_ptr).unwrap();
+                let effects = self.line_effect_cache.get(&line_ptr).unwrap();
 
                 let mut line_renderer = LineRenderer {
                     canvas,
@@ -145,7 +145,7 @@ impl Renderer {
                     height: self.height,
                 };
 
-                line_renderer.render_line(line, line_idx)?;
+                line_renderer.render_line(line, line_idx, effects)?;
             }
         }
 
