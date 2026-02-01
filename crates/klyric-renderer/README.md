@@ -94,3 +94,12 @@ let mut renderer = Renderer::new(width, height);
 // Returns a Result<Vec<u8>> (RGBA pixel data)
 let buffer = renderer.render_frame(&doc, time_in_seconds)?;
 ```
+
+## Performance Optimizations ("Bolt")
+
+The renderer implements several optimizations (internally tagged as "Bolt") to ensure high-performance rendering for 4K video export:
+
+1.  **Loop Hoisting**: Expensive operations like Effect compilation, Transform base calculations, and Shadow/Stroke fallback resolution are hoisted out of the character rendering loop.
+2.  **Paint Reuse**: `skia_safe::Paint` objects are allocated once per line (or reused) rather than per-character, significantly reducing allocator pressure.
+3.  **Pointer Caching**: Layouts and Styles are cached based on memory addresses (`std::ptr`). This allows the renderer to skip re-layout and re-hashing if the underlying `Line` or `Style` object has not moved in memory.
+4.  **Zero-Alloc Particles**: Particle emitters are updated in-place using pre-allocated buffers, avoiding reallocation during frame updates.
