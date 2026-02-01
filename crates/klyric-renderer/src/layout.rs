@@ -4,7 +4,7 @@ use crate::text::TextRenderer;
 #[cfg(target_arch = "wasm32")]
 use crate::text::Typeface;
 #[cfg(not(target_arch = "wasm32"))]
-use skia_safe::{Color, Typeface};
+use skia_safe::{Color, Typeface, Path, Rect};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::text::ResolvedFont;
@@ -31,6 +31,12 @@ pub struct GlyphInfo {
     /// [Bolt Optimization] Pre-parsed override stroke color (Native only)
     #[cfg(not(target_arch = "wasm32"))]
     pub override_stroke_color: Option<Color>,
+    /// [Bolt Optimization] Cached Path (Native only)
+    #[cfg(not(target_arch = "wasm32"))]
+    pub path: Option<Path>,
+    /// [Bolt Optimization] Cached Path Bounds (Native only)
+    #[cfg(not(target_arch = "wasm32"))]
+    pub bounds: Option<Rect>,
 }
 
 pub struct LayoutEngine;
@@ -183,6 +189,18 @@ impl LayoutEngine {
                         (0.0, 0.0, 0)
                     };
 
+                    // [Bolt Optimization] Cache Path and Bounds
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let (path, bounds) = if let Some(tf) = font_ref.as_ref() {
+                        if let Some(p) = renderer.get_path_cached(tf, size, glyph_id) {
+                            (Some(p.clone()), Some(p.bounds()))
+                        } else {
+                            (None, None)
+                        }
+                    } else {
+                        (None, None)
+                    };
+
                     let width = advance;
 
                     glyphs.push(GlyphInfo {
@@ -200,6 +218,10 @@ impl LayoutEngine {
                         override_shadow_color,
                         #[cfg(not(target_arch = "wasm32"))]
                         override_stroke_color,
+                        #[cfg(not(target_arch = "wasm32"))]
+                        path,
+                        #[cfg(not(target_arch = "wasm32"))]
+                        bounds,
                     });
 
                     cursor_x += advance;
@@ -554,5 +576,43 @@ mod tests {
 
         // Verify layout completes (cascade logic exercised)
         let _ = glyphs;
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_layout_populates_path_cache() {
+        // This test verifies that path and bounds are populated in GlyphInfo
+        // Note: success depends on having a valid system font available
+        let line = test_line(vec!["A"]);
+        let style = test_style();
+        let mut renderer = TextRenderer::new();
+
+        // Try to load a font that definitely exists if possible, or rely on fallback
+        #[cfg(target_os = "windows")]
+        let font_name = "Arial";
+        #[cfg(target_os = "macos")]
+        let font_name = "Helvetica";
+        #[cfg(target_os = "linux")]
+        let font_name = "DejaVu Sans";
+
+        // Check if we can get a typeface
+        if renderer.get_typeface(font_name).is_some() {
+             // Mock style to use this font
+             let mut style_with_font = style.clone();
+             style_with_font.font = Some(Font {
+                 family: Some(font_name.to_string()),
+                 size: Some(48.0),
+                 ..Default::default()
+             });
+
+             let glyphs = LayoutEngine::layout_line(&line, &style_with_font, &mut renderer);
+
+             if !glyphs.is_empty() {
+                 let glyph = &glyphs[0];
+                 // Should have path and bounds if font loaded
+                 assert!(glyph.path.is_some(), "Glyph path should be populated");
+                 assert!(glyph.bounds.is_some(), "Glyph bounds should be populated");
+             }
+        }
     }
 }
