@@ -476,13 +476,7 @@ impl Renderer {
 fn resolve_position_value(val: &Option<PositionValue>, total: f32, default: f32) -> f32 {
     match val {
         Some(PositionValue::Pixels(v)) => *v,
-        Some(PositionValue::Percentage(s)) => {
-            if let Some(p) = crate::utils::parse_percentage(s) {
-                total * p
-            } else {
-                default
-            }
-        }
+        Some(PositionValue::Percentage(v)) => total * *v,
         None => default,
     }
 }

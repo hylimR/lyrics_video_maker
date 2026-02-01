@@ -1,4 +1,6 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{self, Visitor};
+use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -16,16 +18,82 @@ pub struct Position {
     pub anchor: Anchor,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum PositionValue {
     Pixels(f32),
-    Percentage(String),
+    Percentage(f32),
 }
 
 impl Default for PositionValue {
     fn default() -> Self {
-        PositionValue::Percentage("50%".to_string())
+        PositionValue::Percentage(0.5)
+    }
+}
+
+impl Serialize for PositionValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            PositionValue::Pixels(v) => serializer.serialize_f32(*v),
+            PositionValue::Percentage(v) => {
+                let s = format!("{}%", v * 100.0);
+                serializer.serialize_str(&s)
+            }
+        }
+    }
+}
+
+struct PositionValueVisitor;
+
+impl<'de> Visitor<'de> for PositionValueVisitor {
+    type Value = PositionValue;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a float (pixels) or string ending in % (percentage)")
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(PositionValue::Pixels(value as f32))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(PositionValue::Pixels(value as f32))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(PositionValue::Pixels(value as f32))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        if let Some(p) = crate::utils::parse_percentage(value) {
+            Ok(PositionValue::Percentage(p))
+        } else {
+            // Fallback for invalid strings to match previous behavior (default 50%)
+            Ok(PositionValue::Percentage(0.5))
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for PositionValue {
+    fn deserialize<D>(deserializer: D) -> Result<PositionValue, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(PositionValueVisitor)
     }
 }
 
@@ -299,5 +367,63 @@ impl RenderTransform {
         if let Some(v) = delta.hue_shift {
             self.hue_shift = v;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_position_value_deserialization() {
+        // Test Pixels (number)
+        let pixels: PositionValue = from_str("100.0").unwrap();
+        if let PositionValue::Pixels(v) = pixels {
+            assert_eq!(v, 100.0);
+        } else {
+            panic!("Expected Pixels");
+        }
+
+        // Test Percentage (string with %)
+        let pct: PositionValue = from_str("\"50%\"").unwrap();
+        if let PositionValue::Percentage(v) = pct {
+            assert_eq!(v, 0.5);
+        } else {
+            panic!("Expected Percentage");
+        }
+
+        // Test Percentage 0%
+        let pct0: PositionValue = from_str("\"0%\"").unwrap();
+        if let PositionValue::Percentage(v) = pct0 {
+            assert_eq!(v, 0.0);
+        } else {
+            panic!("Expected Percentage");
+        }
+
+        // Test Percentage 100%
+        let pct100: PositionValue = from_str("\"100%\"").unwrap();
+        if let PositionValue::Percentage(v) = pct100 {
+            assert_eq!(v, 1.0);
+        } else {
+            panic!("Expected Percentage");
+        }
+
+        // Test invalid string (defaults to 50%)
+        let invalid: PositionValue = from_str("\"gibberish\"").unwrap();
+        if let PositionValue::Percentage(v) = invalid {
+            assert_eq!(v, 0.5);
+        } else {
+            panic!("Expected Percentage");
+        }
+    }
+
+    #[test]
+    fn test_position_value_serialization() {
+        let p = PositionValue::Pixels(100.0);
+        assert_eq!(serde_json::to_string(&p).unwrap(), "100.0");
+
+        let pct = PositionValue::Percentage(0.5);
+        assert_eq!(serde_json::to_string(&pct).unwrap(), "\"50%\"");
     }
 }
