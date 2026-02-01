@@ -53,6 +53,7 @@ pub mod renderer;
 pub mod text;
 pub mod particle;
 pub mod presets;
+pub mod utils;
 
 pub mod expressions;
 

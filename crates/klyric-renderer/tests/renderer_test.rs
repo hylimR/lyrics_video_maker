@@ -1,8 +1,9 @@
-use klyric_renderer::{Renderer, parse_document, KLyricDocumentV2};
+use klyric_renderer::{parse_document, KLyricDocumentV2, Renderer};
 use std::path::Path;
 
 fn create_test_doc(font_family: &str) -> KLyricDocumentV2 {
-    let json = format!(r##"{{
+    let json = format!(
+        r##"{{
         "version": "2.0",
         "project": {{
             "title": "Test",
@@ -35,7 +36,9 @@ fn create_test_doc(font_family: &str) -> KLyricDocumentV2 {
                 }}
             }}
         }}
-    }}"##, font_family);
+    }}"##,
+        font_family
+    );
 
     parse_document(&json).expect("Failed to parse test document")
 }
@@ -54,7 +57,9 @@ fn setup_renderer(width: u32, height: u32) -> (Renderer, Option<String>) {
             ("C:\\Windows\\Fonts\\calibri.ttf", "Calibri"),
         ];
         for (path, name) in font_paths {
-            if Path::new(path).exists() && renderer.text_renderer_mut().load_font(name, path).is_ok() {
+            if Path::new(path).exists()
+                && renderer.text_renderer_mut().load_font(name, path).is_ok()
+            {
                 font_name = Some(name.to_string());
                 println!("Loaded font '{}' from: {}", name, path);
                 break;
@@ -65,9 +70,15 @@ fn setup_renderer(width: u32, height: u32) -> (Renderer, Option<String>) {
     #[cfg(target_os = "linux")]
     {
         let font_paths: [(&str, &str); 3] = [
-            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVu Sans"),
+            (
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "DejaVu Sans",
+            ),
             ("/usr/share/fonts/TTF/DejaVuSans.ttf", "DejaVu Sans"),
-            ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "Liberation Sans"),
+            (
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                "Liberation Sans",
+            ),
         ];
         for (path, name) in font_paths {
             if Path::new(path).exists() {
@@ -108,7 +119,12 @@ fn setup_renderer(width: u32, height: u32) -> (Renderer, Option<String>) {
 /// Get pixel at (x, y) from raw RGBA buffer
 fn get_pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> (u8, u8, u8, u8) {
     let idx = ((y * width + x) * 4) as usize;
-    (pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3])
+    (
+        pixels[idx],
+        pixels[idx + 1],
+        pixels[idx + 2],
+        pixels[idx + 3],
+    )
 }
 
 #[test]
@@ -116,7 +132,9 @@ fn test_basic_render() {
     let (mut renderer, font_name) = setup_renderer(800, 600);
     let doc = create_test_doc(font_name.as_deref().unwrap_or("Arial"));
 
-    let pixels = renderer.render_frame(&doc, 0.0).expect("Failed to render frame");
+    let pixels = renderer
+        .render_frame(&doc, 0.0)
+        .expect("Failed to render frame");
 
     // Verify buffer size: width * height * 4 (RGBA)
     assert_eq!(pixels.len(), 800 * 600 * 4);
@@ -139,8 +157,14 @@ fn test_lyrics_presence() {
         println!("SKIPPING: test_lyrics_presence - no font available");
         let doc = create_test_doc("Arial");
         // Still verify rendering works without crashing
-        let pixels = renderer.render_frame(&doc, 1.5).expect("Failed to render frame");
-        assert_eq!(pixels.len(), 800 * 600 * 4, "Should still produce correct buffer size");
+        let pixels = renderer
+            .render_frame(&doc, 1.5)
+            .expect("Failed to render frame");
+        assert_eq!(
+            pixels.len(),
+            800 * 600 * 4,
+            "Should still produce correct buffer size"
+        );
         return;
     }
 
@@ -148,7 +172,9 @@ fn test_lyrics_presence() {
 
     // Check t=1.5s ("Hello" should be visible)
     {
-        let pixels = renderer.render_frame(&doc, 1.5).expect("Failed to render frame");
+        let pixels = renderer
+            .render_frame(&doc, 1.5)
+            .expect("Failed to render frame");
 
         let mut drawn_pixels = 0;
         for chunk in pixels.chunks_exact(4) {
@@ -165,7 +191,9 @@ fn test_lyrics_presence() {
 
     // Check t=5.0s (Lyrics ended)
     {
-        let pixels = renderer.render_frame(&doc, 5.0).expect("Failed to render frame");
+        let pixels = renderer
+            .render_frame(&doc, 5.0)
+            .expect("Failed to render frame");
 
         let mut drawn_pixels = 0;
         for chunk in pixels.chunks_exact(4) {

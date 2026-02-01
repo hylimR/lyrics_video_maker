@@ -1,12 +1,12 @@
-pub mod types;
-pub mod particles;
 pub mod factory;
+pub mod particles;
 pub mod traits;
 pub mod transitions;
+pub mod types;
 
-pub use types::{EffectPreset, CharBounds};
 pub use factory::PresetFactory;
 pub use traits::ParticlePreset;
+pub use types::{CharBounds, EffectPreset};
 
 #[cfg(test)]
 mod tests {
@@ -31,7 +31,7 @@ mod tests {
         let factory = PresetFactory::new();
         let mut emitter = factory.create_from_enum(EffectPreset::Rain, &bounds, 42);
         assert!(emitter.particles.is_empty());
-        
+
         // Update to trigger spawn
         emitter.update(0.5);
         assert!(!emitter.particles.is_empty());
@@ -40,7 +40,10 @@ mod tests {
     #[test]
     fn test_burst_effects() {
         let bounds = CharBounds {
-            x: 0.0, y: 0.0, width: 100.0, height: 100.0,
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
         };
 
         let factory = PresetFactory::new();

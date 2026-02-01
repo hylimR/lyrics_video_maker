@@ -1,10 +1,13 @@
-use crate::model::{Effect, EffectType, EffectTrigger, AnimatedValue, Easing};
+use crate::model::{AnimatedValue, Easing, Effect, EffectTrigger, EffectType};
 use std::collections::HashMap;
 
 /// Creates a standard Cross Dissolve (Fade In/Out) transition
 pub fn cross_dissolve(duration: f64) -> Effect {
     let mut properties = HashMap::new();
-    properties.insert("opacity".to_string(), AnimatedValue::Range { from: 0.0, to: 1.0 });
+    properties.insert(
+        "opacity".to_string(),
+        AnimatedValue::Range { from: 0.0, to: 1.0 },
+    );
 
     Effect {
         effect_type: EffectType::Transition,

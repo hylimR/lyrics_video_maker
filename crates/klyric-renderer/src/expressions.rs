@@ -1,5 +1,8 @@
-use evalexpr::{ContextWithMutableVariables, HashMapContext, Value, eval_with_context, DefaultNumericTypes};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use evalexpr::{
+    build_operator_tree, eval_with_context, Context, DefaultNumericTypes, EvalexprError,
+    EvalexprResult, Node, Value,
+};
 
 #[derive(Debug, Clone)]
 pub struct EvaluationContext {
@@ -28,49 +31,119 @@ impl Default for EvaluationContext {
     }
 }
 
+/// A lightweight context wrapper that avoids HashMap allocations
+pub struct FastEvaluationContext {
+    t: Value,
+    progress: Value,
+    width: Value,
+    height: Value,
+    index: Option<Value>,
+    count: Option<Value>,
+    char_width: Option<Value>,
+    char_height: Option<Value>,
+}
+
+impl FastEvaluationContext {
+    pub fn new(ctx: &EvaluationContext) -> Self {
+        Self {
+            t: Value::Float(ctx.t),
+            progress: Value::Float(ctx.progress),
+            width: Value::Float(ctx.width),
+            height: Value::Float(ctx.height),
+            index: ctx.index.map(|v| Value::Int(v as i64)),
+            count: ctx.count.map(|v| Value::Int(v as i64)),
+            char_width: ctx.char_width.map(Value::Float),
+            char_height: ctx.char_height.map(Value::Float),
+        }
+    }
+
+    pub fn set_progress(&mut self, progress: f64) {
+        self.progress = Value::Float(progress);
+    }
+
+    pub fn set_index(&mut self, index: usize) {
+        self.index = Some(Value::Int(index as i64));
+    }
+}
+
+impl Context for FastEvaluationContext {
+    type NumericTypes = DefaultNumericTypes;
+
+    fn get_value(&self, identifier: &str) -> Option<&Value> {
+        match identifier {
+            "t" => Some(&self.t),
+            "progress" => Some(&self.progress),
+            "width" => Some(&self.width),
+            "height" => Some(&self.height),
+            "index" | "i" => self.index.as_ref(),
+            "count" => self.count.as_ref(),
+            "char_width" => self.char_width.as_ref(),
+            "char_height" => self.char_height.as_ref(),
+            "PI" | "math::consts::PI" => Some(&Value::Float(std::f64::consts::PI)),
+            _ => None,
+        }
+    }
+
+    fn call_function(&self, identifier: &str, _argument: &Value) -> EvalexprResult<Value> {
+        Err(EvalexprError::FunctionIdentifierNotFound(
+            identifier.to_string(),
+        ))
+    }
+
+    fn are_builtin_functions_disabled(&self) -> bool {
+        false
+    }
+
+    fn set_builtin_functions_disabled(&mut self, _disabled: bool) -> EvalexprResult<()> {
+        Ok(())
+    }
+}
+
 pub struct ExpressionEvaluator;
 
 impl ExpressionEvaluator {
-    pub fn evaluate(expression: &str, context: &EvaluationContext) -> Result<f64> {
-        let mut ctx = HashMapContext::<DefaultNumericTypes>::new();
+    /// Pre-compile an expression for reuse
+    pub fn compile(expression: &str) -> Result<Node> {
+        build_operator_tree(expression).map_err(|e| anyhow!("Compilation error: {}", e))
+    }
 
-        // Standard timing variables
-        ctx.set_value("t".into(), Value::Float(context.t))?;
-        ctx.set_value("progress".into(), Value::Float(context.progress))?;
-        
-        // Dimensions
-        ctx.set_value("width".into(), Value::Float(context.width))?;
-        ctx.set_value("height".into(), Value::Float(context.height))?;
-        
-        // Per-character variables
-        if let Some(idx) = context.index {
-            ctx.set_value("index".into(), Value::Int(idx as i64))?;
-            ctx.set_value("i".into(), Value::Int(idx as i64))?; // Short alias
-        }
-        if let Some(cnt) = context.count {
-            ctx.set_value("count".into(), Value::Int(cnt as i64))?;
-        }
-        if let Some(cw) = context.char_width {
-            ctx.set_value("char_width".into(), Value::Float(cw))?;
-        }
-        if let Some(ch) = context.char_height {
-            ctx.set_value("char_height".into(), Value::Float(ch))?;
-        }
-        
-        // Math constants are built-in to evalexpr (PI, etc.)
+    /// Evaluate a pre-compiled node
+    pub fn evaluate_node(node: &Node, context: &EvaluationContext) -> Result<f64> {
+        // Optimization: Use FastEvaluationContext to avoid HashMap allocation
+        let ctx = FastEvaluationContext::new(context);
+        Self::evaluate_node_fast(node, &ctx)
+    }
 
-        match eval_with_context(expression, &ctx) {
+    /// Evaluate a pre-compiled node using an existing FastEvaluationContext
+    pub fn evaluate_node_fast(node: &Node, ctx: &FastEvaluationContext) -> Result<f64> {
+        match node.eval_with_context(ctx) {
             Ok(Value::Float(f)) => Ok(f),
             Ok(Value::Int(val)) => {
-                let i: i64 = val; 
+                let i: i64 = val;
                 Ok(i as f64)
-            },
+            }
             Ok(Value::Boolean(b)) => Ok(if b { 1.0 } else { 0.0 }),
             Ok(v) => Err(anyhow!("Expression returned non-numeric value: {:?}", v)),
             Err(e) => Err(anyhow!("Evaluation error: {}", e)),
         }
     }
-    
+
+    pub fn evaluate(expression: &str, context: &EvaluationContext) -> Result<f64> {
+        // Optimization: Use FastEvaluationContext to avoid HashMap allocation
+        let ctx = FastEvaluationContext::new(context);
+
+        match eval_with_context(expression, &ctx) {
+            Ok(Value::Float(f)) => Ok(f),
+            Ok(Value::Int(val)) => {
+                let i: i64 = val;
+                Ok(i as f64)
+            }
+            Ok(Value::Boolean(b)) => Ok(if b { 1.0 } else { 0.0 }),
+            Ok(v) => Err(anyhow!("Expression returned non-numeric value: {:?}", v)),
+            Err(e) => Err(anyhow!("Evaluation error: {}", e)),
+        }
+    }
+
     /// Verify if an expression string is valid
     pub fn validate(expression: &str) -> bool {
         // Try parsing with dummy context
@@ -87,7 +160,20 @@ mod tests {
     fn test_basic_math() {
         let ctx = EvaluationContext::default();
         assert_eq!(ExpressionEvaluator::evaluate("1 + 1", &ctx).unwrap(), 2.0);
-        assert_eq!(ExpressionEvaluator::evaluate("10 * 0.5", &ctx).unwrap(), 5.0);
+        assert_eq!(
+            ExpressionEvaluator::evaluate("10 * 0.5", &ctx).unwrap(),
+            5.0
+        );
+    }
+
+    #[test]
+    fn test_compiled_math() {
+        let ctx = EvaluationContext::default();
+        let node = ExpressionEvaluator::compile("1 + 1").unwrap();
+        assert_eq!(
+            ExpressionEvaluator::evaluate_node(&node, &ctx).unwrap(),
+            2.0
+        );
     }
 
     #[test]
@@ -97,9 +183,12 @@ mod tests {
             index: Some(5),
             ..Default::default()
         };
-        
+
         assert_eq!(ExpressionEvaluator::evaluate("t * 2", &ctx).unwrap(), 5.0);
-        assert_eq!(ExpressionEvaluator::evaluate("index + 1", &ctx).unwrap(), 6.0);
+        assert_eq!(
+            ExpressionEvaluator::evaluate("index + 1", &ctx).unwrap(),
+            6.0
+        );
         assert_eq!(ExpressionEvaluator::evaluate("i + 1", &ctx).unwrap(), 6.0);
     }
 
@@ -109,13 +198,13 @@ mod tests {
             t: 0.5,
             ..Default::default()
         };
-        
+
         // true -> 1.0
         assert_eq!(ExpressionEvaluator::evaluate("t > 0", &ctx).unwrap(), 1.0);
         // false -> 0.0
         assert_eq!(ExpressionEvaluator::evaluate("t > 1", &ctx).unwrap(), 0.0);
     }
-    
+
     #[test]
     fn test_complex_expression() {
         let ctx = EvaluationContext {
@@ -123,7 +212,7 @@ mod tests {
             index: Some(0),
             ..Default::default()
         };
-        
+
         // Typical "blink" expression
         // sin(t * PI)
         let val = ExpressionEvaluator::evaluate("math::sin(t * math::consts::PI)", &ctx).unwrap();

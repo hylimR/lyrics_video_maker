@@ -3,8 +3,7 @@
 //! Provides utility functions for creating test documents and inspecting rendered pixels.
 
 use klyric_renderer::{
-    KLyricDocumentV2, Line, Char, Project, Resolution,
-    Style, Font, StateColors, FillStroke,
+    Char, FillStroke, Font, KLyricDocumentV2, Line, Project, Resolution, StateColors, Style,
 };
 use std::collections::HashMap;
 
@@ -20,7 +19,12 @@ use std::collections::HashMap;
 /// Tuple of (red, green, blue, alpha) values
 pub fn get_pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> (u8, u8, u8, u8) {
     let idx = ((y * width + x) * 4) as usize;
-    (pixels[idx], pixels[idx + 1], pixels[idx + 2], pixels[idx + 3])
+    (
+        pixels[idx],
+        pixels[idx + 1],
+        pixels[idx + 2],
+        pixels[idx + 3],
+    )
 }
 
 /// Check if pixel at (x, y) matches expected color within tolerance
@@ -380,10 +384,10 @@ mod tests {
     fn test_get_pixel() {
         // Create a 2x2 image: red, green, blue, white
         let pixels = vec![
-            255, 0, 0, 255,    // (0,0) red
-            0, 255, 0, 255,    // (1,0) green
-            0, 0, 255, 255,    // (0,1) blue
-            255, 255, 255, 255 // (1,1) white
+            255, 0, 0, 255, // (0,0) red
+            0, 255, 0, 255, // (1,0) green
+            0, 0, 255, 255, // (0,1) blue
+            255, 255, 255, 255, // (1,1) white
         ];
 
         assert_eq!(get_pixel(&pixels, 2, 0, 0), (255, 0, 0, 255));
@@ -415,10 +419,10 @@ mod tests {
     #[test]
     fn test_count_non_black_pixels() {
         let pixels = vec![
-            0, 0, 0, 255,      // black
-            50, 0, 0, 255,     // non-black
-            0, 0, 0, 255,      // black
-            100, 100, 100, 255 // non-black
+            0, 0, 0, 255, // black
+            50, 0, 0, 255, // non-black
+            0, 0, 0, 255, // black
+            100, 100, 100, 255, // non-black
         ];
 
         assert_eq!(count_non_black_pixels(&pixels, 20), 2);
@@ -447,10 +451,7 @@ mod tests {
 
     #[test]
     fn test_doc_with_multiple_lines() {
-        let doc = doc_with_multiple_lines(&[
-            ("Hello", 1.0, 3.0),
-            ("World", 4.0, 6.0),
-        ]);
+        let doc = doc_with_multiple_lines(&[("Hello", 1.0, 3.0), ("World", 4.0, 6.0)]);
 
         assert_eq!(doc.lines.len(), 2);
         assert_eq!(doc.lines[0].text, Some("Hello".to_string()));

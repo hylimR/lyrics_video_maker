@@ -1,15 +1,14 @@
 //! KLyric GUI - Main Entry Point
 
 mod app;
+mod audio;
+mod config;
 mod message;
 mod state;
-mod widgets;
 mod theme;
-mod worker;
-mod audio;
 mod utils;
-mod config;
-
+mod widgets;
+mod worker;
 
 fn new() -> (state::AppState, iced::Task<message::Message>) {
     let state = state::AppState::new();
