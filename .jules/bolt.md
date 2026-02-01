@@ -27,3 +27,8 @@ Action: Pivoted optimization strategy to focus on `wasm_renderer.rs` Paint reuse
 Learning: `Style` struct in `klyric-renderer` is a deep tree of `Option<String>` and nested structs, making `clone()` expensive.
 Insight: The `wasm_renderer` was cloning `Style` twice per line per frame (once in `render_frame` fallback logic, once in `render_line`). Since `Style` is immutable during rendering, references `&Style` should be passed instead.
 Action: Refactored `render_frame` and `render_line` to pass `&Style`, removing deep clones. Also optimized font family caching to use `&str` instead of `String` to avoid allocation on font switch.
+
+## 2024-05-24 - Font Path Caching with Glyph ID
+Learning: `TextRenderer::get_glyph_path_by_id` used `(ID, char)` as cache key, causing redundant `char -> GlyphId` lookups and larger map keys.
+Insight: The layout engine already calculates `GlyphId` (u16) for every character. Using `(ID, u16)` as the cache key avoids re-calculating the glyph ID and uses a smaller, faster key for hashing.
+Action: Updated `path_cache` to use `u16` instead of `char`. Modified `render_line` to pass the pre-calculated `glyph_info.glyph_id`, removing the need for `face.glyph_index(ch)` in the hot path.

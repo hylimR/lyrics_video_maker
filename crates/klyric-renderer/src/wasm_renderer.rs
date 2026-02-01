@@ -12,7 +12,7 @@ use tiny_skia::{Color, Pixmap};
 #[derive(Clone, Debug)]
 pub struct Typeface(pub FontArc);
 
-use owned_ttf_parser::{Face, OutlineBuilder};
+use owned_ttf_parser::{Face, GlyphId, OutlineBuilder};
 
 pub struct TextRenderer {
     db: Database,
@@ -20,7 +20,7 @@ pub struct TextRenderer {
     family_map: HashMap<String, String>,
 
     // Caches
-    path_cache: HashMap<(ID, char), tiny_skia::Path>,
+    path_cache: HashMap<(ID, u16), tiny_skia::Path>,
     id_cache: HashMap<String, ID>,
     typeface_cache: HashMap<String, Typeface>,
 }
@@ -161,33 +161,32 @@ impl TextRenderer {
         }
     }
 
-    pub fn get_glyph_path_by_id_ref(&mut self, id: ID, ch: char) -> Option<&tiny_skia::Path> {
+    pub fn get_glyph_path_by_id_ref(&mut self, id: ID, glyph_id: u16) -> Option<&tiny_skia::Path> {
         // Split borrows to allow independent access to cache and db
         let path_cache = &mut self.path_cache;
         let db = &self.db;
 
-        match path_cache.entry((id, ch)) {
+        match path_cache.entry((id, glyph_id)) {
             std::collections::hash_map::Entry::Occupied(o) => Some(o.into_mut()),
             std::collections::hash_map::Entry::Vacant(v) => {
                 // Cache miss: generate path
                 let mut path_opt = None;
                 db.with_face_data(id, |data, index| {
                     if let Ok(face) = Face::parse(data, index) {
-                        if let Some(gid) = face.glyph_index(ch) {
-                            let units_per_em = face.units_per_em() as f32;
-                            let scale_factor = 1.0 / units_per_em;
+                        let gid = GlyphId(glyph_id);
+                        let units_per_em = face.units_per_em() as f32;
+                        let scale_factor = 1.0 / units_per_em;
 
-                            let mut builder = tiny_skia::PathBuilder::new();
-                            let mut visitor = TtfPathVisitor {
-                                builder: &mut builder,
-                                scale: scale_factor,
-                                offset_x: 0.0,
-                                offset_y: 0.0,
-                            };
+                        let mut builder = tiny_skia::PathBuilder::new();
+                        let mut visitor = TtfPathVisitor {
+                            builder: &mut builder,
+                            scale: scale_factor,
+                            offset_x: 0.0,
+                            offset_y: 0.0,
+                        };
 
-                            if face.outline_glyph(gid, &mut visitor).is_some() {
-                                path_opt = builder.finish();
-                            }
+                        if face.outline_glyph(gid, &mut visitor).is_some() {
+                            path_opt = builder.finish();
                         }
                     }
                 });
@@ -201,13 +200,19 @@ impl TextRenderer {
         }
     }
 
-    pub fn get_glyph_path_by_id(&mut self, id: ID, ch: char) -> Option<tiny_skia::Path> {
-        self.get_glyph_path_by_id_ref(id, ch).cloned()
+    pub fn get_glyph_path_by_id(&mut self, id: ID, glyph_id: u16) -> Option<tiny_skia::Path> {
+        self.get_glyph_path_by_id_ref(id, glyph_id).cloned()
     }
 
     pub fn get_glyph_path(&mut self, family: &str, ch: char) -> Option<tiny_skia::Path> {
         let id = self.resolve_font_id(family)?;
-        self.get_glyph_path_by_id(id, ch)
+        let mut glyph_id = None;
+        self.db.with_face_data(id, |data, index| {
+            if let Ok(face) = Face::parse(data, index) {
+                glyph_id = face.glyph_index(ch).map(|g| g.0);
+            }
+        });
+        self.get_glyph_path_by_id(id, glyph_id?)
     }
 }
 
@@ -473,7 +478,7 @@ impl Renderer {
                 text_renderer,
                 pixmap,
                 font_id,
-                glyph_info.char,
+                glyph_info.glyph_id,
                 size,
                 render_x,
                 render_y,
@@ -495,7 +500,7 @@ impl Renderer {
         text_renderer: &mut TextRenderer,
         pixmap: &mut Pixmap,
         font_id: ID,
-        ch: char,
+        glyph_id: u16,
         size: f32,
         x: f32,
         y: f32,
@@ -507,7 +512,7 @@ impl Renderer {
         paint: &mut tiny_skia::Paint,
         stroke_paint: &mut tiny_skia::Paint,
     ) {
-        if let Some(path) = text_renderer.get_glyph_path_by_id_ref(font_id, ch) {
+        if let Some(path) = text_renderer.get_glyph_path_by_id_ref(font_id, glyph_id) {
             // Transform: Scale (size), Translate (x, y)
             let transform = tiny_skia::Transform::from_translate(x, y).pre_scale(size, size);
 
