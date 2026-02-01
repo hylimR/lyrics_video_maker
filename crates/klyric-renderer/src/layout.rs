@@ -4,7 +4,7 @@ use crate::text::TextRenderer;
 #[cfg(target_arch = "wasm32")]
 use crate::text::Typeface;
 #[cfg(not(target_arch = "wasm32"))]
-use skia_safe::Typeface;
+use skia_safe::{Color, Typeface};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::text::ResolvedFont;
@@ -25,6 +25,12 @@ pub struct GlyphInfo {
     pub font_size: f32,
     /// [Bolt Optimization] Resolved typeface for this glyph
     pub typeface: Option<Typeface>,
+    /// [Bolt Optimization] Pre-parsed override shadow color (Native only)
+    #[cfg(not(target_arch = "wasm32"))]
+    pub override_shadow_color: Option<Color>,
+    /// [Bolt Optimization] Pre-parsed override stroke color (Native only)
+    #[cfg(not(target_arch = "wasm32"))]
+    pub override_stroke_color: Option<Color>,
 }
 
 pub struct LayoutEngine;
@@ -135,6 +141,29 @@ impl LayoutEngine {
             #[cfg(not(target_arch = "wasm32"))]
             let resolved_font_ref = cached_font.as_ref();
 
+            // [Bolt Optimization] Pre-resolve colors for this character override
+            #[cfg(not(target_arch = "wasm32"))]
+            let (override_shadow_color, override_stroke_color) = {
+                let shadow_col = char_data
+                    .shadow
+                    .as_ref()
+                    .and_then(|s| s.color.as_deref())
+                    .and_then(|hex| {
+                        crate::utils::parse_hex_color(hex)
+                            .map(|(r, g, b, a)| Color::from_argb(a, r, g, b))
+                    });
+
+                let stroke_col = char_data
+                    .stroke
+                    .as_ref()
+                    .and_then(|s| s.color.as_deref())
+                    .and_then(|hex| {
+                        crate::utils::parse_hex_color(hex)
+                            .map(|(r, g, b, a)| Color::from_argb(a, r, g, b))
+                    });
+                (shadow_col, stroke_col)
+            };
+
             // For each character in the string
             for ch in ch_str.chars() {
                 // Try to get font
@@ -167,6 +196,10 @@ impl LayoutEngine {
                         glyph_id,
                         font_size: size,
                         typeface: font_ref.clone(),
+                        #[cfg(not(target_arch = "wasm32"))]
+                        override_shadow_color,
+                        #[cfg(not(target_arch = "wasm32"))]
+                        override_stroke_color,
                     });
 
                     cursor_x += advance;

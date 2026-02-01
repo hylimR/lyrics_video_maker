@@ -355,7 +355,8 @@ impl<'a> LineRenderer<'a> {
                      
                      // --- 1. SHADOW ---
                      let (active_shadow, active_shadow_color) = if let Some(c_shadow) = char_data.and_then(|c| c.shadow.as_ref()) {
-                         (Some(c_shadow), c_shadow.color.as_deref().and_then(parse_color))
+                         // [Bolt Optimization] Use pre-parsed color from glyph info
+                         (Some(c_shadow), glyph.override_shadow_color)
                      } else if let Some(l_shadow) = line.shadow.as_ref() {
                          (Some(l_shadow), line_shadow_color)
                      } else {
@@ -383,7 +384,8 @@ impl<'a> LineRenderer<'a> {
 
                      // --- 2. STROKE ---
                      let (active_stroke, active_stroke_color) = if let Some(c_stroke) = char_data.and_then(|c| c.stroke.as_ref()) {
-                         (Some(c_stroke), c_stroke.color.as_deref().and_then(parse_color))
+                         // [Bolt Optimization] Use pre-parsed color from glyph info
+                         (Some(c_stroke), glyph.override_stroke_color)
                      } else if let Some(l_stroke) = line.stroke.as_ref() {
                          (Some(l_stroke), line_stroke_color)
                      } else {
