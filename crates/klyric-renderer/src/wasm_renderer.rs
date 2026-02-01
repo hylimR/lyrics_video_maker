@@ -1,9 +1,11 @@
-use crate::layout::LayoutEngine;
+use crate::layout::{GlyphInfo, LayoutEngine};
 use crate::model::{KLyricDocumentV2, Line, PositionValue, Style};
 use ab_glyph::{Font, FontArc, ScaleFont};
 use anyhow::{anyhow, Result};
 use fontdb::{Database, ID};
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use tiny_skia::{Color, Pixmap};
 
 // Typeface wrapper for ab_glyph::FontArc
@@ -258,6 +260,9 @@ pub struct Renderer {
     width: u32,
     height: u32,
     text_renderer: TextRenderer,
+    // Caches
+    layout_cache: HashMap<u64, Vec<GlyphInfo>>,
+    last_doc_ptr: usize,
 }
 
 impl Renderer {
@@ -266,6 +271,8 @@ impl Renderer {
             width,
             height,
             text_renderer: TextRenderer::new(),
+            layout_cache: HashMap::new(),
+            last_doc_ptr: 0,
         }
     }
 
@@ -276,6 +283,13 @@ impl Renderer {
     pub fn render_frame(&mut self, doc: &KLyricDocumentV2, time: f64) -> Result<Vec<u8>> {
         // Clear caches to prevent unbounded growth
         self.text_renderer.clear_font_cache();
+
+        // Check if document changed (pointer check)
+        let current_doc_ptr = doc as *const _ as usize;
+        if self.last_doc_ptr != current_doc_ptr {
+            self.layout_cache.clear();
+            self.last_doc_ptr = current_doc_ptr;
+        }
 
         let mut pixmap = Pixmap::new(self.width, self.height)
             .ok_or_else(|| anyhow!("Failed to create pixmap"))?;
@@ -297,7 +311,24 @@ impl Renderer {
                     .get(line_style_name)
                     .unwrap_or(base_style);
 
-                self.render_line(&mut pixmap, line, line_style, time)?;
+                // Layout (Cached)
+                let layout_hash = compute_layout_hash(line, line_style);
+                if !self.layout_cache.contains_key(&layout_hash) {
+                    let g = LayoutEngine::layout_line(line, line_style, &mut self.text_renderer);
+                    self.layout_cache.insert(layout_hash, g);
+                }
+                let glyphs = self.layout_cache.get(&layout_hash).unwrap();
+
+                Self::render_line(
+                    &mut self.text_renderer,
+                    self.width,
+                    self.height,
+                    &mut pixmap,
+                    line,
+                    line_style,
+                    glyphs,
+                    time,
+                )?;
             }
         }
 
@@ -305,14 +336,15 @@ impl Renderer {
     }
 
     fn render_line(
-        &mut self,
+        text_renderer: &mut TextRenderer,
+        width: u32,
+        height: u32,
         pixmap: &mut Pixmap,
         line: &Line,
         style: &Style,
+        glyphs: &[GlyphInfo],
         time: f64,
     ) -> Result<()> {
-        let glyphs = LayoutEngine::layout_line(line, style, &mut self.text_renderer);
-
         // Pre-allocate paints to avoid allocation per glyph
         let mut paint = tiny_skia::Paint {
             anti_alias: true,
@@ -323,12 +355,12 @@ impl Renderer {
             ..tiny_skia::Paint::default()
         };
 
-        let cx = self.width as f32 / 2.0;
-        let cy = self.height as f32 / 2.0;
+        let cx = width as f32 / 2.0;
+        let cy = height as f32 / 2.0;
 
         let (lx, ly) = if let Some(pos) = &line.position {
-            let x = resolve_position_value(&pos.x, self.width as f32, cx);
-            let y = resolve_position_value(&pos.y, self.height as f32, cy);
+            let x = resolve_position_value(&pos.x, width as f32, cx);
+            let y = resolve_position_value(&pos.y, height as f32, cy);
             (x, y)
         } else {
             (cx, cy)
@@ -421,13 +453,13 @@ impl Renderer {
             let font_id = if let Some((cached_name, cached_id)) = &cached_family_id {
                 if *cached_name == family {
                     *cached_id
-                } else if let Some(id) = self.text_renderer.resolve_font_id(family) {
+                } else if let Some(id) = text_renderer.resolve_font_id(family) {
                     cached_family_id = Some((family, id));
                     id
                 } else {
                     continue; // Skip drawing if font not found
                 }
-            } else if let Some(id) = self.text_renderer.resolve_font_id(family) {
+            } else if let Some(id) = text_renderer.resolve_font_id(family) {
                 cached_family_id = Some((family, id));
                 id
             } else {
@@ -437,7 +469,8 @@ impl Renderer {
             let render_x = lx + glyph_info.x;
             let render_y = ly + glyph_info.y;
 
-            self.draw_glyph_path_by_id(
+            Self::draw_glyph_path_by_id(
+                text_renderer,
                 pixmap,
                 font_id,
                 glyph_info.char,
@@ -459,7 +492,7 @@ impl Renderer {
 
     #[allow(clippy::too_many_arguments)]
     fn draw_glyph_path_by_id(
-        &mut self,
+        text_renderer: &mut TextRenderer,
         pixmap: &mut Pixmap,
         font_id: ID,
         ch: char,
@@ -474,7 +507,7 @@ impl Renderer {
         paint: &mut tiny_skia::Paint,
         stroke_paint: &mut tiny_skia::Paint,
     ) {
-        if let Some(path) = self.text_renderer.get_glyph_path_by_id_ref(font_id, ch) {
+        if let Some(path) = text_renderer.get_glyph_path_by_id_ref(font_id, ch) {
             // Transform: Scale (size), Translate (x, y)
             let transform = tiny_skia::Transform::from_translate(x, y).pre_scale(size, size);
 
@@ -525,4 +558,49 @@ fn resolve_position_value(val: &Option<PositionValue>, total: f32, default: f32)
 fn parse_color(hex: &str) -> Option<Color> {
     let (r, g, b, a) = crate::utils::parse_hex_color(hex)?;
     Some(Color::from_rgba8(r, g, b, a))
+}
+
+fn compute_layout_hash(line: &Line, style: &Style) -> u64 {
+    let mut hasher = DefaultHasher::new();
+
+    // Line Layout
+    if let Some(l) = &line.layout {
+        l.mode.hash(&mut hasher);
+        l.align.hash(&mut hasher);
+        l.justify.hash(&mut hasher);
+        l.gap.to_bits().hash(&mut hasher);
+        l.wrap.hash(&mut hasher);
+        if let Some(mw) = l.max_width {
+            mw.to_bits().hash(&mut hasher);
+        }
+    }
+
+    // Line Font Override
+    if let Some(f) = &line.font {
+        f.family.hash(&mut hasher);
+        if let Some(s) = f.size {
+            s.to_bits().hash(&mut hasher);
+        }
+    }
+
+    // Style Font (Base)
+    if let Some(f) = &style.font {
+        f.family.hash(&mut hasher);
+        if let Some(s) = f.size {
+            s.to_bits().hash(&mut hasher);
+        }
+    }
+
+    // Chars
+    for c in &line.chars {
+        c.char.hash(&mut hasher);
+        if let Some(f) = &c.font {
+            f.family.hash(&mut hasher);
+            if let Some(s) = f.size {
+                s.to_bits().hash(&mut hasher);
+            }
+        }
+    }
+
+    hasher.finish()
 }
