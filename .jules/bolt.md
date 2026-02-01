@@ -1,3 +1,9 @@
-## 2025-05-22 - [Iced GUI Performance] **Learning:** The `view` function in Iced is called on every state update, including high-frequency `Tick` events (60fps) for playback. Reconstructing large lists (like 500+ lyric lines) in `view` creates significant widget allocation overhead every frame, even if the list content hasn't changed. **Action:** Use `iced::widget::lazy` with a pointer-based comparison wrapper (like `DocumentRef` using `Arc::ptr_eq`) for expensive widget trees dependent on large immutable-ish data structures.
+## 2024-05-23 - Hoisting Effect Categorization in Render Loop
 
-## 2025-05-22 - [Build Environment] **Learning:** `skia-bindings` build script triggers a segmentation fault in `clang++` 18 when processing GCC 13 headers (specifically `string_view` UTF-8 validation errors). This blocks native compilation on environments with this toolchain combination. **Action:** When verifying Iced applications in such environments, rely on code analysis or attempt WASM targets if feasible (though `klyric-renderer`'s WASM path also needed maintenance).
+Learning: Found a significant O(N) allocation bottleneck in the render loop where vectors were being allocated per-character to categorize effects, despite the effects being constant for the line.
+Action: Always look for invariant calculations inside tight loops (like per-character rendering) and hoist them. Even "small" vector allocations add up when done thousands of times per frame.
+
+## 2024-05-23 - Caching Strategy Ignored
+
+Learning: The `Renderer` had a sophisticated caching mechanism (`CategorizedLineEffects`) that was fully implemented but *completely ignored* by the `LineRenderer`. The `LineRenderer` was re-computing the work that was already cached.
+Action: When optimizing, first check if existing caches are actually being used. Unconnected caches are a common source of wasted performance.
