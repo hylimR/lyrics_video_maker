@@ -572,14 +572,36 @@ impl<'a> LineRenderer<'a> {
                              height: h * final_transform.scale,
                          };
 
-                         // [Bolt Optimization] Skip expensive config calculation if emitter exists.
-                         // But if we have overrides, we MUST recalculate config to apply dynamic expressions.
-                         if self.particle_system.has_emitter(key) && effect.particle_override.is_none() {
+                         // [Bolt Optimization] Update existing emitter in-place (Zero Allocation Path)
+                         if self.particle_system.has_emitter(key) {
                              self.particle_system.update_emitter_bounds(key, bounds_rect);
+
+                             // Only apply overrides if base config exists (matching legacy behavior) and overrides are present
+                             if let Some(base_config) = &effect.particle_config {
+                                 if let Some(overrides) = &effect.particle_override {
+                                     // Create context only if needed
+                                     let eval_ctx = crate::expressions::EvaluationContext {
+                                         t: self.time,
+                                         progress,
+                                         index: Some(glyph.char_index),
+                                         count: Some(glyphs.len()),
+                                         ..Default::default()
+                                     };
+                                     let fast_ctx = crate::expressions::FastEvaluationContext::new(&eval_ctx);
+
+                                     self.particle_system.apply_emitter_overrides(
+                                         key,
+                                         base_config,
+                                         overrides,
+                                         Some(&resolved_effect.compiled_expressions),
+                                         &fast_ctx
+                                     );
+                                 }
+                             }
                              continue;
                          }
 
-                         // Evaluation Context for Particles (needed for new emitters OR dynamic updates)
+                         // New Emitter Path (Allocation Path)
                          let eval_ctx = crate::expressions::EvaluationContext {
                              t: self.time,
                              progress,

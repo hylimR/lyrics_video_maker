@@ -6,6 +6,9 @@ use crate::presets::{CharBounds, EffectPreset, PresetFactory};
 use skia_safe::{BlendMode as SkBlendMode, Canvas, Color, Image, Paint, Point, Rect};
 use std::collections::{hash_map::DefaultHasher, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+use evalexpr::Node;
+use crate::expressions::FastEvaluationContext;
 
 pub struct ParticleRenderSystem {
     /// Active particle emitters keyed by u64 hash
@@ -79,6 +82,19 @@ impl ParticleRenderSystem {
 
     pub fn has_emitter(&self, key: u64) -> bool {
         self.particle_emitters.contains_key(&key)
+    }
+
+    pub fn apply_emitter_overrides(
+        &mut self,
+        key: u64,
+        base_config: &ParticleConfig,
+        overrides: &HashMap<String, String>,
+        compiled_nodes: Option<&HashMap<String, Arc<Node>>>,
+        ctx: &FastEvaluationContext,
+    ) {
+        if let Some(emitter) = self.particle_emitters.get_mut(&key) {
+            emitter.apply_config_overrides(base_config, overrides, compiled_nodes, ctx);
+        }
     }
 
     pub fn update_emitter_bounds(&mut self, key: u64, bounds: CharBounds) -> bool {

@@ -1,8 +1,12 @@
 //! Particle emitter - spawns and manages particle lifecycles
 
-use super::config::{ParticleConfig, SpawnPattern};
+use super::config::{apply_particle_overrides, ParticleConfig, SpawnPattern};
 use super::rng::Rng;
 use super::types::{parse_hex_color, Particle};
+use crate::expressions::FastEvaluationContext;
+use evalexpr::Node;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Particle emitter that spawns and manages particles
 #[derive(Debug, Clone)]
@@ -124,6 +128,22 @@ impl ParticleEmitter {
     pub fn update_config(&mut self, config: ParticleConfig) {
         self.color_rgba = parse_hex_color(&config.color);
         self.config = config;
+    }
+
+    /// Apply configuration overrides in place
+    pub fn apply_config_overrides(
+        &mut self,
+        base_config: &ParticleConfig,
+        overrides: &HashMap<String, String>,
+        compiled_nodes: Option<&HashMap<String, Arc<Node>>>,
+        ctx: &FastEvaluationContext,
+    ) {
+        // Reset to base configuration to prevent sticky state
+        self.config.reset_from(base_config);
+
+        apply_particle_overrides(&mut self.config, overrides, compiled_nodes, ctx);
+        // Re-parse color just in case it changed
+        self.color_rgba = parse_hex_color(&self.config.color);
     }
 }
 
