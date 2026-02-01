@@ -159,9 +159,9 @@ impl TextRenderer {
         }
     }
 
-    pub fn get_glyph_path_by_id(&mut self, id: ID, ch: char) -> Option<tiny_skia::Path> {
-        if let Some(path) = self.path_cache.get(&(id, ch)) {
-            return Some(path.clone());
+    pub fn get_glyph_path_by_id_ref(&mut self, id: ID, ch: char) -> Option<&tiny_skia::Path> {
+        if self.path_cache.contains_key(&(id, ch)) {
+            return self.path_cache.get(&(id, ch));
         }
 
         // Cache miss: generate path
@@ -188,11 +188,15 @@ impl TextRenderer {
         });
 
         if let Some(path) = path_opt {
-            self.path_cache.insert((id, ch), path.clone());
-            Some(path)
+            self.path_cache.insert((id, ch), path);
+            self.path_cache.get(&(id, ch))
         } else {
             None
         }
+    }
+
+    pub fn get_glyph_path_by_id(&mut self, id: ID, ch: char) -> Option<tiny_skia::Path> {
+        self.get_glyph_path_by_id_ref(id, ch).cloned()
     }
 
     pub fn get_glyph_path(&mut self, family: &str, ch: char) -> Option<tiny_skia::Path> {
@@ -452,7 +456,7 @@ impl Renderer {
         shadow_color: Option<Color>,
         shadow_offset: (f32, f32),
     ) {
-        if let Some(path) = self.text_renderer.get_glyph_path_by_id(font_id, ch) {
+        if let Some(path) = self.text_renderer.get_glyph_path_by_id_ref(font_id, ch) {
             let mut paint = tiny_skia::Paint::default();
             paint.anti_alias = true;
 
@@ -464,7 +468,7 @@ impl Renderer {
                 paint.set_color(sc);
                 let shadow_transform = transform.post_translate(shadow_offset.0, shadow_offset.1);
                 pixmap.fill_path(
-                    &path,
+                    path,
                     &paint,
                     tiny_skia::FillRule::Winding,
                     shadow_transform,
@@ -484,13 +488,13 @@ impl Renderer {
                         ..tiny_skia::Stroke::default()
                     };
 
-                    pixmap.stroke_path(&path, &stroke_paint, &stroke, transform, None);
+                    pixmap.stroke_path(path, &stroke_paint, &stroke, transform, None);
                 }
             }
 
             // 3. Fill
             paint.set_color(fill_color);
-            pixmap.fill_path(&path, &paint, tiny_skia::FillRule::Winding, transform, None);
+            pixmap.fill_path(path, &paint, tiny_skia::FillRule::Winding, transform, None);
         }
     }
 }
