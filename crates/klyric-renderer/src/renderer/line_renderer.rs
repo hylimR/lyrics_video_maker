@@ -244,6 +244,7 @@ impl<'a> LineRenderer<'a> {
             .and_then(|c| parse_color(c));
 
         let mut current_blur = -1.0f32;
+        let mut current_mask_filter: Option<MaskFilter> = None;
 
         // --- OPTIMIZATION: Pre-calculate Active Effects ---
         // 1. Dependent Transform Effects
@@ -396,15 +397,17 @@ impl<'a> LineRenderer<'a> {
                     // Apply Blur (Optimized)
                     if (final_transform.blur - current_blur).abs() > 0.001 {
                         current_blur = final_transform.blur;
-                        if current_blur > 0.0 {
-                            paint.set_mask_filter(MaskFilter::blur(
-                                BlurStyle::Normal,
-                                current_blur,
-                                false,
-                            ));
+
+                        // Create filter once and reuse across all paints
+                        current_mask_filter = if current_blur > 0.0 {
+                            MaskFilter::blur(BlurStyle::Normal, current_blur, false)
                         } else {
-                            paint.set_mask_filter(None);
-                        }
+                            None
+                        };
+
+                        paint.set_mask_filter(current_mask_filter.clone());
+                        shadow_paint.set_mask_filter(current_mask_filter.clone());
+                        stroke_paint.set_mask_filter(current_mask_filter.clone());
                     }
 
                     // --- DRAWING ---
@@ -466,15 +469,7 @@ impl<'a> LineRenderer<'a> {
 
                         // Apply blur to shadow if needed (or inherit from transform?)
                         // For now, if there's global blur, apply it to shadow too
-                        if final_transform.blur > 0.0 {
-                            shadow_paint.set_mask_filter(MaskFilter::blur(
-                                BlurStyle::Normal,
-                                final_transform.blur,
-                                false,
-                            ));
-                        } else {
-                            shadow_paint.set_mask_filter(None);
-                        }
+                        // OPTIMIZATION: MaskFilter is already updated via current_mask_filter above
 
                         self.canvas.save();
                         self.canvas
@@ -499,15 +494,7 @@ impl<'a> LineRenderer<'a> {
                             stroke_paint.set_alpha_f(final_opacity);
                             // stroke_paint.set_anti_alias(true); // Already set
 
-                            if final_transform.blur > 0.0 {
-                                stroke_paint.set_mask_filter(MaskFilter::blur(
-                                    BlurStyle::Normal,
-                                    final_transform.blur,
-                                    false,
-                                ));
-                            } else {
-                                stroke_paint.set_mask_filter(None);
-                            }
+                            // OPTIMIZATION: MaskFilter is already updated via current_mask_filter above
 
                             self.canvas.draw_path(path, &stroke_paint);
                         }
