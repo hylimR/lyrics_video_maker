@@ -103,3 +103,4 @@ The renderer implements several optimizations (internally tagged as "Bolt") to e
 2.  **Paint Reuse**: `skia_safe::Paint` objects are allocated once per line (or reused) rather than per-character, significantly reducing allocator pressure.
 3.  **Pointer Caching**: Layouts and Styles are cached based on memory addresses (`std::ptr`). This allows the renderer to skip re-layout and re-hashing if the underlying `Line` or `Style` object has not moved in memory.
 4.  **Zero-Alloc Particles**: Particle emitters are updated in-place using pre-allocated buffers, avoiding reallocation during frame updates.
+5.  **Uninitialized Frame Buffers**: The renderer avoids zero-filling the frame buffer (`memset`) by using uninitialized memory (`set_len`), as `skia-safe` guarantees complete overwrite of the pixel data.

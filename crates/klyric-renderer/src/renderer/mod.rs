@@ -384,7 +384,13 @@ impl Renderer {
 
         // Return pixels (RGBA or BGRA? Surface N32 usually implies native. We might need specific ColorType::RGBA8888)
         // Ensure we get RGBA for ffmpeg
-        let mut pixels = vec![0u8; (self.width * self.height * 4) as usize];
+        let size = (self.width * self.height * 4) as usize;
+
+        // [Bolt Optimization] Avoid zero-initialization (memset) overhead.
+        // Safety: We immediately overwrite the entire buffer via surface.read_pixels.
+        let mut pixels = Vec::with_capacity(size);
+        unsafe { pixels.set_len(size); }
+
         let info = ImageInfo::new(
             (self.width as i32, self.height as i32),
             ColorType::RGBA8888,
