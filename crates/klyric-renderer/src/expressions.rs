@@ -1,7 +1,5 @@
 use anyhow::{anyhow, Result};
-use evalexpr::{
-    eval_with_context, ContextWithMutableVariables, DefaultNumericTypes, HashMapContext, Value,
-};
+use evalexpr::{eval_with_context, Context, EvalexprError, EvalexprResult, Value};
 
 #[derive(Debug, Clone)]
 pub struct EvaluationContext {
@@ -30,36 +28,69 @@ impl Default for EvaluationContext {
     }
 }
 
+/// A lightweight context wrapper that avoids HashMap allocations
+struct FastEvaluationContext {
+    t: Value,
+    progress: Value,
+    width: Value,
+    height: Value,
+    index: Option<Value>,
+    count: Option<Value>,
+    char_width: Option<Value>,
+    char_height: Option<Value>,
+}
+
+impl FastEvaluationContext {
+    fn new(ctx: &EvaluationContext) -> Self {
+        Self {
+            t: Value::Float(ctx.t),
+            progress: Value::Float(ctx.progress),
+            width: Value::Float(ctx.width),
+            height: Value::Float(ctx.height),
+            index: ctx.index.map(|v| Value::Int(v as i64)),
+            count: ctx.count.map(|v| Value::Int(v as i64)),
+            char_width: ctx.char_width.map(Value::Float),
+            char_height: ctx.char_height.map(Value::Float),
+        }
+    }
+}
+
+impl Context for FastEvaluationContext {
+    fn get_value(&self, identifier: &str) -> Option<&Value> {
+        match identifier {
+            "t" => Some(&self.t),
+            "progress" => Some(&self.progress),
+            "width" => Some(&self.width),
+            "height" => Some(&self.height),
+            "index" | "i" => self.index.as_ref(),
+            "count" => self.count.as_ref(),
+            "char_width" => self.char_width.as_ref(),
+            "char_height" => self.char_height.as_ref(),
+            _ => None,
+        }
+    }
+
+    fn call_function(&self, identifier: &str, _argument: &Value) -> EvalexprResult<Value> {
+        Err(EvalexprError::FunctionIdentifierNotFound(
+            identifier.to_string(),
+        ))
+    }
+
+    fn are_builtin_functions_disabled(&self) -> bool {
+        false
+    }
+
+    fn set_builtin_functions_disabled(&mut self, _disabled: bool) -> EvalexprResult<()> {
+        Ok(())
+    }
+}
+
 pub struct ExpressionEvaluator;
 
 impl ExpressionEvaluator {
     pub fn evaluate(expression: &str, context: &EvaluationContext) -> Result<f64> {
-        let mut ctx = HashMapContext::<DefaultNumericTypes>::new();
-
-        // Standard timing variables
-        ctx.set_value("t".into(), Value::Float(context.t))?;
-        ctx.set_value("progress".into(), Value::Float(context.progress))?;
-
-        // Dimensions
-        ctx.set_value("width".into(), Value::Float(context.width))?;
-        ctx.set_value("height".into(), Value::Float(context.height))?;
-
-        // Per-character variables
-        if let Some(idx) = context.index {
-            ctx.set_value("index".into(), Value::Int(idx as i64))?;
-            ctx.set_value("i".into(), Value::Int(idx as i64))?; // Short alias
-        }
-        if let Some(cnt) = context.count {
-            ctx.set_value("count".into(), Value::Int(cnt as i64))?;
-        }
-        if let Some(cw) = context.char_width {
-            ctx.set_value("char_width".into(), Value::Float(cw))?;
-        }
-        if let Some(ch) = context.char_height {
-            ctx.set_value("char_height".into(), Value::Float(ch))?;
-        }
-
-        // Math constants are built-in to evalexpr (PI, etc.)
+        // Optimization: Use FastEvaluationContext to avoid HashMap allocation
+        let ctx = FastEvaluationContext::new(context);
 
         match eval_with_context(expression, &ctx) {
             Ok(Value::Float(f)) => Ok(f),
