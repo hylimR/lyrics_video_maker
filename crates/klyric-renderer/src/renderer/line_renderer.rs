@@ -195,6 +195,20 @@ impl<'a> LineRenderer<'a> {
             .and_then(|s| s.color.as_deref())
             .and_then(parse_color);
 
+        // [Bolt Optimization] Pre-calculate fallback Shadow/Stroke (Line > Style)
+        // This avoids checking line vs style for every character.
+        let (fallback_shadow, fallback_shadow_color) = if let Some(l_shadow) = line.shadow.as_ref() {
+            (Some(l_shadow), line_shadow_color)
+        } else {
+            (style.shadow.as_ref(), style_shadow_color)
+        };
+
+        let (fallback_stroke, fallback_stroke_color) = if let Some(l_stroke) = line.stroke.as_ref() {
+            (Some(l_stroke), line_stroke_color)
+        } else {
+            (style.stroke.as_ref(), style_stroke_color)
+        };
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -354,10 +368,8 @@ impl<'a> LineRenderer<'a> {
                      let (active_shadow, active_shadow_color) = if let Some(c_shadow) = char_data.and_then(|c| c.shadow.as_ref()) {
                          // [Bolt Optimization] Use pre-parsed color from glyph info
                          (Some(c_shadow), glyph.override_shadow_color)
-                     } else if let Some(l_shadow) = line.shadow.as_ref() {
-                         (Some(l_shadow), line_shadow_color)
                      } else {
-                         (style.shadow.as_ref(), style_shadow_color)
+                         (fallback_shadow, fallback_shadow_color)
                      };
 
                      if let (Some(shadow), Some(shadow_color)) = (active_shadow, active_shadow_color) {
@@ -383,10 +395,8 @@ impl<'a> LineRenderer<'a> {
                      let (active_stroke, active_stroke_color) = if let Some(c_stroke) = char_data.and_then(|c| c.stroke.as_ref()) {
                          // [Bolt Optimization] Use pre-parsed color from glyph info
                          (Some(c_stroke), glyph.override_stroke_color)
-                     } else if let Some(l_stroke) = line.stroke.as_ref() {
-                         (Some(l_stroke), line_stroke_color)
                      } else {
-                         (style.stroke.as_ref(), style_stroke_color)
+                         (fallback_stroke, fallback_stroke_color)
                      };
 
                      if let (Some(stroke), Some(stroke_color)) = (active_stroke, active_stroke_color) {
