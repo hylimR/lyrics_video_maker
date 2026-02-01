@@ -310,6 +310,12 @@ impl Renderer {
         let resolved_style = style.clone();
         let glyphs = LayoutEngine::layout_line(line, &resolved_style, &mut self.text_renderer);
 
+        // Pre-allocate paints to avoid allocation per glyph
+        let mut paint = tiny_skia::Paint::default();
+        paint.anti_alias = true;
+        let mut stroke_paint = tiny_skia::Paint::default();
+        stroke_paint.anti_alias = true;
+
         let cx = self.width as f32 / 2.0;
         let cy = self.height as f32 / 2.0;
 
@@ -436,12 +442,15 @@ impl Renderer {
                 stroke_width,
                 shadow_color,
                 shadow_offset,
+                &mut paint,
+                &mut stroke_paint,
             );
         }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_glyph_path_by_id(
         &mut self,
         pixmap: &mut Pixmap,
@@ -455,21 +464,21 @@ impl Renderer {
         stroke_width: f32,
         shadow_color: Option<Color>,
         shadow_offset: (f32, f32),
+        paint: &mut tiny_skia::Paint,
+        stroke_paint: &mut tiny_skia::Paint,
     ) {
         if let Some(path) = self.text_renderer.get_glyph_path_by_id_ref(font_id, ch) {
-            let mut paint = tiny_skia::Paint::default();
-            paint.anti_alias = true;
-
             // Transform: Scale (size), Translate (x, y)
             let transform = tiny_skia::Transform::from_translate(x, y).pre_scale(size, size);
 
             // 1. Shadow
             if let Some(sc) = shadow_color {
                 paint.set_color(sc);
+                // paint.anti_alias is already true
                 let shadow_transform = transform.post_translate(shadow_offset.0, shadow_offset.1);
                 pixmap.fill_path(
                     path,
-                    &paint,
+                    paint,
                     tiny_skia::FillRule::Winding,
                     shadow_transform,
                     None,
@@ -479,22 +488,21 @@ impl Renderer {
             // 2. Stroke
             if let Some(st_color) = stroke_color {
                 if stroke_width > 0.0 {
-                    let mut stroke_paint = tiny_skia::Paint::default();
                     stroke_paint.set_color(st_color);
-                    stroke_paint.anti_alias = true;
+                    // stroke_paint.anti_alias is already true
 
                     let stroke = tiny_skia::Stroke {
                         width: stroke_width / size, // Stroke width must be inverse scaled because transform scales everything!
                         ..tiny_skia::Stroke::default()
                     };
 
-                    pixmap.stroke_path(path, &stroke_paint, &stroke, transform, None);
+                    pixmap.stroke_path(path, stroke_paint, &stroke, transform, None);
                 }
             }
 
             // 3. Fill
             paint.set_color(fill_color);
-            pixmap.fill_path(path, &paint, tiny_skia::FillRule::Winding, transform, None);
+            pixmap.fill_path(path, paint, tiny_skia::FillRule::Winding, transform, None);
         }
     }
 }

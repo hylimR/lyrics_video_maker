@@ -17,3 +17,8 @@ Action: Implemented a local `cached_family_id` in `render_line` to bypass `TextR
 Learning: The `if map.contains_key(k) { map.get_mut(k) }` pattern performs hashing and bucket lookup twice.
 Insight: Rust's `HashMap` API allows combining these into a single operation using `if let Some(v) = map.get_mut(k)`. For complex updates, helper methods can return `bool` or `Option` to indicate success, allowing the caller to handle the "not found" case without a redundant lookup.
 Action: Refactored `ParticleRenderSystem::update_emitter_bounds` to return `bool`, saving one lookup per active particle emitter per frame in the hot render loop.
+
+## 2024-05-24 - Native Build Segfault Verification
+Learning: Confirmed `clang++` Segmentation Fault (exit code 139) when compiling `skia-bindings` with `cargo check -p klyric-renderer` on native target.
+Insight: The environment's `clang` (version 18.1.3) is incompatible with the current project/system configuration for Skia. This reinforces the need to target optimizations in `wasm32` code paths (like `wasm_renderer.rs`) which use `tiny-skia` and compile successfully.
+Action: Pivoted optimization strategy to focus on `wasm_renderer.rs` Paint reuse, which can be verified with `cargo check --target wasm32-unknown-unknown`.
