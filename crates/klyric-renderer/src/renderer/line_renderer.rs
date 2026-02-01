@@ -4,8 +4,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, RenderTransform};
-use crate::style::StyleResolver;
+use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, RenderTransform, Style};
 use crate::layout::LayoutEngine;
 use crate::text::TextRenderer;
 use crate::effects::{EffectEngine, TriggerContext};
@@ -42,13 +41,9 @@ fn hash_emitter_key(line_idx: usize, char_idx: usize, name: &str) -> u64 {
 }
 
 impl<'a> LineRenderer<'a> {
-    pub fn render_line(&mut self, line: &Line, line_idx: usize, effects: &'a CategorizedLineEffects) -> Result<()> {
-        let resolver = StyleResolver::new(self.doc);
-        let style_name = line.style.as_deref().unwrap_or("base");
-        let style = resolver.resolve(style_name);
-        
+    pub fn render_line(&mut self, line: &Line, line_idx: usize, style: &Style, effects: &'a CategorizedLineEffects) -> Result<()> {
         // Layout Text
-        let glyphs = LayoutEngine::layout_line(line, &style, self.text_renderer);
+        let glyphs = LayoutEngine::layout_line(line, style, self.text_renderer);
 
         // Compute Line Position
         let (base_x, base_y) = self.compute_line_position(line);
