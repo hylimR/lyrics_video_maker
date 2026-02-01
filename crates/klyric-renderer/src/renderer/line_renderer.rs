@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, RenderTransform, Style};
 use crate::layout::{LayoutEngine, GlyphInfo};
 use crate::text::TextRenderer;
-use crate::effects::{EffectEngine, TriggerContext};
+use crate::effects::{EffectEngine, TriggerContext, CompiledRenderOp};
 use crate::presets::CharBounds;
 use crate::expressions::{EvaluationContext, FastEvaluationContext};
 
@@ -80,6 +80,30 @@ impl RenderPaints {
     }
 }
 
+pub struct LineRenderScratch {
+    pub active_transform_indices: Vec<(usize, f64)>,
+    pub compiled_ops: Vec<CompiledRenderOp>,
+    pub active_disintegrate_indices: Vec<(usize, f64, DefaultHasher)>,
+    pub active_particle_indices: Vec<(usize, f64, DefaultHasher)>,
+}
+
+impl LineRenderScratch {
+    pub fn new() -> Self {
+        Self {
+            active_transform_indices: Vec::with_capacity(16),
+            compiled_ops: Vec::with_capacity(32),
+            active_disintegrate_indices: Vec::with_capacity(4),
+            active_particle_indices: Vec::with_capacity(8),
+        }
+    }
+}
+
+impl Default for LineRenderScratch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct LineRenderer<'a> {
     pub canvas: &'a Canvas,
     pub doc: &'a KLyricDocumentV2,
@@ -92,7 +116,7 @@ pub struct LineRenderer<'a> {
 }
 
 impl<'a> LineRenderer<'a> {
-    pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, colors: &ResolvedStyleColors, effects: &'a CategorizedLineEffects) -> Result<()> {
+    pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, colors: &ResolvedStyleColors, effects: &'a CategorizedLineEffects, scratch: &mut LineRenderScratch) -> Result<()> {
         // Compute Line Position
         let (base_x, base_y) = self.compute_line_position(line);
 
@@ -126,24 +150,26 @@ impl<'a> LineRenderer<'a> {
             char_count: Some(glyphs.len()),
         };
 
-        let mut active_effects_progress: Vec<(&crate::effects::ResolvedEffect, f64)> = Vec::with_capacity(effects.transform_effects.len());
-        for resolved in &effects.transform_effects {
+        // [Bolt Optimization] Use scratch buffers for active effects to avoid per-frame allocation
+        scratch.active_transform_indices.clear();
+        for (i, resolved) in effects.transform_effects.iter().enumerate() {
             if EffectEngine::should_trigger(&resolved.effect, &line_ctx) {
                 let p = EffectEngine::calculate_progress(self.time, &resolved.effect, &line_ctx);
                 if (0.0..=1.0).contains(&p) {
-                    active_effects_progress.push((resolved, EffectEngine::ease(p, &resolved.effect.easing)));
+                    scratch.active_transform_indices.push((i, EffectEngine::ease(p, &resolved.effect.easing)));
                 }
             }
         }
 
-        let compiled_ops = EffectEngine::compile_active_effects(&active_effects_progress, &line_ctx);
+        // Compile ops into scratch buffer
+        EffectEngine::compile_active_effects(&effects.transform_effects, &scratch.active_transform_indices, &line_ctx, &mut scratch.compiled_ops);
 
         // [Bolt Optimization] Hoist Disintegration Effect Resolution
         // Safety: We use `line_ctx` (no char_index) because `calculate_progress` strictly depends on
         // line start/end times and scalar delay, making it invariant per line.
         // Per-character variation (staggering) must use Expressions or different Effect types.
-        let mut active_disintegrate_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64, DefaultHasher)> = Vec::with_capacity(effects.disintegrate_effects.len());
-        for (name, resolved_effect) in &effects.disintegrate_effects {
+        scratch.active_disintegrate_indices.clear();
+        for (i, (_name, resolved_effect)) in effects.disintegrate_effects.iter().enumerate() {
              let effect = &resolved_effect.effect;
              if EffectEngine::should_trigger(effect, &line_ctx) {
                  let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
@@ -152,14 +178,14 @@ impl<'a> LineRenderer<'a> {
                      let mut hasher = DefaultHasher::new();
                      line_idx.hash(&mut hasher);
                      hasher.write_u64(resolved_effect.name_hash);
-                     active_disintegrate_effects.push((name, resolved_effect, progress, hasher));
+                     scratch.active_disintegrate_indices.push((i, progress, hasher));
                  }
              }
         }
 
         // [Bolt Optimization] Hoist Particle Effect Resolution
-        let mut active_particle_effects: Vec<(&String, &crate::effects::ResolvedEffect, f64, DefaultHasher)> = Vec::with_capacity(effects.particle_effects.len());
-        for (name, resolved_effect) in &effects.particle_effects {
+        scratch.active_particle_indices.clear();
+        for (i, (_name, resolved_effect)) in effects.particle_effects.iter().enumerate() {
              let effect = &resolved_effect.effect;
              if EffectEngine::should_trigger(effect, &line_ctx) {
                  let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
@@ -168,7 +194,7 @@ impl<'a> LineRenderer<'a> {
                      let mut hasher = DefaultHasher::new();
                      line_idx.hash(&mut hasher);
                      hasher.write_u64(resolved_effect.name_hash);
-                     active_particle_effects.push((name, resolved_effect, progress, hasher));
+                     scratch.active_particle_indices.push((i, progress, hasher));
                  }
              }
         }
@@ -280,7 +306,7 @@ impl<'a> LineRenderer<'a> {
                      fast_ctx.set_index(glyph.char_index);
 
                      // Apply compiled effects
-                     final_transform = EffectEngine::apply_compiled_ops(final_transform, &compiled_ops, &mut fast_ctx);
+                     final_transform = EffectEngine::apply_compiled_ops(final_transform, &scratch.compiled_ops, &mut fast_ctx);
                      
                      // Need TriggerContext for layers/other effects
                      let ctx = TriggerContext {
@@ -305,7 +331,7 @@ impl<'a> LineRenderer<'a> {
                      // Disintegrate Effect Progress
                      // [Bolt Optimization] Use pre-calculated progress
                      let mut disintegration_progress = 0.0;
-                     if let Some((_name, _resolved, progress, _)) = active_disintegrate_effects.first() {
+                     if let Some((_idx, progress, _)) = scratch.active_disintegrate_indices.first() {
                          disintegration_progress = progress.clamp(0.0, 1.0);
                      }
 
@@ -481,7 +507,8 @@ impl<'a> LineRenderer<'a> {
 
                      // --- DISINTEGRATION EFFECT ---
                      // [Bolt Optimization] Iterate active effects only
-                     for (_name, resolved_effect, _progress, base_hasher) in &active_disintegrate_effects {
+                     for (idx, _progress, base_hasher) in &scratch.active_disintegrate_indices {
+                         let (_name, resolved_effect) = &effects.disintegrate_effects[*idx];
                          let effect = &resolved_effect.effect;
                          // progress is already checked to be in range
 
@@ -550,7 +577,8 @@ impl<'a> LineRenderer<'a> {
                      // --- PARTICLE SPAWNING ---
                      // Process standard particle effects
                      // [Bolt Optimization] Iterate active effects only
-                     for (_name, resolved_effect, progress, base_hasher) in &active_particle_effects {
+                     for (idx, progress, base_hasher) in &scratch.active_particle_indices {
+                         let (_name, resolved_effect) = &effects.particle_effects[*idx];
                          let effect = &resolved_effect.effect;
                          let progress = *progress; // Copy f64
 

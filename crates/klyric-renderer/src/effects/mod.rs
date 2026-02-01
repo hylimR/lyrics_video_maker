@@ -55,15 +55,15 @@ impl RenderProperty {
 }
 
 #[derive(Debug, Clone)]
-pub enum RenderValueOp<'a> {
+pub enum RenderValueOp {
     Constant(f32),
-    Expression(&'a Node, f64), // Store (expression, progress)
+    Expression(Arc<Node>, f64), // Store (expression, progress)
     TypewriterLimit(f64),
 }
 
-pub struct CompiledRenderOp<'a> {
+pub struct CompiledRenderOp {
     pub prop: RenderProperty,
-    pub value: RenderValueOp<'a>,
+    pub value: RenderValueOp,
 }
 
 use crate::model::modifiers::{Modifier, EffectLayer, Selector, ScopeType, AppearMode};
@@ -168,13 +168,17 @@ impl EffectEngine {
 
     /// Compile active effects into a list of optimized render operations.
     /// This pre-calculates any values that are constant for the current frame (e.g. lerped ranges, keyframe values).
-    pub fn compile_active_effects<'a>(
-        active_effects: &'a [(&'a ResolvedEffect, f64)],
+    pub fn compile_active_effects(
+        effects_source: &[ResolvedEffect],
+        active_indices: &[(usize, f64)],
         ctx: &TriggerContext,
-    ) -> Vec<CompiledRenderOp<'a>> {
-        let mut ops = Vec::with_capacity(active_effects.len() * 2);
+        ops: &mut Vec<CompiledRenderOp>
+    ) {
+        ops.clear();
+        ops.reserve(active_indices.len() * 2);
 
-        for (resolved_effect, eased_progress) in active_effects {
+        for (idx, eased_progress) in active_indices {
+            let resolved_effect = &effects_source[*idx];
             let effect = &resolved_effect.effect;
             match effect.effect_type {
                 EffectType::Transition => {
@@ -196,7 +200,7 @@ impl EffectEngine {
                                     {
                                         ops.push(CompiledRenderOp {
                                             prop,
-                                            value: RenderValueOp::Expression(node, *eased_progress),
+                                            value: RenderValueOp::Expression(node.clone(), *eased_progress),
                                         });
                                     } else {
                                         // Fallback if not compiled? Should ideally not happen if setup correctly.
@@ -354,7 +358,6 @@ impl EffectEngine {
                 _ => {}
             }
         }
-        ops
     }
 
     /// Apply compiled operations to a RenderTransform.
@@ -366,11 +369,11 @@ impl EffectEngine {
     ) -> RenderTransform {
         use evalexpr::Context;
         for op in ops {
-            match op.value {
-                RenderValueOp::Constant(v) => apply_property_enum(&mut transform, op.prop, v),
+            match &op.value {
+                RenderValueOp::Constant(v) => apply_property_enum(&mut transform, op.prop, *v),
                 RenderValueOp::Expression(node, progress) => {
                     // Update progress in existing context
-                    fast_ctx.set_progress(progress);
+                    fast_ctx.set_progress(*progress);
 
                     // Use pre-compiled node
                     match ExpressionEvaluator::evaluate_node_fast(node, fast_ctx) {
@@ -1677,12 +1680,14 @@ mod tests {
         let resolved = resolve(effect);
 
         // progress = 0.5
-        let binding = [(&resolved, 0.5)];
-        let ops = EffectEngine::compile_active_effects(&binding, &ctx);
+        let effects_source = vec![resolved];
+        let active_indices = vec![(0, 0.5)];
+        let mut ops = Vec::new();
+        EffectEngine::compile_active_effects(&effects_source, &active_indices, &ctx, &mut ops);
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::Opacity);
-        match ops[0].value {
-            RenderValueOp::Constant(v) => assert!(approx_eq(v as f64, 0.5, 1e-6)),
+        match &ops[0].value {
+            RenderValueOp::Constant(v) => assert!(approx_eq(*v as f64, 0.5, 1e-6)),
             _ => panic!("Expected Constant"),
         }
     }
@@ -1711,12 +1716,14 @@ mod tests {
         let resolved = resolve(effect);
 
         // progress = 0.5 -> 5 chars visible
-        let binding = [(&resolved, 0.5)];
-        let ops = EffectEngine::compile_active_effects(&binding, &ctx);
+        let effects_source = vec![resolved];
+        let active_indices = vec![(0, 0.5)];
+        let mut ops = Vec::new();
+        EffectEngine::compile_active_effects(&effects_source, &active_indices, &ctx, &mut ops);
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::Opacity);
-        match ops[0].value {
-            RenderValueOp::TypewriterLimit(lim) => assert!(approx_eq(lim, 5.0, 1e-6)),
+        match &ops[0].value {
+            RenderValueOp::TypewriterLimit(lim) => assert!(approx_eq(*lim, 5.0, 1e-6)),
             _ => panic!("Expected TypewriterLimit"),
         }
     }
@@ -1748,14 +1755,16 @@ mod tests {
         let resolved = resolve(effect);
 
         // progress = 0.5
-        let binding = [(&resolved, 0.5)];
-        let ops = EffectEngine::compile_active_effects(&binding, &ctx);
+        let effects_source = vec![resolved];
+        let active_indices = vec![(0, 0.5)];
+        let mut ops = Vec::new();
+        EffectEngine::compile_active_effects(&effects_source, &active_indices, &ctx, &mut ops);
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::X);
 
-        if let RenderValueOp::Expression(_node, p) = ops[0].value {
+        if let RenderValueOp::Expression(_node, p) = &ops[0].value {
             // RenderValueOp now holds &Node
-            assert!(approx_eq(p, 0.5, 1e-6));
+            assert!(approx_eq(*p, 0.5, 1e-6));
 
             // Now apply it
             let mut transform = RenderTransform::default();
