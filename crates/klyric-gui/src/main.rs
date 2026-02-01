@@ -35,10 +35,19 @@ fn app_theme(_state: &state::AppState) -> iced::Theme {
 pub fn main() -> iced::Result {
     env_logger::init();
 
-    // Check for Microsoft YaHei availability
+    // Check for Microsoft YaHei availability (Windows only)
+    #[cfg(target_os = "windows")]
     let mut default_family = "Segoe UI";
-    let yahei_path = std::path::PathBuf::from("C:\\Windows\\Fonts\\msyh.ttc");
-    let load_yahei = yahei_path.exists();
+    #[cfg(not(target_os = "windows"))]
+    let default_family = "Sans Serif";
+
+    #[cfg(target_os = "windows")]
+    let (load_yahei, yahei_path) = {
+        let path = std::path::PathBuf::from("C:\\Windows\\Fonts\\msyh.ttc");
+        (path.exists(), path)
+    };
+
+    #[cfg(target_os = "windows")]
     if load_yahei {
         default_family = "Microsoft YaHei";
     }
@@ -56,6 +65,7 @@ pub fn main() -> iced::Result {
             ..Default::default()
         });
 
+    #[cfg(target_os = "windows")]
     if load_yahei {
         if let Ok(bytes) = std::fs::read(yahei_path) {
              log::info!("Loaded Microsoft YaHei font from system");

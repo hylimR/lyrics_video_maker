@@ -19,7 +19,29 @@ pub fn scan_system_fonts() -> Vec<FontInfo> {
     let mut dirs = Vec::new();
 
     // Windows system fonts
+    #[cfg(target_os = "windows")]
     dirs.push(PathBuf::from("C:\\Windows\\Fonts"));
+
+    // Linux system fonts
+    #[cfg(target_os = "linux")]
+    {
+        dirs.push(PathBuf::from("/usr/share/fonts"));
+        dirs.push(PathBuf::from("/usr/local/share/fonts"));
+        if let Ok(home) = std::env::var("HOME") {
+            dirs.push(PathBuf::from(&home as &str).join(".local/share/fonts"));
+            dirs.push(PathBuf::from(&home as &str).join(".fonts"));
+        }
+    }
+
+    // macOS system fonts
+    #[cfg(target_os = "macos")]
+    {
+        dirs.push(PathBuf::from("/System/Library/Fonts"));
+        dirs.push(PathBuf::from("/Library/Fonts"));
+        if let Ok(home) = std::env::var("HOME") {
+             dirs.push(PathBuf::from(home).join("Library/Fonts"));
+        }
+    }
 
     // User local fonts (AppData)
     if let Some(user_font_dir) = dirs::font_dir() {
