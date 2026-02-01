@@ -42,6 +42,9 @@ pub struct Renderer {
     last_doc_ptr: usize,
     /// Cache for text layouts: content_hash -> Vec<GlyphInfo>
     layout_cache: HashMap<u64, Vec<GlyphInfo>>,
+    /// Cache for layout hashes per line: (line_ptr, style_ptr) -> layout_hash
+    /// Optimization: Avoids O(N) hashing per frame.
+    line_hash_cache: HashMap<(usize, usize), u64>,
     /// Cache for pre-categorized effects per line: line_ptr -> CategorizedLineEffects
     line_effect_cache: HashMap<usize, CategorizedLineEffects>,
     /// Reusable set for active emitter keys
@@ -60,6 +63,7 @@ impl Renderer {
             style_cache: HashMap::new(),
             last_doc_ptr: 0,
             layout_cache: HashMap::new(),
+            line_hash_cache: HashMap::new(),
             line_effect_cache: HashMap::new(),
             active_emitter_keys: HashSet::new(),
         }
@@ -94,6 +98,7 @@ impl Renderer {
             // We also clear layout cache on doc change to avoid unbounded growth
             // even though hashing protects against stale content.
             self.layout_cache.clear();
+            self.line_hash_cache.clear();
             self.line_effect_cache.clear();
             self.last_doc_ptr = current_doc_ptr;
         }
@@ -119,7 +124,20 @@ impl Renderer {
                 };
 
                 // Layout (Cached via Content Hash)
-                let layout_hash = compute_layout_hash(line, style);
+                // Optimization: Cache the hash calculation to avoid O(N) work every frame.
+                // Key by (line_ptr, style_ptr) to ensure correctness if line changes style association.
+                let line_ptr = line as *const _ as usize;
+                let style_ptr = style as *const _ as usize;
+                let hash_key = (line_ptr, style_ptr);
+
+                let layout_hash = if let Some(&hash) = self.line_hash_cache.get(&hash_key) {
+                    hash
+                } else {
+                    let hash = compute_layout_hash(line, style);
+                    self.line_hash_cache.insert(hash_key, hash);
+                    hash
+                };
+
                 if !self.layout_cache.contains_key(&layout_hash) {
                     let g = LayoutEngine::layout_line(line, style, &mut self.text_renderer);
                     self.layout_cache.insert(layout_hash, g);
@@ -127,7 +145,6 @@ impl Renderer {
                 let _glyphs = self.layout_cache.get(&layout_hash).unwrap();
 
                 // Effects (Cached via Line Ptr)
-                let line_ptr = line as *const _ as usize;
                 if !self.line_effect_cache.contains_key(&line_ptr) {
                     let effects = Self::resolve_line_effects(doc, line, style);
                     self.line_effect_cache.insert(line_ptr, effects);
