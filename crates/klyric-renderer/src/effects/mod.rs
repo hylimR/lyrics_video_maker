@@ -9,6 +9,7 @@ use std::sync::Arc;
 pub struct ResolvedEffect {
     pub effect: Effect,
     pub compiled_expressions: HashMap<String, Arc<Node>>,
+    pub name_hash: u64,
 }
 
 impl std::borrow::Borrow<Effect> for ResolvedEffect {
@@ -1073,6 +1074,7 @@ mod tests {
         ResolvedEffect {
             effect,
             compiled_expressions: map,
+            name_hash: 0, // Default for tests
         }
     }
 

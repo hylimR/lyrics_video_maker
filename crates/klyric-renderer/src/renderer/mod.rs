@@ -225,18 +225,18 @@ impl Renderer {
             if let Some(effect) = effect_resolved {
                 match effect.effect_type {
                     EffectType::Particle => {
-                        let resolved = Self::resolve_expressions(effect);
+                        let resolved = Self::resolve_expressions(effect, effect_name);
                         particle_effects.push((effect_name.clone(), resolved));
                     }
                     EffectType::Disintegrate => {
-                        let resolved = Self::resolve_expressions(effect);
+                        let resolved = Self::resolve_expressions(effect, effect_name);
                         disintegrate_effects.push((effect_name.clone(), resolved));
                     }
                     EffectType::StrokeReveal => {
                         stroke_reveal_effects.push(effect);
                     }
                     _ => {
-                        let resolved = Self::resolve_expressions(effect);
+                        let resolved = Self::resolve_expressions(effect, effect_name);
                         transform_effects.push(resolved);
                     }
                 }
@@ -252,7 +252,10 @@ impl Renderer {
     }
 
     /// Helper to compile expressions in an Effect
-    fn resolve_expressions(effect: Effect) -> ResolvedEffect {
+    fn resolve_expressions(effect: Effect, name: &str) -> ResolvedEffect {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         let mut map = HashMap::new();
         // Check standard properties
         for value in effect.properties.values() {
@@ -271,9 +274,14 @@ impl Renderer {
             }
         }
 
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        let name_hash = hasher.finish();
+
         ResolvedEffect {
             effect,
             compiled_expressions: map,
+            name_hash,
         }
     }
 

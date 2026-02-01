@@ -32,11 +32,11 @@ pub struct LineRenderer<'a> {
 }
 
 /// Hash an emitter key from components to produce u64 for particle system
-fn hash_emitter_key(line_idx: usize, char_idx: usize, name: &str) -> u64 {
+fn hash_emitter_key_fast(line_idx: usize, char_idx: usize, name_hash: u64) -> u64 {
     let mut hasher = DefaultHasher::new();
     line_idx.hash(&mut hasher);
     char_idx.hash(&mut hasher);
-    name.hash(&mut hasher);
+    hasher.write_u64(name_hash);
     hasher.finish()
 }
 
@@ -484,11 +484,11 @@ impl<'a> LineRenderer<'a> {
 
                      // --- DISINTEGRATION EFFECT ---
                      // [Bolt Optimization] Iterate active effects only
-                     for (name, resolved_effect, _progress) in &active_disintegrate_effects {
+                     for (_name, resolved_effect, _progress) in &active_disintegrate_effects {
                          let effect = &resolved_effect.effect;
                          // progress is already checked to be in range
 
-                         let key = hash_emitter_key(line_idx, glyph.char_index, name);
+                         let key = hash_emitter_key_fast(line_idx, glyph.char_index, resolved_effect.name_hash);
                          self.active_keys.insert(key);
 
                          // We need to capture the glyph as an image for the emitter
@@ -551,11 +551,11 @@ impl<'a> LineRenderer<'a> {
                      // --- PARTICLE SPAWNING ---
                      // Process standard particle effects
                      // [Bolt Optimization] Iterate active effects only
-                     for (name, resolved_effect, progress) in &active_particle_effects {
+                     for (_name, resolved_effect, progress) in &active_particle_effects {
                          let effect = &resolved_effect.effect;
                          let progress = *progress; // Copy f64
 
-                         let key = hash_emitter_key(line_idx, glyph.char_index, name);
+                         let key = hash_emitter_key_fast(line_idx, glyph.char_index, resolved_effect.name_hash);
                          self.active_keys.insert(key);
                          
                          let bounds_rect = CharBounds {
