@@ -1,10 +1,10 @@
 use super::model::{Align, Line, Style};
 use crate::text::TextRenderer;
 
-#[cfg(not(target_arch = "wasm32"))]
-use skia_safe::Typeface;
 #[cfg(target_arch = "wasm32")]
 use crate::text::Typeface;
+#[cfg(not(target_arch = "wasm32"))]
+use skia_safe::Typeface;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::text::ResolvedFont;

@@ -190,10 +190,7 @@ impl EffectEngine {
                                     {
                                         ops.push(CompiledRenderOp {
                                             prop,
-                                            value: RenderValueOp::Expression(
-                                                node,
-                                                *eased_progress,
-                                            ),
+                                            value: RenderValueOp::Expression(node, *eased_progress),
                                         });
                                     } else {
                                         // Fallback if not compiled? Should ideally not happen if setup correctly.
