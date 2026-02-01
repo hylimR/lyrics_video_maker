@@ -26,7 +26,6 @@ pub struct LineRenderer<'a> {
     pub time: f64,
     pub text_renderer: &'a mut TextRenderer,
     pub particle_system: &'a mut ParticleRenderSystem,
-    pub active_keys: &'a mut HashSet<u64>,
     pub width: u32,
     pub height: u32,
 }
@@ -492,8 +491,6 @@ impl<'a> LineRenderer<'a> {
                          glyph.char_index.hash(&mut hasher);
                          let key = hasher.finish();
 
-                         self.active_keys.insert(key);
-
                          // We need to capture the glyph as an image for the emitter
                          // Create small surface
                          // Bounds might be slightly larger due to stroke/shadow, but let's stick to path bounds for particles
@@ -563,8 +560,6 @@ impl<'a> LineRenderer<'a> {
                          glyph.char_index.hash(&mut hasher);
                          let key = hasher.finish();
 
-                         self.active_keys.insert(key);
-                         
                          let bounds_rect = CharBounds {
                              x: draw_x + final_transform.x + bounds.left,
                              y: draw_y + final_transform.y + bounds.top,
