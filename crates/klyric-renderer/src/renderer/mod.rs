@@ -47,8 +47,6 @@ pub struct Renderer {
     line_hash_cache: HashMap<(usize, usize), u64>,
     /// Cache for pre-categorized effects per line: line_ptr -> CategorizedLineEffects
     line_effect_cache: HashMap<usize, CategorizedLineEffects>,
-    /// Reusable set for active emitter keys
-    active_emitter_keys: HashSet<u64>,
 }
 
 impl Renderer {
@@ -65,7 +63,6 @@ impl Renderer {
             layout_cache: HashMap::new(),
             line_hash_cache: HashMap::new(),
             line_effect_cache: HashMap::new(),
-            active_emitter_keys: HashSet::new(),
         }
     }
 
@@ -107,7 +104,7 @@ impl Renderer {
         self.draw_background(canvas, doc);
 
         // Track which emitters are active this frame
-        self.active_emitter_keys.clear();
+        self.particle_system.reset_active_flags();
 
         // 2. Find Active Lines and render
         if let Some(line) = doc.get_active_line(time) {
@@ -157,7 +154,6 @@ impl Renderer {
                     time,
                     text_renderer: &mut self.text_renderer,
                     particle_system: &mut self.particle_system,
-                    active_keys: &mut self.active_emitter_keys,
                     width: self.width,
                     height: self.height,
                 };
@@ -168,7 +164,7 @@ impl Renderer {
 
         // 3. Update and render particles
         self.particle_system
-            .update(dt as f32, &self.active_emitter_keys);
+            .update(dt as f32);
         self.particle_system.render(canvas);
 
         Ok(())

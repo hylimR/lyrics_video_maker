@@ -30,13 +30,16 @@ impl ParticleRenderSystem {
         }
     }
 
-    pub fn update(&mut self, dt: f32, active_keys: &HashSet<u64>) {
-        self.particle_emitters.retain(|key, emitter| {
-            // If it's a frame-based emitter (text effects), check if it's active this frame
+    pub fn reset_active_flags(&mut self) {
+        for emitter in self.particle_emitters.values_mut() {
             if emitter.frame_driven {
-                emitter.active = active_keys.contains(key);
+                emitter.active = false;
             }
+        }
+    }
 
+    pub fn update(&mut self, dt: f32) {
+        self.particle_emitters.retain(|_key, emitter| {
             // Update the emitter
             emitter.update(dt);
 
@@ -525,12 +528,12 @@ mod tests {
         // Add emitter
         system.ensure_emitter(key, Some("fire".to_string()), None, bounds, 42);
 
-        // Mark as inactive by NOT including in active_keys set
-        let active_keys = HashSet::new();
+        // Simulate frame end where it wasn't touched
+        system.reset_active_flags();
 
         // Update - after sufficient time, inactive emitter with no particles should be removed
         // First update deactivates it
-        system.update(0.016, &active_keys);
+        system.update(0.016);
 
         // The emitter might still exist if it has particles
         // Let's check that it was at least deactivated
@@ -547,11 +550,12 @@ mod tests {
 
         system.ensure_emitter(key, Some("fire".to_string()), None, bounds, 42);
 
-        // Include in active_keys
-        let mut active_keys = HashSet::new();
-        active_keys.insert(key);
+        // Simulate frame start reset
+        system.reset_active_flags();
+        // Simulate "touching" it
+        system.update_emitter_bounds(key, bounds);
 
-        system.update(0.016, &active_keys);
+        system.update(0.016);
 
         // Emitter should still exist and be active
         assert!(
@@ -577,9 +581,9 @@ mod tests {
         bounds.x.to_bits().hash(&mut hasher);
         let key = hasher.finish();
 
-        // Update without including in active_keys
-        let active_keys = HashSet::new();
-        system.update(0.016, &active_keys);
+        // Update without touching
+        system.reset_active_flags(); // Should not affect burst (not frame_driven)
+        system.update(0.016);
 
         // Should still exist because it's not frame_driven
         assert!(

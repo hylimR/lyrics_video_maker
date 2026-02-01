@@ -15,3 +15,7 @@ Action: When working on native renderers in this codebase, rely on static analys
 ## 2024-05-24 - Context Reuse in Particle Loop
 Learning: Inner loops (like particle spawning inside glyph rendering) were allocating `EvaluationContext` (via `Default::default()`) which not only caused allocation overhead but also used incorrect default dimensions (1920x1080) instead of actual canvas dimensions.
 Action: Reuse context objects (`FastEvaluationContext`) from outer scopes whenever possible, updating only the changed fields (`progress`, `index`). This improves performance and ensures consistency (correct dimensions).
+
+## 2024-05-24 - Active Particle Set Allocation in Render Loop
+Learning: The renderer was maintaining a `HashSet<u64>` of active particle keys by clearing it every frame and inserting keys inside the inner character loop. This involved hashing, probing, and potential resizing overhead for every character with an active effect, every frame.
+Action: Replaced the external `HashSet` tracking with an internal `active` flag on the `ParticleEmitter` objects. By resetting flags at the start of the frame (`reset_active_flags`) and setting them to true when accessed (`ensure_emitter`), we eliminated the `HashSet` entirely, removing O(N) insertions from the hot path.
