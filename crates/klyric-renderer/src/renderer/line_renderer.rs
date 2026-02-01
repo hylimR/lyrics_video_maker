@@ -554,14 +554,13 @@ impl<'a> LineRenderer<'a> {
                          };
 
                          // [Bolt Optimization] Skip expensive config calculation if emitter exists.
-                         // Note: `ensure_emitter` currently ignores config updates for existing emitters,
-                         // so re-evaluating the config here is redundant work.
-                         if self.particle_system.has_emitter(key) {
+                         // But if we have overrides, we MUST recalculate config to apply dynamic expressions.
+                         if self.particle_system.has_emitter(key) && effect.particle_override.is_none() {
                              self.particle_system.update_emitter_bounds(key, bounds_rect);
                              continue;
                          }
 
-                         // Evaluation Context for Particles (only needed for new emitters)
+                         // Evaluation Context for Particles (needed for new emitters OR dynamic updates)
                          let eval_ctx = crate::expressions::EvaluationContext {
                              t: self.time,
                              progress,

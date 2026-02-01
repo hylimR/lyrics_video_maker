@@ -119,6 +119,12 @@ impl ParticleEmitter {
     pub fn stop(&mut self) {
         self.active = false;
     }
+
+    /// Update emitter configuration dynamically
+    pub fn update_config(&mut self, config: ParticleConfig) {
+        self.color_rgba = parse_hex_color(&config.color);
+        self.config = config;
+    }
 }
 
 #[cfg(test)]
