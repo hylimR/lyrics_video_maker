@@ -629,4 +629,43 @@ mod tests {
             "Text renderer should be accessible"
         );
     }
+
+    #[test]
+    fn test_render_stroke_reveal() {
+        let mut renderer = Renderer::new(100, 100);
+        let mut doc = minimal_doc();
+
+        // Add a line with text and stroke reveal effect
+        let mut line = crate::model::Line::default();
+        line.text = Some("Test".to_string());
+        line.start = 0.0;
+        line.end = 5.0;
+        line.effects = vec!["reveal".to_string()];
+
+        // Populate chars
+        let chars = vec!["T", "e", "s", "t"];
+        line.chars = chars.iter().enumerate().map(|(i, c)| crate::model::Char {
+            char: c.to_string(),
+            start: i as f64,
+            end: (i + 1) as f64,
+            style: None,
+            font: None,
+            stroke: None,
+            shadow: None,
+            effects: Vec::new(),
+            transform: None,
+        }).collect();
+
+        doc.lines.push(line);
+
+        // Add effect definition
+        let mut effect = crate::model::Effect::default();
+        effect.effect_type = crate::model::EffectType::StrokeReveal;
+        effect.duration = Some(1.0);
+        doc.effects.insert("reveal".to_string(), effect);
+
+        // Render at 0.5s (partial reveal)
+        let result = renderer.render_frame(&doc, 0.5);
+        assert!(result.is_ok(), "Rendering stroke reveal should succeed");
+    }
 }
