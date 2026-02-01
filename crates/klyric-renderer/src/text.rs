@@ -189,16 +189,16 @@ impl TextRenderer {
         typeface: &Typeface,
         size: f32,
         glyph_id: u16,
-    ) -> Option<&Path> {
+    ) -> Option<Path> {
         let key = (typeface.unique_id().into(), size.to_bits(), glyph_id);
-        if self.path_cache.contains_key(&key) {
-            return self.path_cache.get(&key);
+        if let Some(path) = self.path_cache.get(&key) {
+            return Some(path.clone());
         }
 
         let font = self.get_font(typeface, size);
         if let Some(path) = font.get_path(glyph_id) {
-            self.path_cache.insert(key, path);
-            self.path_cache.get(&key)
+            self.path_cache.insert(key, path.clone());
+            Some(path)
         } else {
             None
         }

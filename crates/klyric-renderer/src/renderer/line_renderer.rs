@@ -341,24 +341,24 @@ impl<'a> LineRenderer<'a> {
                      let path_to_draw: &skia_safe::Path = if let Some(progress) = stroke_reveal_progress {
                          // [Bolt Optimization] Short-circuit if effectively complete to avoid PathMeasure
                          if progress >= 0.999 {
-                             path
+                             &path
                          } else if progress <= 0.001 {
                              // [Bolt Optimization] Avoid PathMeasure if progress is effectively zero (e.g. delay).
                              // Returns an empty path to skip drawing.
                              modified_path_storage = Some(skia_safe::Path::new());
                              modified_path_storage.as_ref().unwrap()
                          } else {
-                             let mut measure = skia_safe::PathMeasure::new(path, false, None);
+                             let mut measure = skia_safe::PathMeasure::new(&path, false, None);
                              let length = measure.length();
                              if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
                                  modified_path_storage = Some(partial_path);
                                  modified_path_storage.as_ref().unwrap()
                              } else {
-                                 path
+                                 &path
                              }
                          }
                      } else {
-                         path
+                         &path
                      };
                      let path = path_to_draw; // Shadow original path with the one to draw
 
