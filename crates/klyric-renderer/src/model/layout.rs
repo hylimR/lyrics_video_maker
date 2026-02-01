@@ -368,6 +368,16 @@ impl RenderTransform {
             self.hue_shift = v;
         }
     }
+
+    /// Checks if the transform only involves translation (no rotation/scale).
+    /// Used for [Bolt Optimization] to skip expensive save/restore calls.
+    #[inline(always)]
+    pub fn is_simple_translation(&self) -> bool {
+        self.rotation.abs() < 0.001
+            && (self.scale - 1.0).abs() < 0.001
+            && (self.scale_x - 1.0).abs() < 0.001
+            && (self.scale_y - 1.0).abs() < 0.001
+    }
 }
 
 #[cfg(test)]
