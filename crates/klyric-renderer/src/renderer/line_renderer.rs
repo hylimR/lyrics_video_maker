@@ -63,8 +63,14 @@ impl<'a> LineRenderer<'a> {
 
         // [Bolt Optimization] Hoist Paint and MaskFilter to avoid per-glyph allocation
         let mut paint = Paint::default();
+        paint.set_anti_alias(true);
+
         let mut shadow_paint = Paint::default();
+        shadow_paint.set_anti_alias(true);
+
         let mut stroke_paint = Paint::default();
+        stroke_paint.set_anti_alias(true);
+        stroke_paint.set_style(PaintStyle::Stroke);
 
         // [Bolt Optimization] Hoist Glitch Effect Paints to avoid 3x clones per char
         let mut r_paint = Paint::default();
@@ -291,9 +297,8 @@ impl<'a> LineRenderer<'a> {
                      }
 
                      // Setup Paint
-                     paint.reset(); // Reuse
+                     // [Bolt Optimization] Manual reuse without reset()
                      paint.set_color(text_color);
-                     paint.set_anti_alias(true);
                      
                      let final_opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
                      paint.set_alpha_f(final_opacity);
@@ -319,6 +324,8 @@ impl<'a> LineRenderer<'a> {
                          if let Some((_, ref filter)) = cached_blur_filter {
                              paint.set_mask_filter(Some(filter.clone()));
                          }
+                     } else {
+                         paint.set_mask_filter(None);
                      }
 
                      // --- DRAWING ---
@@ -348,13 +355,18 @@ impl<'a> LineRenderer<'a> {
                      let mut modified_path_storage: Option<skia_safe::Path> = None;
 
                      let path_to_draw: &skia_safe::Path = if let Some(progress) = stroke_reveal_progress {
-                         let mut measure = skia_safe::PathMeasure::new(path, false, None);
-                         let length = measure.length();
-                         if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
-                             modified_path_storage = Some(partial_path);
-                             modified_path_storage.as_ref().unwrap()
-                         } else {
+                         // [Bolt Optimization] Short-circuit if effectively complete to avoid PathMeasure
+                         if progress >= 0.999 {
                              path
+                         } else {
+                             let mut measure = skia_safe::PathMeasure::new(path, false, None);
+                             let length = measure.length();
+                             if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
+                                 modified_path_storage = Some(partial_path);
+                                 modified_path_storage.as_ref().unwrap()
+                             } else {
+                                 path
+                             }
                          }
                      } else {
                          path
@@ -371,16 +383,17 @@ impl<'a> LineRenderer<'a> {
                      };
 
                      if let (Some(shadow), Some(shadow_color)) = (active_shadow, active_shadow_color) {
-                         shadow_paint.reset();
+                         // [Bolt Optimization] Reuse shadow paint
                          shadow_paint.set_color(shadow_color);
                          shadow_paint.set_alpha_f(final_opacity);
-                         shadow_paint.set_anti_alias(true);
 
                          // Apply blur to shadow if needed
                          if final_transform.blur > 0.0 {
                              if let Some((_, ref filter)) = cached_blur_filter {
                                  shadow_paint.set_mask_filter(Some(filter.clone()));
                              }
+                         } else {
+                             shadow_paint.set_mask_filter(None);
                          }
 
                          self.canvas.save();
@@ -399,17 +412,17 @@ impl<'a> LineRenderer<'a> {
 
                      if let (Some(stroke), Some(stroke_color)) = (active_stroke, active_stroke_color) {
                          if stroke.width_or_default() > 0.0 {
-                             stroke_paint.reset();
-                             stroke_paint.set_style(PaintStyle::Stroke);
+                             // [Bolt Optimization] Reuse stroke paint
                              stroke_paint.set_stroke_width(stroke.width_or_default());
                              stroke_paint.set_color(stroke_color);
                              stroke_paint.set_alpha_f(final_opacity);
-                             stroke_paint.set_anti_alias(true);
 
                              if final_transform.blur > 0.0 {
                                  if let Some((_, ref filter)) = cached_blur_filter {
                                      stroke_paint.set_mask_filter(Some(filter.clone()));
                                  }
+                             } else {
+                                 stroke_paint.set_mask_filter(None);
                              }
 
                              self.canvas.draw_path(path, &stroke_paint);
