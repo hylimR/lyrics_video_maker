@@ -123,7 +123,7 @@ impl LayoutEngine {
                     };
 
                     if !can_reuse {
-                        cached_font = Some(renderer.create_font(tf, size));
+                        cached_font = Some(renderer.get_resolved_font(tf, size));
                         cached_font_key = Some((tf_id, size_bits));
                     }
                 } else {

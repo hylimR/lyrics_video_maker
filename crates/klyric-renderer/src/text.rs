@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Resolved font wrapper for optimized measurement
+#[derive(Clone, Debug)]
 pub struct ResolvedFont {
     pub(crate) font: Font,
     pub(crate) height: f32,
@@ -18,8 +19,8 @@ pub struct TextRenderer {
     font_mgr: FontMgr,
     /// Cached font data by font name
     font_cache: HashMap<String, Typeface>,
-    /// Cache for resolved fonts: (typeface_id, size_bits) -> Font
-    resolved_font_cache: HashMap<(u32, u32), Font>,
+    /// Cache for resolved fonts: (typeface_id, size_bits) -> ResolvedFont
+    resolved_font_cache: HashMap<(u32, u32), ResolvedFont>,
     /// Cache for glyph paths: (typeface_id, size_bits, glyph_id) -> Path
     path_cache: HashMap<(u32, u32, u16), Path>,
     /// Default typeface
@@ -110,14 +111,23 @@ impl TextRenderer {
 
     /// Get a resolved font from cache or create it
     pub fn get_font(&mut self, typeface: &Typeface, size: f32) -> Font {
+        self.get_resolved_font(typeface, size).font
+    }
+
+    /// Get a resolved font structure (including metrics) from cache
+    pub fn get_resolved_font(&mut self, typeface: &Typeface, size: f32) -> ResolvedFont {
         let key = (typeface.unique_id().into(), size.to_bits());
-        if let Some(font) = self.resolved_font_cache.get(&key) {
-            return font.clone();
+        if let Some(resolved) = self.resolved_font_cache.get(&key) {
+            return resolved.clone();
         }
 
         let font = Font::from_typeface(typeface.clone(), size);
-        self.resolved_font_cache.insert(key, font.clone());
-        font
+        let metrics = font.metrics().1;
+        let height = metrics.descent - metrics.ascent;
+        let resolved = ResolvedFont { font, height };
+
+        self.resolved_font_cache.insert(key, resolved.clone());
+        resolved
     }
 
     /// Clear the resolved font cache to free memory (e.g. at end of frame)
@@ -513,6 +523,34 @@ mod tests {
             let path3 = renderer.get_path_cached(&typeface, size2, glyph_id);
             assert!(path3.is_some());
             assert_eq!(renderer.path_cache.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_get_resolved_font_caching() {
+        let mut renderer = TextRenderer::new();
+
+        #[cfg(target_os = "windows")]
+        let font_name = "Arial";
+        #[cfg(target_os = "macos")]
+        let font_name = "Helvetica";
+        #[cfg(target_os = "linux")]
+        let font_name = "DejaVu Sans";
+
+        if let Some(typeface) = renderer.get_typeface(font_name) {
+            let size = 32.0;
+
+            // 1. First call - should populate cache
+            let _rf1 = renderer.get_resolved_font(&typeface, size);
+            assert_eq!(renderer.resolved_font_cache.len(), 1);
+
+            // 2. Second call - should hit cache
+            let _rf2 = renderer.get_resolved_font(&typeface, size);
+            assert_eq!(renderer.resolved_font_cache.len(), 1);
+
+            // 3. Different size - should add new entry
+            let _rf3 = renderer.get_resolved_font(&typeface, 16.0);
+            assert_eq!(renderer.resolved_font_cache.len(), 2);
         }
     }
 }
