@@ -342,6 +342,11 @@ impl<'a> LineRenderer<'a> {
                          // [Bolt Optimization] Short-circuit if effectively complete to avoid PathMeasure
                          if progress >= 0.999 {
                              path
+                         } else if progress <= 0.001 {
+                             // [Bolt Optimization] Avoid PathMeasure if progress is effectively zero (e.g. delay).
+                             // Returns an empty path to skip drawing.
+                             modified_path_storage = Some(skia_safe::Path::new());
+                             modified_path_storage.as_ref().unwrap()
                          } else {
                              let mut measure = skia_safe::PathMeasure::new(path, false, None);
                              let length = measure.length();
