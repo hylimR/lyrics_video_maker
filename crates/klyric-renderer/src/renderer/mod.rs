@@ -142,7 +142,7 @@ impl Renderer {
                     let g = LayoutEngine::layout_line(line, style, &mut self.text_renderer);
                     self.layout_cache.insert(layout_hash, g);
                 }
-                let _glyphs = self.layout_cache.get(&layout_hash).unwrap();
+                let glyphs = self.layout_cache.get(&layout_hash).unwrap();
 
                 // Effects (Cached via Line Ptr)
                 if !self.line_effect_cache.contains_key(&line_ptr) {
@@ -162,7 +162,7 @@ impl Renderer {
                     height: self.height,
                 };
 
-                line_renderer.render_line(line, line_idx, style, effects)?;
+                line_renderer.render_line(line, glyphs, line_idx, style, effects)?;
             }
         }
 
