@@ -15,16 +15,16 @@ pub fn parse_hex_color(hex: &str) -> Option<(u8, u8, u8, u8)> {
             return None;
         }
         let h = match bytes[idx] {
-             b'0'..=b'9' => bytes[idx] - b'0',
-             b'a'..=b'f' => bytes[idx] - b'a' + 10,
-             b'A'..=b'F' => bytes[idx] - b'A' + 10,
-             _ => return None,
+            b'0'..=b'9' => bytes[idx] - b'0',
+            b'a'..=b'f' => bytes[idx] - b'a' + 10,
+            b'A'..=b'F' => bytes[idx] - b'A' + 10,
+            _ => return None,
         };
         let l = match bytes[idx + 1] {
-             b'0'..=b'9' => bytes[idx + 1] - b'0',
-             b'a'..=b'f' => bytes[idx + 1] - b'a' + 10,
-             b'A'..=b'F' => bytes[idx + 1] - b'A' + 10,
-             _ => return None,
+            b'0'..=b'9' => bytes[idx + 1] - b'0',
+            b'a'..=b'f' => bytes[idx + 1] - b'a' + 10,
+            b'A'..=b'F' => bytes[idx + 1] - b'A' + 10,
+            _ => return None,
         };
         Some((h << 4) | l)
     };
@@ -46,5 +46,8 @@ pub fn parse_hex_color(hex: &str) -> Option<(u8, u8, u8, u8)> {
 }
 
 pub fn parse_percentage(s: &str) -> Option<f32> {
-    s.trim_end_matches('%').parse::<f32>().ok().map(|p| p / 100.0)
+    s.trim_end_matches('%')
+        .parse::<f32>()
+        .ok()
+        .map(|p| p / 100.0)
 }
