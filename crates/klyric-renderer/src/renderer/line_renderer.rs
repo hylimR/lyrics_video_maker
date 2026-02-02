@@ -389,7 +389,7 @@ impl<'a> LineRenderer<'a> {
                     // by using reference to char transform or falling back to pre-calculated line transform.
                     let mut final_transform = if let Some(c) = char_data {
                         if let Some(t) = &c.transform {
-                            RenderTransform::new(&line_transform, t)
+                            line_render_transform.overlay_transform(t)
                         } else {
                             line_render_transform
                         }
@@ -410,6 +410,15 @@ impl<'a> LineRenderer<'a> {
                             );
                         }
                     } else {
+                        // [Bolt Bugfix] Ensure hoisted constant effects are applied even if dynamic ops exist.
+                        // Mixed effects (e.g. Constant Opacity + Dynamic Scale) were previously losing the constant part.
+                        if scratch.active_hoisted_mask != 0 {
+                            final_transform.apply_mask(
+                                &scratch.active_hoisted_transform,
+                                scratch.active_hoisted_mask,
+                            );
+                        }
+
                         final_transform = EffectEngine::apply_compiled_ops(
                             final_transform,
                             &scratch.compiled_ops,
