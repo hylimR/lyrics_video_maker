@@ -1,6 +1,6 @@
 use anyhow::Result;
 use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, RenderTransform, Style};
@@ -85,6 +85,10 @@ pub struct LineRenderScratch {
     pub active_disintegrate_indices: Vec<(usize, f64, u64)>,
     pub active_particle_indices: Vec<(usize, f64, u64)>,
     pub local_layer_indices: Vec<usize>,
+    /// [Bolt Optimization] Cache for PathMeasure to avoid re-scanning paths every frame.
+    /// Key: (typeface_id, font_size_bits, glyph_id)
+    /// Value: (Path, PathMeasure). We must store Path because PathMeasure refers to it.
+    pub path_measure_cache: HashMap<(u32, u64, u16), (skia_safe::Path, skia_safe::PathMeasure)>,
 }
 
 impl LineRenderScratch {
@@ -95,6 +99,7 @@ impl LineRenderScratch {
             active_disintegrate_indices: Vec::with_capacity(4),
             active_particle_indices: Vec::with_capacity(8),
             local_layer_indices: Vec::with_capacity(4),
+            path_measure_cache: HashMap::new(),
         }
     }
 }
@@ -461,7 +466,22 @@ impl<'a> LineRenderer<'a> {
                              modified_path_storage = Some(skia_safe::Path::new());
                              modified_path_storage.as_ref().unwrap()
                          } else {
-                             let mut measure = skia_safe::PathMeasure::new(path, false, None);
+                             // [Bolt Optimization] Use cached PathMeasure
+                             let tf_id: u32 = if let Some(tf) = &glyph.typeface {
+                                 tf.unique_id().into()
+                             } else {
+                                 0
+                             };
+                             let key = (tf_id, glyph.font_size.to_bits(), glyph.glyph_id);
+
+                             // Safety: PathMeasure refers to SkPath object. We must keep the SkPath object alive.
+                             // We store (Path, PathMeasure) in the cache.
+                             let (_, measure) = scratch.path_measure_cache.entry(key).or_insert_with(|| {
+                                 let p = path.clone();
+                                 let m = skia_safe::PathMeasure::new(&p, false, None);
+                                 (p, m)
+                             });
+
                              let length = measure.length();
                              if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
                                  modified_path_storage = Some(partial_path);

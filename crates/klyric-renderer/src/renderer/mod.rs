@@ -157,6 +157,7 @@ impl Renderer {
             self.line_hash_cache.clear();
             self.line_effect_cache.clear();
             self.style_color_cache.clear();
+            self.line_render_scratch.path_measure_cache.clear();
             self.last_doc_ptr = current_doc_ptr;
         }
 
