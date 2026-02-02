@@ -103,26 +103,29 @@ impl ParticleRenderSystem {
     pub fn update_emitter_bounds(&mut self, key: u64, bounds: CharBounds) -> bool {
         if let Some(emitter) = self.particle_emitters.get_mut(&key) {
             emitter.active = true;
+            emitter.update_bounds(bounds.x, bounds.y, bounds.width, bounds.height);
+            true
+        } else {
+            false
+        }
+    }
 
-            // Update spawn pattern based on new bounds
-            match &mut emitter.spawn_pattern {
-                crate::particle::SpawnPattern::Point { x, y } => {
-                    *x = bounds.x + bounds.width / 2.0;
-                    *y = bounds.y + bounds.height / 2.0;
-                }
-                crate::particle::SpawnPattern::Rect { x, y, w, h } => {
-                    *x = bounds.x;
-                    *y = bounds.y;
-                    *w = bounds.width;
-                    *h = bounds.height;
-                }
-                crate::particle::SpawnPattern::Line { x1, y1, x2, y2 } => {
-                    let _width_diff = bounds.width - (*x2 - *x1);
-                    *x1 = bounds.x;
-                    *x2 = bounds.x + bounds.width;
-                    *y1 = bounds.y - 50.0;
-                    *y2 = bounds.y - 50.0;
-                }
+    pub fn update_existing_emitter(
+        &mut self,
+        key: u64,
+        bounds: CharBounds,
+        base_config: Option<&ParticleConfig>,
+        overrides: Option<&HashMap<String, String>>,
+        compiled_nodes: Option<&HashMap<String, Arc<Node>>>,
+        ctx: &FastEvaluationContext,
+    ) -> bool {
+        if let Some(emitter) = self.particle_emitters.get_mut(&key) {
+            emitter.active = true;
+            emitter.update_bounds(bounds.x, bounds.y, bounds.width, bounds.height);
+
+            // Only apply overrides if base config exists and overrides are present
+            if let (Some(config), Some(ovr)) = (base_config, overrides) {
+                emitter.apply_config_overrides(config, ovr, compiled_nodes, ctx);
             }
             true
         } else {
@@ -701,5 +704,50 @@ mod tests {
             count_before,
             "Existing key should not create duplicate"
         );
+    }
+
+    #[test]
+    fn test_update_existing_emitter() {
+        let mut system = ParticleRenderSystem::new();
+        let bounds = test_bounds();
+        let key = hash_test_key("optimization_test");
+
+        // 1. Ensure doesn't exist yet
+        let ctx = crate::expressions::EvaluationContext::default();
+        let fast_ctx = crate::expressions::FastEvaluationContext::new(&ctx);
+
+        let exists = system.update_existing_emitter(
+            key,
+            bounds.clone(),
+            None,
+            None,
+            None,
+            &fast_ctx
+        );
+        assert!(!exists, "Should return false for non-existent emitter");
+
+        // 2. Add emitter
+        system.ensure_emitter(key, Some("fire".to_string()), None, bounds.clone(), 42);
+
+        // 3. Update existing
+        let new_bounds = CharBounds { x: 50.0, y: 50.0, width: 20.0, height: 20.0 };
+        let exists_now = system.update_existing_emitter(
+            key,
+            new_bounds,
+            None,
+            None,
+            None,
+            &fast_ctx
+        );
+        assert!(exists_now, "Should return true for existing emitter");
+
+        let emitter = system.particle_emitters.get(&key).unwrap();
+        // Verify bounds updated (Point pattern uses center)
+        if let SpawnPattern::Point { x, y } = emitter.spawn_pattern {
+            assert_eq!(x, 60.0); // 50 + 20/2
+            assert_eq!(y, 60.0); // 50 + 20/2
+        } else {
+            panic!("Expected Point pattern for Fire preset");
+        }
     }
 }

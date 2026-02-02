@@ -17,3 +17,7 @@ Action: Cached `path` and `bounds` directly in the `GlyphInfo` struct during the
 ## 2024-05-27 - [Correctness/Performance] Reference to Temporary in Expression Context
 Learning: In `FastEvaluationContext::get_value`, returning `Some(&Value::Float(PI))` attempts to return a reference to a temporary value, which is invalid Rust and likely caused compilation failures or undefined behavior. It also constructed a new `Value` enum variant on every access.
 Action: Added `pi` and `e` fields to the struct to store these constants once. Updated `get_value` to return references to these cached fields. This fixes the correctness issue and avoids construction overhead in the hot expression evaluation loop.
+
+## 2024-05-28 - [Performance] Redundant HashMap Lookups in Particle System
+Learning: The particle system performed 3 separate HashMap lookups per character per frame for active emitters: `has_emitter`, `update_bounds`, and `apply_overrides`. For a typical scene with 500 characters, this is 1500 lookups/frame (90k/sec).
+Action: Consolidated these operations into a single `update_existing_emitter` method using the `HashMap` Entry API (or explicit `get_mut`), reducing the cost to 1 lookup per character per frame (3x reduction in map overhead).

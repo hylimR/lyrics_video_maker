@@ -130,6 +130,28 @@ impl ParticleEmitter {
         self.config = config;
     }
 
+    /// Update spawn pattern based on new character bounds
+    pub fn update_bounds(&mut self, x: f32, y: f32, w: f32, h: f32) {
+        match &mut self.spawn_pattern {
+            SpawnPattern::Point { x: px, y: py } => {
+                *px = x + w / 2.0;
+                *py = y + h / 2.0;
+            }
+            SpawnPattern::Rect { x: rx, y: ry, w: rw, h: rh } => {
+                *rx = x;
+                *ry = y;
+                *rw = w;
+                *rh = h;
+            }
+            SpawnPattern::Line { x1, y1, x2, y2 } => {
+                *x1 = x;
+                *x2 = x + w;
+                *y1 = y - 50.0;
+                *y2 = y - 50.0;
+            }
+        }
+    }
+
     /// Apply configuration overrides in place
     pub fn apply_config_overrides(
         &mut self,
