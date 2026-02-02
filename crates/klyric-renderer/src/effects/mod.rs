@@ -196,7 +196,7 @@ impl EffectEngine {
         ops.clear();
         ops.reserve(active_indices.len() * 2);
         *hoisted_mask = 0;
-        let mut has_dynamic = false;
+        let mut dynamic_seen_mask: u16 = 0;
 
         for (idx, eased_progress) in active_indices {
             let resolved_effect = &effects_source[*idx];
@@ -210,20 +210,24 @@ impl EffectEngine {
                                     // Pre-calculate lerp once per frame
                                     let val = Self::lerp(*from, *to, *eased_progress);
                                     let val_f32 = val as f32;
-                                    ops.push(CompiledRenderOp {
-                                        prop,
-                                        value: RenderValueOp::Constant(val_f32),
-                                    });
                                     // [Bolt Optimization] Update hoisted
                                     apply_property_enum(hoisted_transform, prop, val_f32);
                                     *hoisted_mask |= prop.mask_bit();
+
+                                    // [Bolt Optimization] Only push constant if it overrides a dynamic op
+                                    if (dynamic_seen_mask & prop.mask_bit()) != 0 {
+                                        ops.push(CompiledRenderOp {
+                                            prop,
+                                            value: RenderValueOp::Constant(val_f32),
+                                        });
+                                    }
                                 }
                                 AnimatedValue::Expression(expr_str) => {
                                     // Look up compiled expression
                                     if let Some(node) =
                                         resolved_effect.compiled_expressions.get(expr_str)
                                     {
-                                        has_dynamic = true;
+                                        dynamic_seen_mask |= prop.mask_bit();
                                         ops.push(CompiledRenderOp {
                                             prop,
                                             value: RenderValueOp::Expression(
@@ -240,7 +244,7 @@ impl EffectEngine {
                     }
                 }
                 EffectType::Typewriter => {
-                    has_dynamic = true;
+                    dynamic_seen_mask |= RenderProperty::Opacity.mask_bit();
                     // Pre-calculate visible limit logic
                     let total_chars = ctx.char_count.unwrap_or(1) as f64;
                     let visible_limit = *eased_progress * total_chars;
@@ -293,94 +297,115 @@ impl EffectEngine {
                     // Emit Constant ops for all keyframe properties
                     if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::Opacity,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::Opacity, val);
                         *hoisted_mask |= RenderProperty::Opacity.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::Opacity.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::Opacity,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale, end_kf.scale) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::Scale,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::Scale, val);
                         *hoisted_mask |= RenderProperty::Scale.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::Scale.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::Scale,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::ScaleX,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::ScaleX, val);
                         *hoisted_mask |= RenderProperty::ScaleX.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::ScaleX.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::ScaleX,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::ScaleY,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::ScaleY, val);
                         *hoisted_mask |= RenderProperty::ScaleY.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::ScaleY.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::ScaleY,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::Rotation,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::Rotation, val);
                         *hoisted_mask |= RenderProperty::Rotation.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::Rotation.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::Rotation,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.x, end_kf.x) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::X,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::X, val);
                         *hoisted_mask |= RenderProperty::X.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::X.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::X,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::Y,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::Y, val);
                         *hoisted_mask |= RenderProperty::Y.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::Y.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::Y,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.blur, end_kf.blur) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::Blur,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::Blur, val);
                         *hoisted_mask |= RenderProperty::Blur.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::Blur.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::Blur,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                     if let (Some(s), Some(e)) = (start_kf.glitch_offset, end_kf.glitch_offset) {
                         let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
-                        ops.push(CompiledRenderOp {
-                            prop: RenderProperty::GlitchOffset,
-                            value: RenderValueOp::Constant(val),
-                        });
                         apply_property_enum(hoisted_transform, RenderProperty::GlitchOffset, val);
                         *hoisted_mask |= RenderProperty::GlitchOffset.mask_bit();
+
+                        if (dynamic_seen_mask & RenderProperty::GlitchOffset.mask_bit()) != 0 {
+                            ops.push(CompiledRenderOp {
+                                prop: RenderProperty::GlitchOffset,
+                                value: RenderValueOp::Constant(val),
+                            });
+                        }
                     }
                 }
                 _ => {}
             }
-        }
-
-        // [Bolt Optimization] If no dynamic ops (Expression, Typewriter) are present,
-        // clear the ops vector to signal the renderer to use the fast path (hoisted transform only).
-        if !has_dynamic {
-            ops.clear();
         }
     }
 
