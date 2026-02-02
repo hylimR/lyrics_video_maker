@@ -84,6 +84,7 @@ pub struct LineRenderScratch {
     pub compiled_ops: Vec<CompiledRenderOp>,
     pub active_disintegrate_indices: Vec<(usize, f64, u64)>,
     pub active_particle_indices: Vec<(usize, f64, u64)>,
+    pub local_layer_indices: Vec<usize>,
 }
 
 impl LineRenderScratch {
@@ -93,6 +94,7 @@ impl LineRenderScratch {
             compiled_ops: Vec::with_capacity(32),
             active_disintegrate_indices: Vec::with_capacity(4),
             active_particle_indices: Vec::with_capacity(8),
+            local_layer_indices: Vec::with_capacity(4),
         }
     }
 }
@@ -270,6 +272,29 @@ impl<'a> LineRenderer<'a> {
             (style.stroke.as_ref(), style_stroke_color)
         };
 
+        // [Bolt Optimization] Hoist Global Layer Transforms
+        // We separate layers into "Global" (same for every char) and "Local" (depends on index/char).
+        // Global layers are computed once per line. Local layers are computed per char.
+        scratch.local_layer_indices.clear();
+        let global_layer_transform = if let Some(layers) = style.layers.as_ref() {
+            let global_ctx = TriggerContext {
+                start_time: line.start,
+                end_time: line.end,
+                current_time: self.time,
+                active: true,
+                char_index: Some(0), // Dummy index to satisfy Scope(Char)
+                char_count: Some(glyphs.len()),
+            };
+            EffectEngine::compute_global_layer_transform(
+                self.time,
+                layers,
+                &global_ctx,
+                &mut scratch.local_layer_indices,
+            )
+        } else {
+            RenderTransform::default()
+        };
+
         // Loop:
         for glyph in glyphs.iter() {
              let char_absolute_x = base_x + glyph.x;
@@ -338,13 +363,19 @@ impl<'a> LineRenderer<'a> {
                      };
 
                      // --- 4. MODIFIER LAYERS (New System) ---
+                     // [Bolt Optimization] Apply hoisted global transform + local layers
+                     final_transform.combine(&global_layer_transform);
+
                      if let Some(layers) = style.layers.as_ref() {
-                         final_transform = EffectEngine::apply_layers_to_render(
-                             self.time,
-                             final_transform,
-                             layers,
-                             &ctx
-                         );
+                         if !scratch.local_layer_indices.is_empty() {
+                             final_transform = EffectEngine::apply_specific_layers_to_render(
+                                 self.time,
+                                 final_transform,
+                                 layers,
+                                 &scratch.local_layer_indices,
+                                 &ctx,
+                             );
+                         }
                      }
 
                      // Disintegrate Effect Progress
