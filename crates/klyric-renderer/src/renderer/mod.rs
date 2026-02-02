@@ -387,7 +387,12 @@ impl Renderer {
         let size = (self.width * self.height * 4) as usize;
 
         // [Bolt Optimization] Avoid zero-initialization (memset) overhead.
-        // Safety: We immediately overwrite the entire buffer via surface.read_pixels.
+        // Safety:
+        // 1. We allocate capacity for `size` bytes.
+        // 2. We set length to `size`, exposing uninitialized memory.
+        // 3. This is safe for `Vec<u8>` because `u8` has no validity invariants (any byte is valid) and no destructor.
+        // 4. We immediately overwrite the buffer via `surface.read_pixels`. Even if `read_pixels` fails or does partial write,
+        //    reading the uninitialized "garbage" bytes is safe (no UB), just incorrect data.
         let mut pixels = Vec::with_capacity(size);
         unsafe { pixels.set_len(size); }
 
