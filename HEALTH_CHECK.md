@@ -1,54 +1,58 @@
 # Codebase Health Check Report
 
-**Date:** 2024-05-30
-**Scope:** `crates/klyric-renderer`, `crates/klyric-gui`
-**Review Focus:** Particle Optimization (Commit #141) & "Bolt" Follow-up
+**Date:** 2026-02-02
+**Scope:** `crates/klyric-renderer`
+**Review Focus:** RenderTransform Optimization & Mixed Effects Fix (Commit c228b96)
 
 ## Executive Summary
 
-The codebase is in a healthy state. The recent particle optimizations (Commit #141) and "Bolt" optimizations have been reviewed and verified. These changes significantly reduce allocation overhead and improve rendering performance for the native target. The architecture remains sound, though the WASM target remains broken as expected.
+The codebase remains healthy. Recent optimizations ("Bolt") continue to improve performance. A critical bug involving mixed constant/dynamic effects has been verified fixed. Additionally, a bug where `anchor` properties were ignored during rendering has been identified and fixed.
 
 ## 1. Rendering Engine (`klyric-renderer`)
 
-### Particle Optimization Review
-The recent optimizations in `ParticleRenderSystem` (merged in commit #141) were reviewed:
+### Review: Commit c228b96 (RenderTransform & Mixed Effects)
+The changes introduced in commit `c228b96` were reviewed:
 
-*   **CharBounds Pass-by-Value:** `CharBounds` now derives `Copy` and is passed by value in hot loops, eliminating cloning overhead.
-*   **Redundant Lookups:** The `update_existing_emitter` method consolidates existence check, bounds update, and override application into a single `HashMap` lookup.
-*   **Integration:** `LineRenderer::render_line` correctly utilizes this method, further reducing overhead in the hot loop.
+*   **RenderTransform Optimization:**
+    *   `RenderTransform` creation now utilizes an `overlay_transform` method to efficiently apply sparse updates on top of a base transform.
+    *   `apply_mask` optimization correctly copies only modified fields (tracked via bitmask) to avoid redundant writes.
+    *   **Status:** Verified. logic is sound and efficient.
 
-### "Bolt" Optimization Review
-The recent optimizations in `LineRenderer::render_line` and `Renderer` were inspected and verified:
+*   **Mixed Effects Bugfix:**
+    *   The renderer now correctly applies hoisted constant effects (via `active_hoisted_transform`) even when dynamic operations (expressions/typewriter) are present in the `compiled_ops` queue.
+    *   Previously, the presence of any dynamic op would cause the hoisted constants to be skipped.
+    *   **Status:** Verified. The `if scratch.active_hoisted_mask != 0` check is now correctly present in both branches.
 
-*   **Scratch Buffers:** `LineRenderScratch` is correctly implemented and passed from `Renderer` to `LineRenderer`, ensuring reuse of vectors for active effects and indices.
-*   **Paint Object Reuse:** `RenderPaints` struct effectively persists `skia_safe::Paint` objects. State tracking for blur sigma (`current_paint_blur`, etc.) prevents redundant native calls.
-*   **Loop Hoisting:**
-    *   **Effect Compilation:** Transform and particle effect resolution is correctly moved outside the character loop.
-    *   **Fallback Resolution:** Shadow and Stroke color fallback logic (Line > Style) is computed once per line.
-    *   **Transforms:** Base line transforms are pre-calculated.
-*   **Zero-Alloc Particles:** The `apply_emitter_overrides` path allows updating existing emitters without reallocation.
-*   **Hashing:** The `line_hash_cache` correctly uses pointer addresses (`line as *const _`) to avoid O(N) hashing when the document structure is stable.
-*   **Shadow/Glitch Transform Optimization (New):** Replaced expensive `save/restore` calls with `translate/translate(-)` pairs for Shadow and Glitch rendering. This reduces stack overhead for these common operations.
-*   **Layout Color Parsing (New):** Introduced caching for shadow and stroke color overrides in `LayoutEngine::layout_line`. This prevents redundant hex string parsing when multiple consecutive characters share the same color override.
+*   **Anchor Property Fix (New):**
+    *   **Issue:** During code review, it was discovered that `RenderTransform.anchor_x` and `anchor_y` properties were being parsed and propagated but **ignored** in `LineRenderer::render_line`, which hardcoded the pivot to the path center.
+    *   **Fix:** The renderer now correctly calculates the pivot point using `bounds.left + bounds.width() * anchor_x` (and equivalent for y).
+    *   **Status:** Fixed in `crates/klyric-renderer/src/renderer/line_renderer.rs`.
+
+### "Bolt" Optimization Status
+The previously implemented optimizations remain stable:
+
+*   **Scratch Buffers:** Effectively reused.
+*   **Paint Reuse:** Correctly implemented with state tracking.
+*   **Loop Hoisting:** Effect resolution remains hoisted out of the character loop.
+*   **Shadow/Glitch Optimization:** `translate/translate(-)` optimization is safe as confirmed by `is_simple_translation` check (which correctly ignores `glitch_offset` as it manages its own state).
 
 ### Issues & Risks
-*   **Build Stability:** `skia-bindings` build failures (clang segmentation faults) were observed in some CI/sandbox environments. This is likely an upstream or environment-specific issue but blocks local verification.
-*   **WASM Support:** Remains broken due to direct dependency on `skia-safe` native bindings. This is a known limitation.
-*   **Memory Safety:** The pointer-based caching (`last_doc_ptr`, `line_hash_cache`) is generally safe given `klyric-gui`'s usage of `Arc` and copy-on-write, but requires strict adherence to immutable data patterns to avoid stale caches.
+*   **Build Stability:** `skia-bindings` build failures (clang segmentation faults) persist in the current environment, preventing local execution of tests (`bolt_ops_opt.rs`). Verification relies on static analysis.
+*   **WASM Support:** Remains broken (dependency on native `skia-safe`).
+*   **Anchor Logic:** The fix for anchors assumes `RenderTransform` defaults to 0.5 (center), which matches the previous hardcoded behavior. This is confirmed by the `Default` impl.
 
 ## 2. Code Quality
 
-*   **Readability:** The optimized code in `line_renderer.rs` is complex but well-commented, with clear markers (`[Bolt Optimization]`) explaining the rationale.
-*   **Safety:** `unsafe` usage is minimal and justifiable (pointer casting for cache keys).
-*   **Consistency:** Naming conventions and error handling are consistent across the crate.
+*   **Readability:** High. Comments explain the "why" behind optimizations.
+*   **Safety:** `unsafe` usage is contained. The new anchor fix uses safe arithmetic.
+*   **Maintainability:** The `LineRenderer::render_line` function is large (over 400 lines) and complex. Future refactoring should consider extracting the drawing logic (Shadow, Stroke, Fill) into smaller helper functions, though this must be balanced against inlining performance.
 
 ## 3. Documentation
 
 *   **Status:** Up-to-date.
-*   **README:** The root and crate-level READMEs accurately reflect the current architecture and known issues.
-*   **Comments:** Inline comments in `line_renderer.rs` provide excellent context for the optimizations.
+*   **README:** Accurately reflects the project state.
 
 ## 4. Recommendations
 
-*   **Maintain:** Continue using `HEALTH_CHECK.md` to track major architectural changes.
-*   **Future Work:** If WASM support becomes a priority, consider abstracting the drawing context behind a trait to support a non-Skia backend (e.g. `tiny-skia` or HTML5 Canvas).
+*   **Refactor `render_line`:** Consider breaking down the monolithic render loop if it grows further.
+*   **Fix CI/Build:** Investigate the `clang` segmentation fault to enable reliable local testing.
