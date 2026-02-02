@@ -12,13 +12,15 @@ mod worker;
 
 fn new() -> (state::AppState, iced::Task<message::Message>) {
     let state = state::AppState::new();
-    
+
     // Initial font scan task
     let scan_task = iced::Task::perform(
         async {
-            tokio::task::spawn_blocking(utils::font_loader::scan_system_fonts).await.unwrap()
+            tokio::task::spawn_blocking(utils::font_loader::scan_system_fonts)
+                .await
+                .unwrap()
         },
-        message::Message::FontScanComplete
+        message::Message::FontScanComplete,
     );
 
     (state, scan_task)
@@ -68,17 +70,13 @@ pub fn main() -> iced::Result {
     #[cfg(target_os = "windows")]
     if load_yahei {
         if let Ok(bytes) = std::fs::read(yahei_path) {
-             log::info!("Loaded Microsoft YaHei font from system");
-             // Static leak to keep bytes alive (iced .font() takes slice)
-             app = app.font(&*Box::leak(bytes.into_boxed_slice()));
+            log::info!("Loaded Microsoft YaHei font from system");
+            // Static leak to keep bytes alive (iced .font() takes slice)
+            app = app.font(&*Box::leak(bytes.into_boxed_slice()));
         } else {
-             log::warn!("Failed to read Microsoft YaHei font");
+            log::warn!("Failed to read Microsoft YaHei font");
         }
     }
 
     app.run()
 }
-
-
-
-

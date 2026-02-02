@@ -20,9 +20,9 @@ use self::particle_system::ParticleRenderSystem;
 use self::utils::parse_color;
 
 /// Default colors for karaoke states when not specified in style
-const DEFAULT_INACTIVE_COLOR: &str = "#888888";  // Dimmed gray
-const DEFAULT_ACTIVE_COLOR: &str = "#FFFF00";    // Bright yellow
-const DEFAULT_COMPLETE_COLOR: &str = "#FFFFFF";  // White
+const DEFAULT_INACTIVE_COLOR: &str = "#888888"; // Dimmed gray
+const DEFAULT_ACTIVE_COLOR: &str = "#FFFF00"; // Bright yellow
+const DEFAULT_COMPLETE_COLOR: &str = "#FFFFFF"; // White
 
 #[derive(Clone, Debug)]
 pub struct ResolvedStyleColors {
@@ -34,29 +34,39 @@ pub struct ResolvedStyleColors {
 }
 
 fn resolve_style_colors(style: &Style) -> ResolvedStyleColors {
-    let inactive_hex = style.colors.as_ref()
+    let inactive_hex = style
+        .colors
+        .as_ref()
         .and_then(|c| c.inactive.as_ref())
         .and_then(|fs| fs.fill.as_deref())
         .unwrap_or(DEFAULT_INACTIVE_COLOR);
     let inactive = parse_color(inactive_hex).unwrap_or(Color::WHITE);
 
-    let active_hex = style.colors.as_ref()
+    let active_hex = style
+        .colors
+        .as_ref()
         .and_then(|c| c.active.as_ref())
         .and_then(|fs| fs.fill.as_deref())
         .unwrap_or(DEFAULT_ACTIVE_COLOR);
     let active = parse_color(active_hex).unwrap_or(Color::WHITE);
 
-    let complete_hex = style.colors.as_ref()
+    let complete_hex = style
+        .colors
+        .as_ref()
         .and_then(|c| c.complete.as_ref())
         .and_then(|fs| fs.fill.as_deref())
         .unwrap_or(DEFAULT_COMPLETE_COLOR);
     let complete = parse_color(complete_hex).unwrap_or(Color::WHITE);
 
-    let shadow = style.shadow.as_ref()
+    let shadow = style
+        .shadow
+        .as_ref()
         .and_then(|s| s.color.as_deref())
         .and_then(parse_color);
 
-    let stroke = style.stroke.as_ref()
+    let stroke = style
+        .stroke
+        .as_ref()
         .and_then(|s| s.color.as_deref())
         .and_then(parse_color);
 
@@ -228,13 +238,20 @@ impl Renderer {
                     paints: &mut self.render_paints,
                 };
 
-                line_renderer.render_line(line, glyphs, line_idx, style, style_colors, effects, &mut self.line_render_scratch)?;
+                line_renderer.render_line(
+                    line,
+                    glyphs,
+                    line_idx,
+                    style,
+                    style_colors,
+                    effects,
+                    &mut self.line_render_scratch,
+                )?;
             }
         }
 
         // 3. Update and render particles
-        self.particle_system
-            .update(dt as f32);
+        self.particle_system.update(dt as f32);
         self.particle_system.render(canvas);
 
         Ok(())
@@ -395,7 +412,9 @@ impl Renderer {
         // 4. We immediately overwrite the buffer via `surface.read_pixels`. Even if `read_pixels` fails or does partial write,
         //    reading the uninitialized "garbage" bytes is safe (no UB), just incorrect data.
         let mut pixels = Vec::with_capacity(size);
-        unsafe { pixels.set_len(size); }
+        unsafe {
+            pixels.set_len(size);
+        }
 
         let info = ImageInfo::new(
             (self.width as i32, self.height as i32),
@@ -729,17 +748,21 @@ mod tests {
 
         // Populate chars
         let chars = vec!["T", "e", "s", "t"];
-        line.chars = chars.iter().enumerate().map(|(i, c)| crate::model::Char {
-            char: c.to_string(),
-            start: i as f64,
-            end: (i + 1) as f64,
-            style: None,
-            font: None,
-            stroke: None,
-            shadow: None,
-            effects: Vec::new(),
-            transform: None,
-        }).collect();
+        line.chars = chars
+            .iter()
+            .enumerate()
+            .map(|(i, c)| crate::model::Char {
+                char: c.to_string(),
+                start: i as f64,
+                end: (i + 1) as f64,
+                style: None,
+                font: None,
+                stroke: None,
+                shadow: None,
+                effects: Vec::new(),
+                transform: None,
+            })
+            .collect();
 
         doc.lines.push(line);
 

@@ -1,5 +1,5 @@
+use klyric_renderer::model::{Char, KLyricDocumentV2, Line, Project, Resolution, Style};
 use klyric_renderer::renderer::Renderer;
-use klyric_renderer::model::{KLyricDocumentV2, Line, Char, Style, Project, Resolution};
 use std::collections::HashMap;
 
 /// Verification test for Shadow Optimization (Bolt).
@@ -18,7 +18,10 @@ fn test_render_shadow_optimization() {
             artist: None,
             album: None,
             duration: 10.0,
-            resolution: Resolution { width: 100, height: 100 },
+            resolution: Resolution {
+                width: 100,
+                height: 100,
+            },
             fps: 30,
             audio: None,
             created: None,

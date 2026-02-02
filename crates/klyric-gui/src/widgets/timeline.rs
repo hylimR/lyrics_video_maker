@@ -75,7 +75,3 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
     .align_y(Alignment::Center)
     .into()
 }
-
-
-
-

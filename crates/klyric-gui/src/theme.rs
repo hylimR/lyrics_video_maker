@@ -1,8 +1,8 @@
 //! Custom Dark Theme for KLyric GUI
 //! Inspired by bl3_save_edit's polished dark aesthetic
 
-use iced::widget::{button, container, text_input, scrollable, slider};
-use iced::{Border, Color, Theme, Background, Shadow, Vector};
+use iced::widget::{button, container, scrollable, slider, text_input};
+use iced::{Background, Border, Color, Shadow, Theme, Vector};
 
 // ============================================================================
 // Color Palette
@@ -30,39 +30,39 @@ pub mod icons {
 /// Background colors (darkest to lightest)
 pub mod colors {
     use iced::Color;
-    
-    /// Main application background - very dark
-    pub const SURFACE_DARKEST: Color = Color::from_rgb(0.067, 0.067, 0.067);  // #111111
-    /// Panel backgrounds
-    pub const SURFACE_DARK: Color = Color::from_rgb(0.086, 0.086, 0.086);     // #161616
-    /// Elevated surfaces (cards, modals)
-    pub const SURFACE_MID: Color = Color::from_rgb(0.098, 0.098, 0.098);      // #191919
-    /// Hover states
-    pub const SURFACE_LIGHT: Color = Color::from_rgb(0.118, 0.118, 0.118);    // #1E1E1E
-    
-    /// Border colors
-    pub const BORDER: Color = Color::from_rgb(0.137, 0.137, 0.137);           // #232323
-    pub const BORDER_HOVER: Color = Color::from_rgb(0.176, 0.176, 0.176);     // #2D2D2D
-    #[allow(dead_code)]
-    pub const BORDER_FOCUS: Color = Color::from_rgb(0.4, 0.6, 0.9);           // Blue accent
-    
-    /// Text colors
-    pub const TEXT_PRIMARY: Color = Color::from_rgb(0.863, 0.863, 0.863);     // #DCDCDC
-    pub const TEXT_SECONDARY: Color = Color::from_rgb(0.6, 0.6, 0.6);         // #999999
-    pub const TEXT_MUTED: Color = Color::from_rgb(0.4, 0.4, 0.4);             // #666666
-    
-    /// Accent colors
-    pub const ACCENT: Color = Color::from_rgb(0.4, 0.6, 0.9);                 // Blue
-    pub const ACCENT_HOVER: Color = Color::from_rgb(0.5, 0.7, 1.0);           // Lighter blue
-    pub const ACCENT_PRESSED: Color = Color::from_rgb(0.3, 0.5, 0.8);         // Darker blue
-    
-    /// Semantic colors
-    pub const SUCCESS: Color = Color::from_rgb(0.4, 0.75, 0.5);               // Green
 
-    pub const ERROR: Color = Color::from_rgb(0.9, 0.4, 0.4);                  // Red
-    
+    /// Main application background - very dark
+    pub const SURFACE_DARKEST: Color = Color::from_rgb(0.067, 0.067, 0.067); // #111111
+    /// Panel backgrounds
+    pub const SURFACE_DARK: Color = Color::from_rgb(0.086, 0.086, 0.086); // #161616
+    /// Elevated surfaces (cards, modals)
+    pub const SURFACE_MID: Color = Color::from_rgb(0.098, 0.098, 0.098); // #191919
+    /// Hover states
+    pub const SURFACE_LIGHT: Color = Color::from_rgb(0.118, 0.118, 0.118); // #1E1E1E
+
+    /// Border colors
+    pub const BORDER: Color = Color::from_rgb(0.137, 0.137, 0.137); // #232323
+    pub const BORDER_HOVER: Color = Color::from_rgb(0.176, 0.176, 0.176); // #2D2D2D
+    #[allow(dead_code)]
+    pub const BORDER_FOCUS: Color = Color::from_rgb(0.4, 0.6, 0.9); // Blue accent
+
+    /// Text colors
+    pub const TEXT_PRIMARY: Color = Color::from_rgb(0.863, 0.863, 0.863); // #DCDCDC
+    pub const TEXT_SECONDARY: Color = Color::from_rgb(0.6, 0.6, 0.6); // #999999
+    pub const TEXT_MUTED: Color = Color::from_rgb(0.4, 0.4, 0.4); // #666666
+
+    /// Accent colors
+    pub const ACCENT: Color = Color::from_rgb(0.4, 0.6, 0.9); // Blue
+    pub const ACCENT_HOVER: Color = Color::from_rgb(0.5, 0.7, 1.0); // Lighter blue
+    pub const ACCENT_PRESSED: Color = Color::from_rgb(0.3, 0.5, 0.8); // Darker blue
+
+    /// Semantic colors
+    pub const SUCCESS: Color = Color::from_rgb(0.4, 0.75, 0.5); // Green
+
+    pub const ERROR: Color = Color::from_rgb(0.9, 0.4, 0.4); // Red
+
     /// Selection/Active state
-    pub const SELECTED: Color = Color::from_rgb(0.2, 0.35, 0.5);              // Dark blue
+    pub const SELECTED: Color = Color::from_rgb(0.2, 0.35, 0.5); // Dark blue
 }
 
 // ============================================================================
@@ -84,13 +84,15 @@ pub fn dark_theme() -> Theme {
     )
 }
 
-
 // ============================================================================
 // Text & Icon Helpers
 // ============================================================================
 
 /// Helper to create a row with an icon and text
-pub fn icon_text<'a>(icon: &'static str, label: &'static str) -> iced::widget::Row<'a, crate::message::Message> {
+pub fn icon_text<'a>(
+    icon: &'static str,
+    label: &'static str,
+) -> iced::widget::Row<'a, crate::message::Message> {
     iced::widget::row![
         iced::widget::text(icon).font(ICON_FONT),
         iced::widget::text(label)
@@ -520,22 +522,31 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
             },
         },
     };
-    
+
     let auto_scroll = scrollable::AutoScroll {
-        background: Background::Color(Color { a: 0.9, ..colors::SURFACE_MID }),
+        background: Background::Color(Color {
+            a: 0.9,
+            ..colors::SURFACE_MID
+        }),
         border: Border {
-            color: Color { a: 0.5, ..colors::TEXT_PRIMARY },
+            color: Color {
+                a: 0.5,
+                ..colors::TEXT_PRIMARY
+            },
             width: 1.0,
             radius: 50.0.into(),
         },
         shadow: Shadow {
-            color: Color { a: 0.5, ..colors::SURFACE_DARKEST },
+            color: Color {
+                a: 0.5,
+                ..colors::SURFACE_DARKEST
+            },
             offset: Vector::ZERO,
             blur_radius: 5.0,
         },
         icon: colors::TEXT_PRIMARY,
     };
-    
+
     match status {
         scrollable::Status::Active { .. } => scrollable::Style {
             container: container::Style::default(),
@@ -544,7 +555,7 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
             gap: None,
             auto_scroll,
         },
-        scrollable::Status::Hovered { 
+        scrollable::Status::Hovered {
             is_horizontal_scrollbar_hovered,
             is_vertical_scrollbar_hovered,
             ..
@@ -557,11 +568,13 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                     radius: 4.0.into(),
                 },
                 scroller: scrollable::Scroller {
-                    background: Background::Color(if is_vertical_scrollbar_hovered || is_horizontal_scrollbar_hovered {
-                        colors::ACCENT
-                    } else {
-                        colors::BORDER_HOVER
-                    }),
+                    background: Background::Color(
+                        if is_vertical_scrollbar_hovered || is_horizontal_scrollbar_hovered {
+                            colors::ACCENT
+                        } else {
+                            colors::BORDER_HOVER
+                        },
+                    ),
                     border: Border {
                         color: Color::TRANSPARENT,
                         width: 0.0,
@@ -576,7 +589,7 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                 gap: None,
                 auto_scroll,
             }
-        },
+        }
         scrollable::Status::Dragged {
             is_horizontal_scrollbar_dragged,
             is_vertical_scrollbar_dragged,
@@ -590,11 +603,13 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                     radius: 4.0.into(),
                 },
                 scroller: scrollable::Scroller {
-                    background: Background::Color(if is_vertical_scrollbar_dragged || is_horizontal_scrollbar_dragged {
-                        colors::ACCENT_PRESSED
-                    } else {
-                        colors::ACCENT
-                    }),
+                    background: Background::Color(
+                        if is_vertical_scrollbar_dragged || is_horizontal_scrollbar_dragged {
+                            colors::ACCENT_PRESSED
+                        } else {
+                            colors::ACCENT
+                        },
+                    ),
                     border: Border {
                         color: Color::TRANSPARENT,
                         width: 0.0,
@@ -609,7 +624,7 @@ pub fn scrollable_style(_theme: &Theme, status: scrollable::Status) -> scrollabl
                 gap: None,
                 auto_scroll,
             }
-        },
+        }
     }
 }
 
@@ -639,7 +654,7 @@ pub fn slider_style(_theme: &Theme, status: slider::Status) -> slider::Style {
             border_color: colors::SURFACE_DARKEST,
         },
     };
-    
+
     match status {
         slider::Status::Active => base,
         slider::Status::Hovered => slider::Style {
@@ -682,7 +697,7 @@ pub fn property_slider_style(_theme: &Theme, status: slider::Status) -> slider::
             border_color: colors::SURFACE_DARKEST,
         },
     };
-    
+
     match status {
         slider::Status::Active => base,
         slider::Status::Hovered => slider::Style {
@@ -755,7 +770,3 @@ pub fn text_input_inherit_style(_theme: &Theme, status: text_input::Status) -> t
     }
     style
 }
-
-
-
-

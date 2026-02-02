@@ -102,13 +102,31 @@ pub struct EmitParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "mode")]
 pub enum ValueDriver {
-    Fixed { val: f32 },
-    Linear { start: f32, end: f32, ease: DriverEasing },
-    Sine { base: f32, amp: f32, freq: f32, phase: f32 },
-    Noise { base: f32, amp: f32, speed: f32 },
-    Step { values: Vec<f32>, interval: f32 },
+    Fixed {
+        val: f32,
+    },
+    Linear {
+        start: f32,
+        end: f32,
+        ease: DriverEasing,
+    },
+    Sine {
+        base: f32,
+        amp: f32,
+        freq: f32,
+        phase: f32,
+    },
+    Noise {
+        base: f32,
+        amp: f32,
+        speed: f32,
+    },
+    Step {
+        values: Vec<f32>,
+        interval: f32,
+    },
     // Defaults for easy JSON
-    Default, 
+    Default,
 }
 
 impl Default for ValueDriver {
@@ -120,11 +138,21 @@ impl Default for ValueDriver {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DriverEasing {
     Linear,
-    QuadIn, QuadOut, QuadInOut,
-    CubicIn, CubicOut, CubicInOut,
-    BackIn, BackOut, BackInOut,
-    BounceIn, BounceOut, BounceInOut,
-    ElasticIn, ElasticOut, ElasticInOut,
+    QuadIn,
+    QuadOut,
+    QuadInOut,
+    CubicIn,
+    CubicOut,
+    CubicInOut,
+    BackIn,
+    BackOut,
+    BackInOut,
+    BounceIn,
+    BounceOut,
+    BounceInOut,
+    ElasticIn,
+    ElasticOut,
+    ElasticInOut,
 }
 
 // --- Selectors (Targeting) ---

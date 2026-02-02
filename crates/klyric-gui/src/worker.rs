@@ -7,15 +7,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::sync::mpsc as tokio_mpsc;
 
-
-
 pub enum RenderingRequest {
     Render {
         doc: Arc<KLyricDocumentV2>,
         time: f64,
         width: u32,
         height: u32,
-    }
+    },
 }
 
 pub enum RenderingResponse {
@@ -30,11 +28,11 @@ pub struct RenderWorker {
 
 impl RenderWorker {
     pub fn request_frame(&self, doc: Arc<KLyricDocumentV2>, time: f64, width: u32, height: u32) {
-        let _ = self.tx.send(RenderingRequest::Render { 
+        let _ = self.tx.send(RenderingRequest::Render {
             doc,
-            time, 
-            width, 
-            height 
+            time,
+            width,
+            height,
         });
     }
 }
@@ -55,7 +53,12 @@ pub fn spawn() -> WorkerConnection {
 
         while let Some(msg) = req_rx.blocking_recv() {
             match msg {
-                RenderingRequest::Render { doc, time, width, height } => {
+                RenderingRequest::Render {
+                    doc,
+                    time,
+                    width,
+                    height,
+                } => {
                     if renderer.is_none() || last_size != (width, height) {
                         renderer = Some(Renderer::new(width, height));
                         last_size = (width, height);
@@ -84,13 +87,13 @@ pub fn spawn() -> WorkerConnection {
 }
 
 // Subscription removed in favor of polling in app.rs
-// pub fn subscription(...) ... 
+// pub fn subscription(...) ...
 
 impl WorkerConnection {
     pub fn get_worker(&self) -> RenderWorker {
         self.worker.clone()
     }
-    
+
     pub fn try_recv(&self) -> Result<RenderingResponse, tokio_mpsc::error::TryRecvError> {
         let mut guard = self.receiver.lock().expect("Lock poisoned");
         if let Some(rx) = guard.as_mut() {
@@ -100,7 +103,3 @@ impl WorkerConnection {
         }
     }
 }
-
-
-
-

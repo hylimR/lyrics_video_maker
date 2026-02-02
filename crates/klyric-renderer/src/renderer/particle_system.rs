@@ -1,14 +1,14 @@
+use crate::expressions::FastEvaluationContext;
 use crate::particle::{
     color_to_rgba, BlendMode, Particle, ParticleConfig, ParticleEmitter, ParticlePhysics,
     ParticleShape, RangeValue, SpawnPattern,
 };
 use crate::presets::{CharBounds, EffectPreset, PresetFactory};
+use evalexpr::Node;
 use skia_safe::{BlendMode as SkBlendMode, Canvas, Color, Image, Paint, Point, Rect};
 use std::collections::{hash_map::DefaultHasher, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use evalexpr::Node;
-use crate::expressions::FastEvaluationContext;
 
 pub struct ParticleRenderSystem {
     /// Active particle emitters keyed by u64 hash
@@ -716,29 +716,22 @@ mod tests {
         let ctx = crate::expressions::EvaluationContext::default();
         let fast_ctx = crate::expressions::FastEvaluationContext::new(&ctx);
 
-        let exists = system.update_existing_emitter(
-            key,
-            bounds.clone(),
-            None,
-            None,
-            None,
-            &fast_ctx
-        );
+        let exists =
+            system.update_existing_emitter(key, bounds.clone(), None, None, None, &fast_ctx);
         assert!(!exists, "Should return false for non-existent emitter");
 
         // 2. Add emitter
         system.ensure_emitter(key, Some("fire".to_string()), None, bounds.clone(), 42);
 
         // 3. Update existing
-        let new_bounds = CharBounds { x: 50.0, y: 50.0, width: 20.0, height: 20.0 };
-        let exists_now = system.update_existing_emitter(
-            key,
-            new_bounds,
-            None,
-            None,
-            None,
-            &fast_ctx
-        );
+        let new_bounds = CharBounds {
+            x: 50.0,
+            y: 50.0,
+            width: 20.0,
+            height: 20.0,
+        };
+        let exists_now =
+            system.update_existing_emitter(key, new_bounds, None, None, None, &fast_ctx);
         assert!(exists_now, "Should return true for existing emitter");
 
         let emitter = system.particle_emitters.get(&key).unwrap();

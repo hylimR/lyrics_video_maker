@@ -4,7 +4,7 @@ use crate::text::TextRenderer;
 #[cfg(target_arch = "wasm32")]
 use crate::text::Typeface;
 #[cfg(not(target_arch = "wasm32"))]
-use skia_safe::{Color, Typeface, Path, Rect};
+use skia_safe::{Color, Path, Rect, Typeface};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::text::ResolvedFont;
@@ -94,6 +94,17 @@ impl LayoutEngine {
         let mut cached_family_override: Option<&str> = None;
         let mut cached_typeface_override: Option<Option<Typeface>> = None;
 
+        // [Bolt Optimization] Cache for Color Overrides
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut cached_shadow_hex: Option<&str> = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut cached_shadow_color: Option<Color> = None;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut cached_stroke_hex: Option<&str> = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut cached_stroke_color: Option<Color> = None;
+
         // Iterate over character objects in the line
         for (i, char_data) in line.chars.iter().enumerate() {
             let ch_str = &char_data.char;
@@ -150,23 +161,32 @@ impl LayoutEngine {
             // [Bolt Optimization] Pre-resolve colors for this character override
             #[cfg(not(target_arch = "wasm32"))]
             let (override_shadow_color, override_stroke_color) = {
-                let shadow_col = char_data
-                    .shadow
-                    .as_ref()
-                    .and_then(|s| s.color.as_deref())
-                    .and_then(|hex| {
-                        crate::utils::parse_hex_color(hex)
-                            .map(|(r, g, b, a)| Color::from_argb(a, r, g, b))
-                    });
+                // Shadow
+                let shadow_hex_opt = char_data.shadow.as_ref().and_then(|s| s.color.as_deref());
+                let shadow_col = if let Some(hex) = shadow_hex_opt {
+                    if cached_shadow_hex != Some(hex) {
+                        cached_shadow_color = crate::utils::parse_hex_color(hex)
+                            .map(|(r, g, b, a)| Color::from_argb(a, r, g, b));
+                        cached_shadow_hex = Some(hex);
+                    }
+                    cached_shadow_color
+                } else {
+                    None
+                };
 
-                let stroke_col = char_data
-                    .stroke
-                    .as_ref()
-                    .and_then(|s| s.color.as_deref())
-                    .and_then(|hex| {
-                        crate::utils::parse_hex_color(hex)
-                            .map(|(r, g, b, a)| Color::from_argb(a, r, g, b))
-                    });
+                // Stroke
+                let stroke_hex_opt = char_data.stroke.as_ref().and_then(|s| s.color.as_deref());
+                let stroke_col = if let Some(hex) = stroke_hex_opt {
+                    if cached_stroke_hex != Some(hex) {
+                        cached_stroke_color = crate::utils::parse_hex_color(hex)
+                            .map(|(r, g, b, a)| Color::from_argb(a, r, g, b));
+                        cached_stroke_hex = Some(hex);
+                    }
+                    cached_stroke_color
+                } else {
+                    None
+                };
+
                 (shadow_col, stroke_col)
             };
 
@@ -597,22 +617,22 @@ mod tests {
 
         // Check if we can get a typeface
         if renderer.get_typeface(font_name).is_some() {
-             // Mock style to use this font
-             let mut style_with_font = style.clone();
-             style_with_font.font = Some(Font {
-                 family: Some(font_name.to_string()),
-                 size: Some(48.0),
-                 ..Default::default()
-             });
+            // Mock style to use this font
+            let mut style_with_font = style.clone();
+            style_with_font.font = Some(Font {
+                family: Some(font_name.to_string()),
+                size: Some(48.0),
+                ..Default::default()
+            });
 
-             let glyphs = LayoutEngine::layout_line(&line, &style_with_font, &mut renderer);
+            let glyphs = LayoutEngine::layout_line(&line, &style_with_font, &mut renderer);
 
-             if !glyphs.is_empty() {
-                 let glyph = &glyphs[0];
-                 // Should have path and bounds if font loaded
-                 assert!(glyph.path.is_some(), "Glyph path should be populated");
-                 assert!(glyph.bounds.is_some(), "Glyph bounds should be populated");
-             }
+            if !glyphs.is_empty() {
+                let glyph = &glyphs[0];
+                // Should have path and bounds if font loaded
+                assert!(glyph.path.is_some(), "Glyph path should be populated");
+                assert!(glyph.bounds.is_some(), "Glyph bounds should be populated");
+            }
         }
     }
 }
