@@ -394,6 +394,9 @@ impl<'a> LineRenderer<'a> {
 
                      // [Bolt Optimization] Fast path for translation-only transforms
                      // Skip expensive save/restore if we only have translation (no rotate/scale)
+                     // WARNING: This optimization assumes that NO other canvas state (clip, matrix, etc.)
+                     // is permanently modified within this block. If future changes introduce clipping
+                     // or complex matrix ops that need restoration, this optimization must be disabled.
                      let is_simple_transform = final_transform.is_simple_translation();
                      let tx = draw_x + final_transform.x;
                      let ty = draw_y + final_transform.y;
