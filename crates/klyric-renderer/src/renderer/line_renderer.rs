@@ -536,10 +536,12 @@ impl<'a> LineRenderer<'a> {
                          // [Bolt Optimization] Apply blur to shadow with state tracking
                          apply_paint_blur(&mut self.paints.shadow_paint, &mut self.paints.current_shadow_blur, final_transform.blur, &self.paints.cached_blur_filter);
 
-                         self.canvas.save();
-                         self.canvas.translate((shadow.x_or_default(), shadow.y_or_default()));
+                         // [Bolt Optimization] Use translate instead of save/restore
+                         let sx = shadow.x_or_default();
+                         let sy = shadow.y_or_default();
+                         self.canvas.translate((sx, sy));
                          self.canvas.draw_path(path, &self.paints.shadow_paint);
-                         self.canvas.restore();
+                         self.canvas.translate((-sx, -sy));
                      }
 
                      // --- 2. STROKE ---
@@ -587,20 +589,22 @@ impl<'a> LineRenderer<'a> {
                              self.paints.b_paint.set_alpha_f(final_opacity);
                              apply_paint_blur(&mut self.paints.b_paint, &mut self.paints.current_b_blur, final_transform.blur, &self.paints.cached_blur_filter);
 
-                             self.canvas.save();
+                             // [Bolt Optimization] Use translate instead of save/restore for channels
+
+                             // Red
                              self.canvas.translate((-offset, -offset));
                              self.canvas.draw_path(path, &self.paints.r_paint);
-                             self.canvas.restore();
+                             self.canvas.translate((offset, offset));
 
-                             self.canvas.save();
+                             // Green
                              self.canvas.translate((offset, -offset));
                              self.canvas.draw_path(path, &self.paints.g_paint);
-                             self.canvas.restore();
+                             self.canvas.translate((-offset, offset));
 
-                             self.canvas.save();
+                             // Blue
                              self.canvas.translate((offset, offset));
                              self.canvas.draw_path(path, &self.paints.b_paint);
-                             self.canvas.restore();
+                             self.canvas.translate((-offset, -offset));
 
                          } else {
                              // Normal Draw

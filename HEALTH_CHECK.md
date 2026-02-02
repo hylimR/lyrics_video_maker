@@ -27,6 +27,7 @@ The recent optimizations in `LineRenderer::render_line` and `Renderer` were insp
     *   **Transforms:** Base line transforms are pre-calculated.
 *   **Zero-Alloc Particles:** The `apply_emitter_overrides` path allows updating existing emitters without reallocation.
 *   **Hashing:** The `line_hash_cache` correctly uses pointer addresses (`line as *const _`) to avoid O(N) hashing when the document structure is stable.
+*   **Shadow/Glitch Transform Optimization (New):** Replaced expensive `save/restore` calls with `translate/translate(-)` pairs for Shadow and Glitch rendering. This reduces stack overhead for these common operations.
 
 ### Issues & Risks
 *   **Build Stability:** `skia-bindings` build failures (clang segmentation faults) were observed in some CI/sandbox environments. This is likely an upstream or environment-specific issue but blocks local verification.
