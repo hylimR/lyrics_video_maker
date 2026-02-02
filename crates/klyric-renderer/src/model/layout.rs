@@ -394,6 +394,47 @@ impl RenderTransform {
         self.hue_shift += other.hue_shift;
         // Anchors are not accumulated
     }
+
+    /// Apply masked fields from another RenderTransform.
+    /// Used for [Bolt Optimization] fast path to skip ops loop.
+    pub fn apply_mask(&mut self, other: &RenderTransform, mask: u16) {
+        if mask & (1 << 0) != 0 {
+            self.opacity = other.opacity;
+        }
+        if mask & (1 << 1) != 0 {
+            self.scale = other.scale;
+        }
+        if mask & (1 << 2) != 0 {
+            self.scale_x = other.scale_x;
+        }
+        if mask & (1 << 3) != 0 {
+            self.scale_y = other.scale_y;
+        }
+        if mask & (1 << 4) != 0 {
+            self.x = other.x;
+        }
+        if mask & (1 << 5) != 0 {
+            self.y = other.y;
+        }
+        if mask & (1 << 6) != 0 {
+            self.rotation = other.rotation;
+        }
+        if mask & (1 << 7) != 0 {
+            self.blur = other.blur;
+        }
+        if mask & (1 << 8) != 0 {
+            self.glitch_offset = other.glitch_offset;
+        }
+        if mask & (1 << 9) != 0 {
+            self.anchor_x = other.anchor_x;
+        }
+        if mask & (1 << 10) != 0 {
+            self.anchor_y = other.anchor_y;
+        }
+        if mask & (1 << 11) != 0 {
+            self.hue_shift = other.hue_shift;
+        }
+    }
 }
 
 #[cfg(test)]
