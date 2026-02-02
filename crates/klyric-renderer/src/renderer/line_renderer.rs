@@ -520,16 +520,17 @@ impl<'a> LineRenderer<'a> {
                         self.canvas.save();
                         self.canvas.translate((tx, ty));
 
-                        let path_center_x = bounds.center_x();
-                        let path_center_y = bounds.center_y();
+                        // [Bolt Fix] Respect anchor properties (was previously hardcoded to center)
+                        let pivot_x = bounds.left + bounds.width() * final_transform.anchor_x;
+                        let pivot_y = bounds.top + bounds.height() * final_transform.anchor_y;
 
-                        self.canvas.translate((path_center_x, path_center_y));
+                        self.canvas.translate((pivot_x, pivot_y));
                         self.canvas.rotate(final_transform.rotation, None);
                         self.canvas.scale((
                             final_transform.scale * final_transform.scale_x,
                             final_transform.scale * final_transform.scale_y,
                         ));
-                        self.canvas.translate((-path_center_x, -path_center_y));
+                        self.canvas.translate((-pivot_x, -pivot_y));
                     }
 
                     // Modify path if StrokeReveal is active
