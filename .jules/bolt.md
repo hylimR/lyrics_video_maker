@@ -13,3 +13,7 @@ Action: Introduced `LineRenderScratch` struct in `Renderer` to hold persistent `
 ## 2024-05-26 - [Performance] FFI Overhead in Hot Render Loop
 Learning: Calling `path.bounds()` involves an FFI call to C++ Skia logic. Doing this for every character every frame (e.g. 2000 chars * 60 fps = 120,000 FFI calls/sec) creates measurable overhead. Additionally, retrieving the path from a HashMap cache (`get_path_cached`) involves hashing and lookup every frame.
 Action: Cached `path` and `bounds` directly in the `GlyphInfo` struct during the `LayoutEngine` phase. Layout happens only when text/style changes, so this moves the cost from O(Frames) to O(LayoutUpdates).
+
+## 2024-05-27 - [Correctness/Performance] Reference to Temporary in Expression Context
+Learning: In `FastEvaluationContext::get_value`, returning `Some(&Value::Float(PI))` attempts to return a reference to a temporary value, which is invalid Rust and likely caused compilation failures or undefined behavior. It also constructed a new `Value` enum variant on every access.
+Action: Added `pi` and `e` fields to the struct to store these constants once. Updated `get_value` to return references to these cached fields. This fixes the correctness issue and avoids construction overhead in the hot expression evaluation loop.
