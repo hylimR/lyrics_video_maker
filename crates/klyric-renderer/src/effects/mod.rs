@@ -388,13 +388,12 @@ impl EffectEngine {
                 }
                 RenderValueOp::TypewriterLimit(visible_limit) => {
                     // Get index from fast context
-                    if let Some(val) = fast_ctx.get_value("index") {
-                        if let evalexpr::Value::Int(idx) = val {
-                            if (*idx as f64) < visible_limit {
-                                apply_property_enum(&mut transform, op.prop, 1.0);
-                            } else {
-                                apply_property_enum(&mut transform, op.prop, 0.0);
-                            }
+                    // [Bolt Optimization] Use get_index_raw to avoid string match
+                    if let Some(idx) = fast_ctx.get_index_raw() {
+                        if (idx as f64) < visible_limit {
+                            apply_property_enum(&mut transform, op.prop, 1.0);
+                        } else {
+                            apply_property_enum(&mut transform, op.prop, 0.0);
                         }
                     }
                 }

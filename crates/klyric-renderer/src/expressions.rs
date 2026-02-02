@@ -63,11 +63,29 @@ impl FastEvaluationContext {
     }
 
     pub fn set_progress(&mut self, progress: f64) {
-        self.progress = Value::Float(progress);
+        if let Value::Float(ref mut p) = self.progress {
+            *p = progress;
+        } else {
+            self.progress = Value::Float(progress);
+        }
     }
 
     pub fn set_index(&mut self, index: usize) {
-        self.index = Some(Value::Int(index as i64));
+        if let Some(Value::Int(ref mut i)) = self.index {
+            *i = index as i64;
+        } else {
+            self.index = Some(Value::Int(index as i64));
+        }
+    }
+
+    pub fn get_index_raw(&self) -> Option<i64> {
+        self.index.as_ref().and_then(|v| {
+            if let Value::Int(i) = v {
+                Some(*i)
+            } else {
+                None
+            }
+        })
     }
 }
 
