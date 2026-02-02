@@ -1,14 +1,16 @@
 use anyhow::Result;
-use skia_safe::{Canvas, Color, Paint, BlendMode, PaintStyle, MaskFilter, BlurStyle, surfaces};
+use skia_safe::{surfaces, BlendMode, BlurStyle, Canvas, Color, MaskFilter, Paint, PaintStyle};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
-use crate::model::{KLyricDocumentV2, Line, PositionValue, EffectType, Transform, Easing, RenderTransform, Style};
-use crate::layout::{LayoutEngine, GlyphInfo};
-use crate::text::TextRenderer;
-use crate::effects::{EffectEngine, TriggerContext, CompiledRenderOp};
-use crate::presets::CharBounds;
+use crate::effects::{CompiledRenderOp, EffectEngine, TriggerContext};
 use crate::expressions::{EvaluationContext, FastEvaluationContext};
+use crate::layout::{GlyphInfo, LayoutEngine};
+use crate::model::{
+    Easing, EffectType, KLyricDocumentV2, Line, PositionValue, RenderTransform, Style, Transform,
+};
+use crate::presets::CharBounds;
+use crate::text::TextRenderer;
 
 use super::particle_system::ParticleRenderSystem;
 use super::utils::parse_color;
@@ -150,12 +152,25 @@ pub struct LineRenderer<'a> {
 }
 
 impl<'a> LineRenderer<'a> {
-    pub fn render_line(&mut self, line: &Line, glyphs: &[GlyphInfo], line_idx: usize, style: &Style, colors: &ResolvedStyleColors, effects: &'a CategorizedLineEffects, scratch: &mut LineRenderScratch) -> Result<()> {
+    pub fn render_line(
+        &mut self,
+        line: &Line,
+        glyphs: &[GlyphInfo],
+        line_idx: usize,
+        style: &Style,
+        colors: &ResolvedStyleColors,
+        effects: &'a CategorizedLineEffects,
+        scratch: &mut LineRenderScratch,
+    ) -> Result<()> {
         // Compute Line Position
         let (base_x, base_y) = self.compute_line_position(line);
 
         // Resolve font size for rasterization (Base)
-        let style_family = style.font.as_ref().and_then(|f| f.family.as_deref()).unwrap_or("Noto Sans SC");
+        let style_family = style
+            .font
+            .as_ref()
+            .and_then(|f| f.family.as_deref())
+            .unwrap_or("Noto Sans SC");
         let style_size = style.font.as_ref().and_then(|f| f.size).unwrap_or(72.0);
 
         // Pre-resolve colors to avoid parsing per-glyph
@@ -191,13 +206,20 @@ impl<'a> LineRenderer<'a> {
             if EffectEngine::should_trigger(&resolved.effect, &line_ctx) {
                 let p = EffectEngine::calculate_progress(self.time, &resolved.effect, &line_ctx);
                 if (0.0..=1.0).contains(&p) {
-                    scratch.active_transform_indices.push((i, EffectEngine::ease(p, &resolved.effect.easing)));
+                    scratch
+                        .active_transform_indices
+                        .push((i, EffectEngine::ease(p, &resolved.effect.easing)));
                 }
             }
         }
 
         // Compile ops into scratch buffer
-        EffectEngine::compile_active_effects(&effects.transform_effects, &scratch.active_transform_indices, &line_ctx, &mut scratch.compiled_ops);
+        EffectEngine::compile_active_effects(
+            &effects.transform_effects,
+            &scratch.active_transform_indices,
+            &line_ctx,
+            &mut scratch.compiled_ops,
+        );
 
         // [Bolt Optimization] Hoist Disintegration Effect Resolution
         // Safety: We use `line_ctx` (no char_index) because `calculate_progress` strictly depends on
@@ -205,39 +227,41 @@ impl<'a> LineRenderer<'a> {
         // Per-character variation (staggering) must use Expressions or different Effect types.
         scratch.active_disintegrate_indices.clear();
         for (i, (_name, resolved_effect)) in effects.disintegrate_effects.iter().enumerate() {
-             let effect = &resolved_effect.effect;
-             if EffectEngine::should_trigger(effect, &line_ctx) {
-                 let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
-                 if (0.0..=1.0).contains(&progress) {
-                     // [Bolt Optimization] Pre-calculate partial hash prefix
-                     let prefix = fast_hash_prefix(line_idx, resolved_effect.name_hash);
-                     scratch.active_disintegrate_indices.push((i, progress, prefix));
-                 }
-             }
+            let effect = &resolved_effect.effect;
+            if EffectEngine::should_trigger(effect, &line_ctx) {
+                let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
+                if (0.0..=1.0).contains(&progress) {
+                    // [Bolt Optimization] Pre-calculate partial hash prefix
+                    let prefix = fast_hash_prefix(line_idx, resolved_effect.name_hash);
+                    scratch
+                        .active_disintegrate_indices
+                        .push((i, progress, prefix));
+                }
+            }
         }
 
         // [Bolt Optimization] Hoist Particle Effect Resolution
         scratch.active_particle_indices.clear();
         for (i, (_name, resolved_effect)) in effects.particle_effects.iter().enumerate() {
-             let effect = &resolved_effect.effect;
-             if EffectEngine::should_trigger(effect, &line_ctx) {
-                 let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
-                 if (0.0..=1.0).contains(&progress) {
-                     // [Bolt Optimization] Pre-calculate partial hash prefix
-                     let prefix = fast_hash_prefix(line_idx, resolved_effect.name_hash);
-                     scratch.active_particle_indices.push((i, progress, prefix));
-                 }
-             }
+            let effect = &resolved_effect.effect;
+            if EffectEngine::should_trigger(effect, &line_ctx) {
+                let progress = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
+                if (0.0..=1.0).contains(&progress) {
+                    // [Bolt Optimization] Pre-calculate partial hash prefix
+                    let prefix = fast_hash_prefix(line_idx, resolved_effect.name_hash);
+                    scratch.active_particle_indices.push((i, progress, prefix));
+                }
+            }
         }
 
         // [Bolt Optimization] Hoist Stroke Reveal Resolution
         let mut active_stroke_reveal_progress: Option<f64> = None;
         for effect in &effects.stroke_reveal_effects {
-             if EffectEngine::should_trigger(effect, &line_ctx) {
-                 let p = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
-                 active_stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
-                 break; // Only one stroke reveal supported
-             }
+            if EffectEngine::should_trigger(effect, &line_ctx) {
+                let p = EffectEngine::calculate_progress(self.time, effect, &line_ctx);
+                active_stroke_reveal_progress = Some(p.clamp(0.0, 1.0));
+                break; // Only one stroke reveal supported
+            }
         }
 
         // Reusable context for expression evaluation
@@ -259,25 +283,31 @@ impl<'a> LineRenderer<'a> {
         // [Bolt Optimization] Pre-calculate Shadow/Stroke colors to avoid parsing inside loop
         let style_shadow_color = colors.shadow;
 
-        let line_shadow_color = line.shadow.as_ref()
+        let line_shadow_color = line
+            .shadow
+            .as_ref()
             .and_then(|s| s.color.as_deref())
             .and_then(parse_color);
 
         let style_stroke_color = colors.stroke;
 
-        let line_stroke_color = line.stroke.as_ref()
+        let line_stroke_color = line
+            .stroke
+            .as_ref()
             .and_then(|s| s.color.as_deref())
             .and_then(parse_color);
 
         // [Bolt Optimization] Pre-calculate fallback Shadow/Stroke (Line > Style)
         // This avoids checking line vs style for every character.
-        let (fallback_shadow, fallback_shadow_color) = if let Some(l_shadow) = line.shadow.as_ref() {
+        let (fallback_shadow, fallback_shadow_color) = if let Some(l_shadow) = line.shadow.as_ref()
+        {
             (Some(l_shadow), line_shadow_color)
         } else {
             (style.shadow.as_ref(), style_shadow_color)
         };
 
-        let (fallback_stroke, fallback_stroke_color) = if let Some(l_stroke) = line.stroke.as_ref() {
+        let (fallback_stroke, fallback_stroke_color) = if let Some(l_stroke) = line.stroke.as_ref()
+        {
             (Some(l_stroke), line_stroke_color)
         } else {
             (style.stroke.as_ref(), style_stroke_color)
@@ -308,453 +338,516 @@ impl<'a> LineRenderer<'a> {
 
         // Loop:
         for glyph in glyphs.iter() {
-             let char_absolute_x = base_x + glyph.x;
-             let char_absolute_y = base_y + glyph.y;
-             
-             // Resolve Font for THIS glyph (matches layout logic)
-             let char_data = line.chars.get(glyph.char_index);
+            let char_absolute_x = base_x + glyph.x;
+            let char_absolute_y = base_y + glyph.y;
 
-             // [Bolt Optimization] Use pre-resolved font from layout
-             let size = glyph.font_size;
-             
-             if let Some(typeface) = &glyph.typeface {
-                 // Get path
-                 // [Bolt Optimization] Use cached path from GlyphInfo (populated during layout)
-                 // This avoids FFI calls and HashMap lookups per frame.
-                 if let Some(path) = glyph.path.as_ref() {
-                     // Dimensions for effects
-                     // [Bolt Optimization] Use cached bounds from GlyphInfo
-                     let bounds = glyph.bounds.unwrap_or_else(|| path.bounds());
-                     let w = bounds.width();
-                     let h = bounds.height();
-                     // Helper midpoint
-                     let cx = w / 2.0;
-                     let cy = h / 2.0;
+            // Resolve Font for THIS glyph (matches layout logic)
+            let char_data = line.chars.get(glyph.char_index);
 
-                     // Resolve color
-                     let is_active = char_data.map(|c| self.time >= c.start && self.time <= c.end).unwrap_or(false);
-                     let is_past = char_data.map(|c| self.time > c.end).unwrap_or(false);
-                     
-                     let text_color = if is_past {
-                         complete_color
-                     } else if is_active {
-                         active_color
-                     } else {
-                         inactive_color
-                     };
+            // [Bolt Optimization] Use pre-resolved font from layout
+            let size = glyph.font_size;
 
-                     // Compute Transform (Base + Effects)
-                     // [Bolt Optimization] Use RenderTransform and compiled ops
-                     // Optimization: Eliminates 1 allocation and 1 deep copy (96 bytes) per character per frame
-                     // by using reference to char transform or falling back to pre-calculated line transform.
-                     let mut final_transform = if let Some(c) = char_data {
-                         if let Some(t) = &c.transform {
-                             RenderTransform::new(&line_transform, t)
-                         } else {
-                             line_render_transform
-                         }
-                     } else {
-                         line_render_transform // RenderTransform is Copy
-                     };
+            if let Some(typeface) = &glyph.typeface {
+                // Get path
+                // [Bolt Optimization] Use cached path from GlyphInfo (populated during layout)
+                // This avoids FFI calls and HashMap lookups per frame.
+                if let Some(path) = glyph.path.as_ref() {
+                    // Dimensions for effects
+                    // [Bolt Optimization] Use cached bounds from GlyphInfo
+                    let bounds = glyph.bounds.unwrap_or_else(|| path.bounds());
+                    let w = bounds.width();
+                    let h = bounds.height();
+                    // Helper midpoint
+                    let cx = w / 2.0;
+                    let cy = h / 2.0;
 
-                     // Update context
-                     fast_ctx.set_index(glyph.char_index);
+                    // Resolve color
+                    let is_active = char_data
+                        .map(|c| self.time >= c.start && self.time <= c.end)
+                        .unwrap_or(false);
+                    let is_past = char_data.map(|c| self.time > c.end).unwrap_or(false);
 
-                     // Apply compiled effects
-                     final_transform = EffectEngine::apply_compiled_ops(final_transform, &scratch.compiled_ops, &mut fast_ctx);
-                     
-                     // Need TriggerContext for layers/other effects
-                     let ctx = TriggerContext {
-                         start_time: line.start,
-                         end_time: line.end,
-                         current_time: self.time,
-                         active: true,
-                         char_index: Some(glyph.char_index),
-                         char_count: Some(glyphs.len()),
-                     };
+                    let text_color = if is_past {
+                        complete_color
+                    } else if is_active {
+                        active_color
+                    } else {
+                        inactive_color
+                    };
 
-                     // --- 4. MODIFIER LAYERS (New System) ---
-                     // [Bolt Optimization] Apply hoisted global transform + local layers
-                     final_transform.combine(&global_layer_transform);
+                    // Compute Transform (Base + Effects)
+                    // [Bolt Optimization] Use RenderTransform and compiled ops
+                    // Optimization: Eliminates 1 allocation and 1 deep copy (96 bytes) per character per frame
+                    // by using reference to char transform or falling back to pre-calculated line transform.
+                    let mut final_transform = if let Some(c) = char_data {
+                        if let Some(t) = &c.transform {
+                            RenderTransform::new(&line_transform, t)
+                        } else {
+                            line_render_transform
+                        }
+                    } else {
+                        line_render_transform // RenderTransform is Copy
+                    };
 
-                     if let Some(layers) = style.layers.as_ref() {
-                         if !scratch.local_layer_indices.is_empty() {
-                             final_transform = EffectEngine::apply_specific_layers_to_render(
-                                 self.time,
-                                 final_transform,
-                                 layers,
-                                 &scratch.local_layer_indices,
-                                 &ctx,
-                             );
-                         }
-                     }
+                    // Update context
+                    fast_ctx.set_index(glyph.char_index);
 
-                     // Disintegrate Effect Progress
-                     // [Bolt Optimization] Use pre-calculated progress
-                     let mut disintegration_progress = 0.0;
-                     if let Some((_idx, progress, _)) = scratch.active_disintegrate_indices.first() {
-                         disintegration_progress = progress.clamp(0.0, 1.0);
-                     }
+                    // Apply compiled effects
+                    final_transform = EffectEngine::apply_compiled_ops(
+                        final_transform,
+                        &scratch.compiled_ops,
+                        &mut fast_ctx,
+                    );
 
-                     // Setup Paint
-                     // [Bolt Optimization] Manual reuse without reset()
-                     self.paints.main_paint.set_color(text_color);
-                     
-                     let final_opacity = final_transform.opacity * (1.0 - disintegration_progress as f32);
-                     self.paints.main_paint.set_alpha_f(final_opacity);
+                    // Need TriggerContext for layers/other effects
+                    let ctx = TriggerContext {
+                        start_time: line.start,
+                        end_time: line.end,
+                        current_time: self.time,
+                        active: true,
+                        char_index: Some(glyph.char_index),
+                        char_count: Some(glyphs.len()),
+                    };
 
-                     // Apply Blur with caching
-                     let blur = final_transform.blur;
-                     if blur > 0.0 {
-                         let use_cached = if let Some((last_sigma, _)) = self.paints.cached_blur_filter.as_ref() {
-                             (last_sigma - blur).abs() < 0.001
-                         } else {
-                             false
-                         };
+                    // --- 4. MODIFIER LAYERS (New System) ---
+                    // [Bolt Optimization] Apply hoisted global transform + local layers
+                    final_transform.combine(&global_layer_transform);
 
-                         if !use_cached {
-                             // Create new filter
-                             if let Some(filter) = MaskFilter::blur(BlurStyle::Normal, blur, false) {
-                                 self.paints.cached_blur_filter = Some((blur, filter));
-                             } else {
-                                 self.paints.cached_blur_filter = None;
-                             }
-                         }
-                     }
+                    if let Some(layers) = style.layers.as_ref() {
+                        if !scratch.local_layer_indices.is_empty() {
+                            final_transform = EffectEngine::apply_specific_layers_to_render(
+                                self.time,
+                                final_transform,
+                                layers,
+                                &scratch.local_layer_indices,
+                                &ctx,
+                            );
+                        }
+                    }
 
-                     // [Bolt Optimization] Only update paint mask filter if blur changed
-                     apply_paint_blur(&mut self.paints.main_paint, &mut self.paints.current_paint_blur, blur, &self.paints.cached_blur_filter);
+                    // Disintegrate Effect Progress
+                    // [Bolt Optimization] Use pre-calculated progress
+                    let mut disintegration_progress = 0.0;
+                    if let Some((_idx, progress, _)) = scratch.active_disintegrate_indices.first() {
+                        disintegration_progress = progress.clamp(0.0, 1.0);
+                    }
 
-                     // --- DRAWING ---
-                     // Calculate position context
-                     let draw_x = char_absolute_x;
-                     let draw_y = char_absolute_y;
-                     
-                     // Check for StrokeReveal
-                     // [Bolt Optimization] Use pre-calculated progress
-                     let stroke_reveal_progress = active_stroke_reveal_progress;
+                    // Setup Paint
+                    // [Bolt Optimization] Manual reuse without reset()
+                    self.paints.main_paint.set_color(text_color);
 
-                     // [Bolt Optimization] Fast path for translation-only transforms
-                     // Skip expensive save/restore if we only have translation (no rotate/scale)
-                     // WARNING: This optimization assumes that NO other canvas state (clip, matrix, etc.)
-                     // is permanently modified within this block. If future changes introduce clipping
-                     // or complex matrix ops that need restoration, this optimization must be disabled.
-                     let is_simple_transform = final_transform.is_simple_translation();
-                     let tx = draw_x + final_transform.x;
-                     let ty = draw_y + final_transform.y;
+                    let final_opacity =
+                        final_transform.opacity * (1.0 - disintegration_progress as f32);
+                    self.paints.main_paint.set_alpha_f(final_opacity);
 
-                     if is_simple_transform {
-                         self.canvas.translate((tx, ty));
-                     } else {
-                         self.canvas.save();
-                         self.canvas.translate((tx, ty));
+                    // Apply Blur with caching
+                    let blur = final_transform.blur;
+                    if blur > 0.0 {
+                        let use_cached = if let Some((last_sigma, _)) =
+                            self.paints.cached_blur_filter.as_ref()
+                        {
+                            (last_sigma - blur).abs() < 0.001
+                        } else {
+                            false
+                        };
 
-                         let path_center_x = bounds.center_x();
-                         let path_center_y = bounds.center_y();
+                        if !use_cached {
+                            // Create new filter
+                            if let Some(filter) = MaskFilter::blur(BlurStyle::Normal, blur, false) {
+                                self.paints.cached_blur_filter = Some((blur, filter));
+                            } else {
+                                self.paints.cached_blur_filter = None;
+                            }
+                        }
+                    }
 
-                         self.canvas.translate((path_center_x, path_center_y));
-                         self.canvas.rotate(final_transform.rotation, None);
-                         self.canvas.scale((final_transform.scale * final_transform.scale_x, final_transform.scale * final_transform.scale_y));
-                         self.canvas.translate((-path_center_x, -path_center_y));
-                     }
-                     
-                     // Modify path if StrokeReveal is active
-                     // [Bolt Optimization] COW path: avoid clone unless modified
-                     let mut modified_path_storage: Option<skia_safe::Path> = None;
+                    // [Bolt Optimization] Only update paint mask filter if blur changed
+                    apply_paint_blur(
+                        &mut self.paints.main_paint,
+                        &mut self.paints.current_paint_blur,
+                        blur,
+                        &self.paints.cached_blur_filter,
+                    );
 
-                     let path_to_draw: &skia_safe::Path = if let Some(progress) = stroke_reveal_progress {
-                         // [Bolt Optimization] Short-circuit if effectively complete to avoid PathMeasure
-                         if progress >= 0.999 {
-                             path
-                         } else if progress <= 0.001 {
-                             // [Bolt Optimization] Avoid PathMeasure if progress is effectively zero (e.g. delay).
-                             // Returns an empty path to skip drawing.
-                             modified_path_storage = Some(skia_safe::Path::new());
-                             modified_path_storage.as_ref().unwrap()
-                         } else {
-                             // [Bolt Optimization] Use cached PathMeasure
-                             let tf_id: u32 = if let Some(tf) = &glyph.typeface {
-                                 tf.unique_id().into()
-                             } else {
-                                 0
-                             };
-                             let key = (tf_id, glyph.font_size.to_bits(), glyph.glyph_id);
+                    // --- DRAWING ---
+                    // Calculate position context
+                    let draw_x = char_absolute_x;
+                    let draw_y = char_absolute_y;
 
-                             // [Bolt Optimization] Check per-line segment cache (Duplicate glyph optimization)
-                             let progress_bits = progress.to_bits();
-                             let segment_key = (tf_id, glyph.font_size.to_bits(), glyph.glyph_id, progress_bits);
+                    // Check for StrokeReveal
+                    // [Bolt Optimization] Use pre-calculated progress
+                    let stroke_reveal_progress = active_stroke_reveal_progress;
 
-                             if let Some(cached_opt) = scratch.segment_cache.get(&segment_key) {
-                                 if let Some(p) = cached_opt {
-                                     modified_path_storage = Some(p.clone());
-                                     modified_path_storage.as_ref().unwrap()
-                                 } else {
-                                     path
-                                 }
-                             } else {
-                                 // Safety: PathMeasure refers to SkPath object. We must keep the SkPath object alive.
-                                 // We store (Path, PathMeasure) in the cache.
-                                 let (_, measure) = scratch.path_measure_cache.entry(key).or_insert_with(|| {
-                                     let p = path.clone();
-                                     let m = skia_safe::PathMeasure::new(&p, false, None);
-                                     (p, m)
-                                 });
+                    // [Bolt Optimization] Fast path for translation-only transforms
+                    // Skip expensive save/restore if we only have translation (no rotate/scale)
+                    // WARNING: This optimization assumes that NO other canvas state (clip, matrix, etc.)
+                    // is permanently modified within this block. If future changes introduce clipping
+                    // or complex matrix ops that need restoration, this optimization must be disabled.
+                    let is_simple_transform = final_transform.is_simple_translation();
+                    let tx = draw_x + final_transform.x;
+                    let ty = draw_y + final_transform.y;
 
-                                 let length = measure.length();
-                                 let segment_result = measure.segment(0.0, length * progress as f32, true);
+                    if is_simple_transform {
+                        self.canvas.translate((tx, ty));
+                    } else {
+                        self.canvas.save();
+                        self.canvas.translate((tx, ty));
 
-                                 // Store in cache (Clone if present)
-                                 scratch.segment_cache.insert(segment_key, segment_result.clone());
+                        let path_center_x = bounds.center_x();
+                        let path_center_y = bounds.center_y();
 
-                                 if let Some(partial_path) = segment_result {
-                                     modified_path_storage = Some(partial_path);
-                                     modified_path_storage.as_ref().unwrap()
-                                 } else {
-                                     path
-                                 }
-                             }
-                         }
-                     } else {
-                         path
-                     };
-                     let path = path_to_draw; // Shadow original path with the one to draw
+                        self.canvas.translate((path_center_x, path_center_y));
+                        self.canvas.rotate(final_transform.rotation, None);
+                        self.canvas.scale((
+                            final_transform.scale * final_transform.scale_x,
+                            final_transform.scale * final_transform.scale_y,
+                        ));
+                        self.canvas.translate((-path_center_x, -path_center_y));
+                    }
 
-                     
-                     // --- 1. SHADOW ---
-                     let (active_shadow, active_shadow_color) = if let Some(c_shadow) = char_data.and_then(|c| c.shadow.as_ref()) {
-                         // [Bolt Optimization] Use pre-parsed color from glyph info
-                         (Some(c_shadow), glyph.override_shadow_color)
-                     } else {
-                         (fallback_shadow, fallback_shadow_color)
-                     };
+                    // Modify path if StrokeReveal is active
+                    // [Bolt Optimization] COW path: avoid clone unless modified
+                    let mut modified_path_storage: Option<skia_safe::Path> = None;
 
-                     if let (Some(shadow), Some(shadow_color)) = (active_shadow, active_shadow_color) {
-                         // [Bolt Optimization] Reuse shadow paint
-                         self.paints.shadow_paint.set_color(shadow_color);
-                         self.paints.shadow_paint.set_alpha_f(final_opacity);
+                    let path_to_draw: &skia_safe::Path = if let Some(progress) =
+                        stroke_reveal_progress
+                    {
+                        // [Bolt Optimization] Short-circuit if effectively complete to avoid PathMeasure
+                        if progress >= 0.999 {
+                            path
+                        } else if progress <= 0.001 {
+                            // [Bolt Optimization] Avoid PathMeasure if progress is effectively zero (e.g. delay).
+                            // Returns an empty path to skip drawing.
+                            modified_path_storage = Some(skia_safe::Path::new());
+                            modified_path_storage.as_ref().unwrap()
+                        } else {
+                            // [Bolt Optimization] Use cached PathMeasure
+                            let tf_id: u32 = if let Some(tf) = &glyph.typeface {
+                                tf.unique_id().into()
+                            } else {
+                                0
+                            };
+                            let key = (tf_id, glyph.font_size.to_bits(), glyph.glyph_id);
 
-                         // [Bolt Optimization] Apply blur to shadow with state tracking
-                         apply_paint_blur(&mut self.paints.shadow_paint, &mut self.paints.current_shadow_blur, final_transform.blur, &self.paints.cached_blur_filter);
+                            // [Bolt Optimization] Check per-line segment cache (Duplicate glyph optimization)
+                            let progress_bits = progress.to_bits();
+                            let segment_key = (
+                                tf_id,
+                                glyph.font_size.to_bits(),
+                                glyph.glyph_id,
+                                progress_bits,
+                            );
 
-                         // [Bolt Optimization] Use translate instead of save/restore
-                         let sx = shadow.x_or_default();
-                         let sy = shadow.y_or_default();
-                         self.canvas.translate((sx, sy));
-                         self.canvas.draw_path(path, &self.paints.shadow_paint);
-                         self.canvas.translate((-sx, -sy));
-                     }
+                            if let Some(cached_opt) = scratch.segment_cache.get(&segment_key) {
+                                if let Some(p) = cached_opt {
+                                    modified_path_storage = Some(p.clone());
+                                    modified_path_storage.as_ref().unwrap()
+                                } else {
+                                    path
+                                }
+                            } else {
+                                // Safety: PathMeasure refers to SkPath object. We must keep the SkPath object alive.
+                                // We store (Path, PathMeasure) in the cache.
+                                let (_, measure) =
+                                    scratch.path_measure_cache.entry(key).or_insert_with(|| {
+                                        let p = path.clone();
+                                        let m = skia_safe::PathMeasure::new(&p, false, None);
+                                        (p, m)
+                                    });
 
-                     // --- 2. STROKE ---
-                     let (active_stroke, active_stroke_color) = if let Some(c_stroke) = char_data.and_then(|c| c.stroke.as_ref()) {
-                         // [Bolt Optimization] Use pre-parsed color from glyph info
-                         (Some(c_stroke), glyph.override_stroke_color)
-                     } else {
-                         (fallback_stroke, fallback_stroke_color)
-                     };
+                                let length = measure.length();
+                                let segment_result =
+                                    measure.segment(0.0, length * progress as f32, true);
 
-                     if let (Some(stroke), Some(stroke_color)) = (active_stroke, active_stroke_color) {
-                         if stroke.width_or_default() > 0.0 {
-                             // [Bolt Optimization] Reuse stroke paint
-                             self.paints.stroke_paint.set_stroke_width(stroke.width_or_default());
-                             self.paints.stroke_paint.set_color(stroke_color);
-                             self.paints.stroke_paint.set_alpha_f(final_opacity);
+                                // Store in cache (Clone if present)
+                                scratch
+                                    .segment_cache
+                                    .insert(segment_key, segment_result.clone());
 
-                             // [Bolt Optimization] Apply blur to stroke with state tracking
-                             apply_paint_blur(&mut self.paints.stroke_paint, &mut self.paints.current_stroke_blur, final_transform.blur, &self.paints.cached_blur_filter);
+                                if let Some(partial_path) = segment_result {
+                                    modified_path_storage = Some(partial_path);
+                                    modified_path_storage.as_ref().unwrap()
+                                } else {
+                                    path
+                                }
+                            }
+                        }
+                    } else {
+                        path
+                    };
+                    let path = path_to_draw; // Shadow original path with the one to draw
 
-                             self.canvas.draw_path(path, &self.paints.stroke_paint);
-                         }
-                     }
+                    // --- 1. SHADOW ---
+                    let (active_shadow, active_shadow_color) =
+                        if let Some(c_shadow) = char_data.and_then(|c| c.shadow.as_ref()) {
+                            // [Bolt Optimization] Use pre-parsed color from glyph info
+                            (Some(c_shadow), glyph.override_shadow_color)
+                        } else {
+                            (fallback_shadow, fallback_shadow_color)
+                        };
 
-                     // --- 3. MAIN TEXT (With Glitch Logic) ---
-                     if self.paints.main_paint.alpha_f() > 0.001 {
-                         if final_transform.glitch_offset.abs() > 0.01 {
-                             // Glitch Effect: Draw channels separately
-                             let offset = final_transform.glitch_offset;
+                    if let (Some(shadow), Some(shadow_color)) = (active_shadow, active_shadow_color)
+                    {
+                        // [Bolt Optimization] Reuse shadow paint
+                        self.paints.shadow_paint.set_color(shadow_color);
+                        self.paints.shadow_paint.set_alpha_f(final_opacity);
 
-                             // Update shared properties for all channels
-                             // [Bolt Optimization] Update hoisted paints instead of cloning.
-                             // Note: We strictly use Fill style here as this block is for the main text fill.
-                             // Strokes are handled in a separate block below.
+                        // [Bolt Optimization] Apply blur to shadow with state tracking
+                        apply_paint_blur(
+                            &mut self.paints.shadow_paint,
+                            &mut self.paints.current_shadow_blur,
+                            final_transform.blur,
+                            &self.paints.cached_blur_filter,
+                        );
 
-                             // Red Channel Update
-                             self.paints.r_paint.set_alpha_f(final_opacity);
-                             apply_paint_blur(&mut self.paints.r_paint, &mut self.paints.current_r_blur, final_transform.blur, &self.paints.cached_blur_filter);
+                        // [Bolt Optimization] Use translate instead of save/restore
+                        let sx = shadow.x_or_default();
+                        let sy = shadow.y_or_default();
+                        self.canvas.translate((sx, sy));
+                        self.canvas.draw_path(path, &self.paints.shadow_paint);
+                        self.canvas.translate((-sx, -sy));
+                    }
 
-                             // Green Channel Update
-                             self.paints.g_paint.set_alpha_f(final_opacity);
-                             apply_paint_blur(&mut self.paints.g_paint, &mut self.paints.current_g_blur, final_transform.blur, &self.paints.cached_blur_filter);
+                    // --- 2. STROKE ---
+                    let (active_stroke, active_stroke_color) =
+                        if let Some(c_stroke) = char_data.and_then(|c| c.stroke.as_ref()) {
+                            // [Bolt Optimization] Use pre-parsed color from glyph info
+                            (Some(c_stroke), glyph.override_stroke_color)
+                        } else {
+                            (fallback_stroke, fallback_stroke_color)
+                        };
 
-                             // Blue Channel Update
-                             self.paints.b_paint.set_alpha_f(final_opacity);
-                             apply_paint_blur(&mut self.paints.b_paint, &mut self.paints.current_b_blur, final_transform.blur, &self.paints.cached_blur_filter);
+                    if let (Some(stroke), Some(stroke_color)) = (active_stroke, active_stroke_color)
+                    {
+                        if stroke.width_or_default() > 0.0 {
+                            // [Bolt Optimization] Reuse stroke paint
+                            self.paints
+                                .stroke_paint
+                                .set_stroke_width(stroke.width_or_default());
+                            self.paints.stroke_paint.set_color(stroke_color);
+                            self.paints.stroke_paint.set_alpha_f(final_opacity);
 
-                             // [Bolt Optimization] Use translate instead of save/restore for channels
+                            // [Bolt Optimization] Apply blur to stroke with state tracking
+                            apply_paint_blur(
+                                &mut self.paints.stroke_paint,
+                                &mut self.paints.current_stroke_blur,
+                                final_transform.blur,
+                                &self.paints.cached_blur_filter,
+                            );
 
-                             // Red
-                             self.canvas.translate((-offset, -offset));
-                             self.canvas.draw_path(path, &self.paints.r_paint);
-                             self.canvas.translate((offset, offset));
+                            self.canvas.draw_path(path, &self.paints.stroke_paint);
+                        }
+                    }
 
-                             // Green
-                             self.canvas.translate((offset, -offset));
-                             self.canvas.draw_path(path, &self.paints.g_paint);
-                             self.canvas.translate((-offset, offset));
+                    // --- 3. MAIN TEXT (With Glitch Logic) ---
+                    if self.paints.main_paint.alpha_f() > 0.001 {
+                        if final_transform.glitch_offset.abs() > 0.01 {
+                            // Glitch Effect: Draw channels separately
+                            let offset = final_transform.glitch_offset;
 
-                             // Blue
-                             self.canvas.translate((offset, offset));
-                             self.canvas.draw_path(path, &self.paints.b_paint);
-                             self.canvas.translate((-offset, -offset));
+                            // Update shared properties for all channels
+                            // [Bolt Optimization] Update hoisted paints instead of cloning.
+                            // Note: We strictly use Fill style here as this block is for the main text fill.
+                            // Strokes are handled in a separate block below.
 
-                         } else {
-                             // Normal Draw
-                             self.canvas.draw_path(path, &self.paints.main_paint);
-                         }
-                     }
-                     
-                     if is_simple_transform {
-                         self.canvas.translate((-tx, -ty));
-                     } else {
-                         self.canvas.restore(); // Restore transform for next glyph/effects
-                     }
+                            // Red Channel Update
+                            self.paints.r_paint.set_alpha_f(final_opacity);
+                            apply_paint_blur(
+                                &mut self.paints.r_paint,
+                                &mut self.paints.current_r_blur,
+                                final_transform.blur,
+                                &self.paints.cached_blur_filter,
+                            );
 
-                     // --- DISINTEGRATION EFFECT ---
-                     // [Bolt Optimization] Iterate active effects only
-                     for (idx, _progress, base_prefix) in &scratch.active_disintegrate_indices {
-                         let (_name, resolved_effect) = &effects.disintegrate_effects[*idx];
-                         let effect = &resolved_effect.effect;
-                         // progress is already checked to be in range
+                            // Green Channel Update
+                            self.paints.g_paint.set_alpha_f(final_opacity);
+                            apply_paint_blur(
+                                &mut self.paints.g_paint,
+                                &mut self.paints.current_g_blur,
+                                final_transform.blur,
+                                &self.paints.cached_blur_filter,
+                            );
 
-                         // [Bolt Optimization] Finish hashing using pre-calculated prefix (Zero Alloc)
-                         let key = fast_hash_finish(*base_prefix, glyph.char_index);
+                            // Blue Channel Update
+                            self.paints.b_paint.set_alpha_f(final_opacity);
+                            apply_paint_blur(
+                                &mut self.paints.b_paint,
+                                &mut self.paints.current_b_blur,
+                                final_transform.blur,
+                                &self.paints.cached_blur_filter,
+                            );
 
-                         // We need to capture the glyph as an image for the emitter
-                         // Create small surface
-                         // Bounds might be slightly larger due to stroke/shadow, but let's stick to path bounds for particles
-                         let capture_w = w.ceil() as i32 + 20; // Padding
-                         let capture_h = h.ceil() as i32 + 20;
-                         if capture_w <= 0 || capture_h <= 0 { continue; }
-                         
-                         // Create offscreen surface for disintegration effect.
-                         // Optimization: Skip surface creation if emitter already exists.
-                         if self.particle_system.has_emitter(key) {
-                              continue;
-                         }
+                            // [Bolt Optimization] Use translate instead of save/restore for channels
 
-                         if let Some(mut surface) = surfaces::raster_n32_premul((capture_w, capture_h)) {
-                             let c = surface.canvas();
-                             // Center the path in the capture
-                             let _tx = (capture_w as f32 / 2.0) - cx;
-                             let _ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
-                             // path bounds .top might be negative.
-                             // bounds.y is usually negative (ascender).
-                             // If bounds y is -50, height 70.
-                             // We want to translate such that top-left of bounds is at (0,0)?
-                             // Or center.
-                             
-                             let bounds_left = bounds.left;
-                             let bounds_top = bounds.top;
-                             
-                             c.translate((-bounds_left + 10.0, -bounds_top + 10.0));
-                             
-                             // Draw path filled white
-                             let mut cap_paint = Paint::default();
-                             cap_paint.set_color(Color::WHITE);
-                             cap_paint.set_anti_alias(true);
-                             c.draw_path(path, &cap_paint);
-                             
-                             let image = surface.image_snapshot();
+                            // Red
+                            self.canvas.translate((-offset, -offset));
+                            self.canvas.draw_path(path, &self.paints.r_paint);
+                            self.canvas.translate((offset, offset));
 
-                             // Calculate screen bounds for the emitter
-                             let bounds_rect = CharBounds {
-                                 x: draw_x + final_transform.x + bounds_left - 10.0, // Adjust back
-                                 y: draw_y + final_transform.y + bounds_top - 10.0,
-                                 width: capture_w as f32 * final_transform.scale,
-                                 height: capture_h as f32 * final_transform.scale,
-                             };
+                            // Green
+                            self.canvas.translate((offset, -offset));
+                            self.canvas.draw_path(path, &self.paints.g_paint);
+                            self.canvas.translate((-offset, offset));
 
-                             let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+                            // Blue
+                            self.canvas.translate((offset, offset));
+                            self.canvas.draw_path(path, &self.paints.b_paint);
+                            self.canvas.translate((-offset, -offset));
+                        } else {
+                            // Normal Draw
+                            self.canvas.draw_path(path, &self.paints.main_paint);
+                        }
+                    }
 
-                             self.particle_system.ensure_disintegration_emitter(
-                                 key,
-                                 &image,
-                                 bounds_rect,
-                                 seed,
-                                 effect.particle_config.clone()
-                             );
-                         }
-                     }
-                     
-                     // --- PARTICLE SPAWNING ---
-                     // Process standard particle effects
-                     // [Bolt Optimization] Iterate active effects only
-                     for (idx, progress, base_prefix) in &scratch.active_particle_indices {
-                         let (_name, resolved_effect) = &effects.particle_effects[*idx];
-                         let effect = &resolved_effect.effect;
-                         let progress = *progress; // Copy f64
+                    if is_simple_transform {
+                        self.canvas.translate((-tx, -ty));
+                    } else {
+                        self.canvas.restore(); // Restore transform for next glyph/effects
+                    }
 
-                         // [Bolt Optimization] Finish hashing using pre-calculated prefix (Zero Alloc)
-                         let key = fast_hash_finish(*base_prefix, glyph.char_index);
+                    // --- DISINTEGRATION EFFECT ---
+                    // [Bolt Optimization] Iterate active effects only
+                    for (idx, _progress, base_prefix) in &scratch.active_disintegrate_indices {
+                        let (_name, resolved_effect) = &effects.disintegrate_effects[*idx];
+                        let effect = &resolved_effect.effect;
+                        // progress is already checked to be in range
 
-                         let bounds_rect = CharBounds {
-                             x: draw_x + final_transform.x + bounds.left,
-                             y: draw_y + final_transform.y + bounds.top,
-                             width: w * final_transform.scale,
-                             height: h * final_transform.scale,
-                         };
+                        // [Bolt Optimization] Finish hashing using pre-calculated prefix (Zero Alloc)
+                        let key = fast_hash_finish(*base_prefix, glyph.char_index);
 
-                         // [Bolt Optimization] Update existing emitter (Single Lookup)
-                         // We set context progress just in case overrides need it
-                         fast_ctx.set_progress(progress);
+                        // We need to capture the glyph as an image for the emitter
+                        // Create small surface
+                        // Bounds might be slightly larger due to stroke/shadow, but let's stick to path bounds for particles
+                        let capture_w = w.ceil() as i32 + 20; // Padding
+                        let capture_h = h.ceil() as i32 + 20;
+                        if capture_w <= 0 || capture_h <= 0 {
+                            continue;
+                        }
 
-                         if self.particle_system.update_existing_emitter(
-                             key,
-                             bounds_rect.clone(),
-                             effect.particle_config.as_ref(),
-                             effect.particle_override.as_ref(),
-                             Some(&resolved_effect.compiled_expressions),
-                             &fast_ctx
-                         ) {
-                             continue;
-                         }
+                        // Create offscreen surface for disintegration effect.
+                        // Optimization: Skip surface creation if emitter already exists.
+                        if self.particle_system.has_emitter(key) {
+                            continue;
+                        }
 
-                         // New Emitter Path (Allocation Path)
-                         let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
-                         
-                         // Clone config and apply overrides
-                         let mut p_config = effect.particle_config.clone();
-                         if let (Some(config), Some(overrides)) = (&mut p_config, &effect.particle_override) {
-                             // Reuse context
-                             fast_ctx.set_progress(progress);
+                        if let Some(mut surface) =
+                            surfaces::raster_n32_premul((capture_w, capture_h))
+                        {
+                            let c = surface.canvas();
+                            // Center the path in the capture
+                            let _tx = (capture_w as f32 / 2.0) - cx;
+                            let _ty = (capture_h as f32 / 2.0) - cy; // - bounds.top?
+                                                                     // path bounds .top might be negative.
+                                                                     // bounds.y is usually negative (ascender).
+                                                                     // If bounds y is -50, height 70.
+                                                                     // We want to translate such that top-left of bounds is at (0,0)?
+                                                                     // Or center.
 
-                             // [Bolt Optimization] Use pre-compiled expressions
-                             crate::particle::config::apply_particle_overrides(
-                                 config,
-                                 overrides,
-                                 Some(&resolved_effect.compiled_expressions),
-                                 &fast_ctx
-                             );
-                         }
+                            let bounds_left = bounds.left;
+                            let bounds_top = bounds.top;
 
-                         self.particle_system.ensure_emitter(
-                             key, 
-                             effect.preset.clone(), 
-                             p_config, 
-                             bounds_rect, 
-                             seed
-                         );
-                     }
-                 }
-             }
+                            c.translate((-bounds_left + 10.0, -bounds_top + 10.0));
+
+                            // Draw path filled white
+                            let mut cap_paint = Paint::default();
+                            cap_paint.set_color(Color::WHITE);
+                            cap_paint.set_anti_alias(true);
+                            c.draw_path(path, &cap_paint);
+
+                            let image = surface.image_snapshot();
+
+                            // Calculate screen bounds for the emitter
+                            let bounds_rect = CharBounds {
+                                x: draw_x + final_transform.x + bounds_left - 10.0, // Adjust back
+                                y: draw_y + final_transform.y + bounds_top - 10.0,
+                                width: capture_w as f32 * final_transform.scale,
+                                height: capture_h as f32 * final_transform.scale,
+                            };
+
+                            let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+
+                            self.particle_system.ensure_disintegration_emitter(
+                                key,
+                                &image,
+                                bounds_rect,
+                                seed,
+                                effect.particle_config.clone(),
+                            );
+                        }
+                    }
+
+                    // --- PARTICLE SPAWNING ---
+                    // Process standard particle effects
+                    // [Bolt Optimization] Iterate active effects only
+                    for (idx, progress, base_prefix) in &scratch.active_particle_indices {
+                        let (_name, resolved_effect) = &effects.particle_effects[*idx];
+                        let effect = &resolved_effect.effect;
+                        let progress = *progress; // Copy f64
+
+                        // [Bolt Optimization] Finish hashing using pre-calculated prefix (Zero Alloc)
+                        let key = fast_hash_finish(*base_prefix, glyph.char_index);
+
+                        let bounds_rect = CharBounds {
+                            x: draw_x + final_transform.x + bounds.left,
+                            y: draw_y + final_transform.y + bounds.top,
+                            width: w * final_transform.scale,
+                            height: h * final_transform.scale,
+                        };
+
+                        // [Bolt Optimization] Update existing emitter (Single Lookup)
+                        // We set context progress just in case overrides need it
+                        fast_ctx.set_progress(progress);
+
+                        if self.particle_system.update_existing_emitter(
+                            key,
+                            bounds_rect.clone(),
+                            effect.particle_config.as_ref(),
+                            effect.particle_override.as_ref(),
+                            Some(&resolved_effect.compiled_expressions),
+                            &fast_ctx,
+                        ) {
+                            continue;
+                        }
+
+                        // New Emitter Path (Allocation Path)
+                        let seed = (line_idx * 1000 + glyph.char_index * 100) as u64;
+
+                        // Clone config and apply overrides
+                        let mut p_config = effect.particle_config.clone();
+                        if let (Some(config), Some(overrides)) =
+                            (&mut p_config, &effect.particle_override)
+                        {
+                            // Reuse context
+                            fast_ctx.set_progress(progress);
+
+                            // [Bolt Optimization] Use pre-compiled expressions
+                            crate::particle::config::apply_particle_overrides(
+                                config,
+                                overrides,
+                                Some(&resolved_effect.compiled_expressions),
+                                &fast_ctx,
+                            );
+                        }
+
+                        self.particle_system.ensure_emitter(
+                            key,
+                            effect.preset.clone(),
+                            p_config,
+                            bounds_rect,
+                            seed,
+                        );
+                    }
+                }
+            }
         }
-        
+
         Ok(())
     }
-    
+
     fn compute_line_position(&self, line: &Line) -> (f32, f32) {
         let mut x = self.width as f32 / 2.0;
         let mut y = self.height as f32 / 2.0;
-        
+
         if let Some(pos) = &line.position {
             if let Some(px) = &pos.x {
                 x = match px {
@@ -762,14 +855,14 @@ impl<'a> LineRenderer<'a> {
                     PositionValue::Percentage(p) => p * self.width as f32,
                 };
             }
-             if let Some(py) = &pos.y {
+            if let Some(py) = &pos.y {
                 y = match py {
                     PositionValue::Pixels(v) => *v,
                     PositionValue::Percentage(p) => p * self.height as f32,
                 };
             }
         }
-        
+
         (x, y)
     }
 }
@@ -780,7 +873,7 @@ fn apply_paint_blur(
     paint: &mut Paint,
     current_blur: &mut f32,
     target_blur: f32,
-    cached_filter: &Option<(f32, MaskFilter)>
+    cached_filter: &Option<(f32, MaskFilter)>,
 ) {
     if (target_blur - *current_blur).abs() > 0.001 {
         if target_blur > 0.0 {

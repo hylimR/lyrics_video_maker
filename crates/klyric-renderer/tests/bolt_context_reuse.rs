@@ -1,4 +1,4 @@
-use klyric_renderer::expressions::{EvaluationContext, FastEvaluationContext, ExpressionEvaluator};
+use klyric_renderer::expressions::{EvaluationContext, ExpressionEvaluator, FastEvaluationContext};
 
 #[test]
 fn test_fast_context_reuse() {
@@ -22,22 +22,37 @@ fn test_fast_context_reuse() {
     let derived_expr = ExpressionEvaluator::compile("progress * 10 + index").unwrap();
 
     // 4. Initial Check
-    assert_eq!(ExpressionEvaluator::evaluate_node_fast(&progress_expr, &fast_ctx).unwrap(), 0.0);
-    assert_eq!(ExpressionEvaluator::evaluate_node_fast(&index_expr, &fast_ctx).unwrap(), 0.0);
+    assert_eq!(
+        ExpressionEvaluator::evaluate_node_fast(&progress_expr, &fast_ctx).unwrap(),
+        0.0
+    );
+    assert_eq!(
+        ExpressionEvaluator::evaluate_node_fast(&index_expr, &fast_ctx).unwrap(),
+        0.0
+    );
 
     // 5. Mutate Progress (Reusing context)
     fast_ctx.set_progress(0.5);
 
     // 6. Check update
-    assert_eq!(ExpressionEvaluator::evaluate_node_fast(&progress_expr, &fast_ctx).unwrap(), 0.5);
+    assert_eq!(
+        ExpressionEvaluator::evaluate_node_fast(&progress_expr, &fast_ctx).unwrap(),
+        0.5
+    );
 
     // 7. Mutate Index (Reusing context)
     fast_ctx.set_index(5);
 
     // 8. Check update
-    assert_eq!(ExpressionEvaluator::evaluate_node_fast(&index_expr, &fast_ctx).unwrap(), 5.0);
+    assert_eq!(
+        ExpressionEvaluator::evaluate_node_fast(&index_expr, &fast_ctx).unwrap(),
+        5.0
+    );
 
     // 9. Check complex derived
     // 0.5 * 10 + 5 = 10.0
-    assert_eq!(ExpressionEvaluator::evaluate_node_fast(&derived_expr, &fast_ctx).unwrap(), 10.0);
+    assert_eq!(
+        ExpressionEvaluator::evaluate_node_fast(&derived_expr, &fast_ctx).unwrap(),
+        10.0
+    );
 }

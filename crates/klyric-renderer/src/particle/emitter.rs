@@ -137,7 +137,12 @@ impl ParticleEmitter {
                 *px = x + w / 2.0;
                 *py = y + h / 2.0;
             }
-            SpawnPattern::Rect { x: rx, y: ry, w: rw, h: rh } => {
+            SpawnPattern::Rect {
+                x: rx,
+                y: ry,
+                w: rw,
+                h: rh,
+            } => {
                 *rx = x;
                 *ry = y;
                 *rw = w;

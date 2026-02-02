@@ -1,4 +1,4 @@
-use klyric_renderer::{Renderer, KLyricDocumentV2, model::*};
+use klyric_renderer::{model::*, KLyricDocumentV2, Renderer};
 use std::collections::HashMap;
 
 #[test]
@@ -40,17 +40,21 @@ fn test_stroke_reveal_with_repetitive_text() {
 
     // Manually populate chars to ensure they are processed
     // (In real app, Importer does this)
-    line.chars = text.chars().enumerate().map(|(i, c)| Char {
-        char: c.to_string(),
-        start: 0.0,
-        end: 2.0,
-        style: None,
-        font: None,
-        stroke: None,
-        shadow: None,
-        effects: Vec::new(),
-        transform: None,
-    }).collect();
+    line.chars = text
+        .chars()
+        .enumerate()
+        .map(|(i, c)| Char {
+            char: c.to_string(),
+            start: 0.0,
+            end: 2.0,
+            style: None,
+            font: None,
+            stroke: None,
+            shadow: None,
+            effects: Vec::new(),
+            transform: None,
+        })
+        .collect();
 
     doc.lines.push(line);
 

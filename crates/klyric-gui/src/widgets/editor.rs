@@ -1,13 +1,13 @@
 //! Editor Panel - Line list, character list, and property editors
 //! Redesigned with custom dark theme styling
 
+use crate::message::Message;
+use crate::state::AppState;
+use crate::theme;
 use iced::{
     widget::{button, column, container, row, scrollable, text, Space},
     Alignment, Element, Length,
 };
-use crate::message::Message;
-use crate::state::AppState;
-use crate::theme;
 
 /// View for the editor panel
 /// View for the editor panel (now just Line Selector)
@@ -37,9 +37,7 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                                 .width(Length::Fixed(24.0)),
                             column![
                                 text(label_owned).size(13),
-                                text(timing)
-                                    .size(10)
-                                    .color(theme::colors::TEXT_SECONDARY),
+                                text(timing).size(10).color(theme::colors::TEXT_SECONDARY),
                             ]
                             .spacing(2),
                         ]
@@ -50,9 +48,8 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
                             .style(if is_selected {
                                 |t: &iced::Theme, status| {
                                     let mut style = theme::list_item_style(t, status);
-                                    style.background = Some(iced::Background::Color(
-                                        theme::colors::SELECTED,
-                                    ));
+                                    style.background =
+                                        Some(iced::Background::Color(theme::colors::SELECTED));
                                     style.border.color = theme::colors::ACCENT;
                                     style.border.width = 1.0;
                                     style

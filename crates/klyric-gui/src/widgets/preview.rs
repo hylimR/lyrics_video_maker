@@ -97,7 +97,3 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
 }
 
 use iced::widget::row;
-
-
-
-

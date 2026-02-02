@@ -42,17 +42,16 @@
 //! └─────────────────┘
 //! ```
 
-
+pub mod effects;
+pub mod importer;
+pub mod layout;
 pub mod model;
 pub mod parser;
-pub mod importer;
-pub mod style;
-pub mod effects;
-pub mod layout;
-pub mod renderer;
-pub mod text;
 pub mod particle;
 pub mod presets;
+pub mod renderer;
+pub mod style;
+pub mod text;
 pub mod utils;
 
 pub mod expressions;
@@ -63,6 +62,5 @@ pub use parser::parse_document;
 pub use renderer::Renderer;
 pub use text::TextRenderer;
 
-pub use particle::{Particle, ParticleEmitter, ParticleConfig};
+pub use particle::{Particle, ParticleConfig, ParticleEmitter};
 pub use presets::{EffectPreset, PresetFactory};
-

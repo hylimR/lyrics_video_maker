@@ -25,3 +25,7 @@ Action: Consolidated these operations into a single `update_existing_emitter` me
 ## 2024-05-30 - [Performance] Canvas Save/Restore Overhead for Simple Translations
 Learning: `skia_safe::Canvas::save()` and `restore()` involve stack allocation and clip state management. For simple translations (like shadows and glitch offsets) that don't involve rotation, scale, or clipping, using paired `translate()` calls (translate forward, draw, translate back) is significantly cheaper and avoids the stack overhead.
 Action: Replaced `save/restore` blocks with `translate/translate(-)` pairs in the Shadow and Glitch rendering paths in `LineRenderer::render_line`. This is safe because these blocks only perform translation and do not modify other canvas states.
+
+## 2026-02-02 - [Performance] Redundant Shadow/Stroke Parsing in Layout
+Learning: `LayoutEngine::layout_line` re-parsed hex color strings for every character in a line, even if they shared the same override values (e.g. strict importers or bulk edits). While less critical than render loops, this added O(N) string parsing overhead to layout updates.
+Action: Implemented a local cache (`cached_shadow_hex`, `cached_stroke_hex`) inside the layout loop to reuse parsed `skia_safe::Color` values for consecutive characters with identical hex strings.

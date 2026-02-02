@@ -8,8 +8,7 @@ use crate::theme;
 use crate::utils::font_loader::FontInfo;
 use iced::{
     widget::{
-        button, column, container, pick_list, row, scrollable, slider, text, text_input,
-        Space,
+        button, column, container, pick_list, row, scrollable, slider, text, text_input, Space,
     },
     Alignment, Element, Length,
 };
@@ -289,7 +288,12 @@ pub fn view(state: &AppState) -> Element<'_, Message> {
         container(column![
             header(doc, state.selected_line, state.selected_char),
             Space::new().height(10),
-            scrollable(content(doc, state.selected_line, state.selected_char, &state.available_fonts))
+            scrollable(content(
+                doc,
+                state.selected_line,
+                state.selected_char,
+                &state.available_fonts
+            ))
         ])
         .width(Length::Fill)
         .height(Length::Fill)

@@ -1,7 +1,8 @@
-
 mod helpers;
 
-use klyric_renderer::{Renderer, KLyricDocumentV2, model::Effect, model::EffectType, model::Easing};
+use klyric_renderer::{
+    model::Easing, model::Effect, model::EffectType, KLyricDocumentV2, Renderer,
+};
 
 // Helper to create a doc with StrokeReveal
 fn create_stroke_doc() -> KLyricDocumentV2 {
@@ -33,7 +34,9 @@ fn test_stroke_reveal_optimization_start() {
 
     // T=0.0 (Progress 0.0)
     // With optimization, this returns empty path and draws nothing.
-    let pixels = renderer.render_frame(&doc, 0.0).expect("Render failed at 0.0");
+    let pixels = renderer
+        .render_frame(&doc, 0.0)
+        .expect("Render failed at 0.0");
 
     // Should be black (empty path drawn)
     let count = helpers::count_non_black_pixels(&pixels, 10);
@@ -48,7 +51,9 @@ fn test_stroke_reveal_mid_progress() {
 
     // T=0.5 (Progress 0.5)
     // Should behave normally (PathMeasure used)
-    let _pixels = renderer.render_frame(&doc, 0.5).expect("Render failed at 0.5");
+    let _pixels = renderer
+        .render_frame(&doc, 0.5)
+        .expect("Render failed at 0.5");
 
     // We don't assert pixels because font loading might fail in CI/test env without system fonts
 }

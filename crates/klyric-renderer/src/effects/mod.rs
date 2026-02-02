@@ -66,8 +66,8 @@ pub struct CompiledRenderOp {
     pub value: RenderValueOp,
 }
 
-use crate::model::modifiers::{Modifier, EffectLayer, Selector, ScopeType, AppearMode};
 use crate::effects::drivers::DriverManager;
+use crate::model::modifiers::{AppearMode, EffectLayer, Modifier, ScopeType, Selector};
 
 pub mod drivers; // Added drivers module
 
@@ -172,7 +172,7 @@ impl EffectEngine {
         effects_source: &[ResolvedEffect],
         active_indices: &[(usize, f64)],
         ctx: &TriggerContext,
-        ops: &mut Vec<CompiledRenderOp>
+        ops: &mut Vec<CompiledRenderOp>,
     ) {
         ops.clear();
         ops.reserve(active_indices.len() * 2);
@@ -200,7 +200,10 @@ impl EffectEngine {
                                     {
                                         ops.push(CompiledRenderOp {
                                             prop,
-                                            value: RenderValueOp::Expression(node.clone(), *eased_progress),
+                                            value: RenderValueOp::Expression(
+                                                node.clone(),
+                                                *eased_progress,
+                                            ),
                                         });
                                     } else {
                                         // Fallback if not compiled? Should ideally not happen if setup correctly.
@@ -770,7 +773,7 @@ impl EffectEngine {
                 }
             }
         }
-        
+
         final_transform
     }
 
@@ -786,7 +789,12 @@ impl EffectEngine {
         for layer in layers {
             if Self::matches_selector(&layer.selector, ctx) {
                 for modifier in &layer.modifiers {
-                    Self::apply_modifier_to_render(&mut final_transform, modifier, current_time, ctx);
+                    Self::apply_modifier_to_render(
+                        &mut final_transform,
+                        modifier,
+                        current_time,
+                        ctx,
+                    );
                 }
             }
         }
@@ -868,12 +876,7 @@ impl EffectEngine {
             let layer = &layers[idx];
             if Self::matches_selector(&layer.selector, ctx) {
                 for modifier in &layer.modifiers {
-                    Self::apply_modifier_to_render(
-                        &mut transform,
-                        modifier,
-                        current_time,
-                        ctx,
-                    );
+                    Self::apply_modifier_to_render(&mut transform, modifier, current_time, ctx);
                 }
             }
         }
@@ -886,153 +889,163 @@ impl EffectEngine {
             Selector::Scope(scope) => {
                 match scope {
                     ScopeType::Document => true, // Usually always true if reached here
-                    ScopeType::Line => true, // Context is usually within a line
+                    ScopeType::Line => true,     // Context is usually within a line
                     ScopeType::Word => true, // Need word index in context? For now assume per-char acts as word if grouped
                     ScopeType::Char => ctx.char_index.is_some(),
                     ScopeType::Syllable => true, // Similar to word/char
                 }
-            },
+            }
             Selector::Pattern { n, offset } => {
                 if let Some(idx) = ctx.char_index {
                     (idx % n) == *offset
                 } else {
                     false
                 }
-            },
+            }
             Selector::TimeRange { start, end } => {
                 let _t = ctx.current_time; // This might need to be absolute or relative
-                // Spec says TimeRange. Let's assume relative to line?
-                // Or maybe drivers handle time. Selector might toggle.
-                // Let's assume local time relative to context start
-                 let local_t = ctx.current_time - ctx.start_time;
-                 local_t >= *start as f64 && local_t <= *end as f64
-            },
+                                           // Spec says TimeRange. Let's assume relative to line?
+                                           // Or maybe drivers handle time. Selector might toggle.
+                                           // Let's assume local time relative to context start
+                let local_t = ctx.current_time - ctx.start_time;
+                local_t >= *start as f64 && local_t <= *end as f64
+            }
             Selector::Text { .. } => true, // Not implemented fully without text access
-            Selector::Tag(_) => true, // Tagging system not passed in context
+            Selector::Tag(_) => true,      // Tagging system not passed in context
         }
     }
 
-    fn apply_modifier(transform: &mut Transform, modifier: &Modifier, time: f64, _ctx: &TriggerContext) {
+    fn apply_modifier(
+        transform: &mut Transform,
+        modifier: &Modifier,
+        time: f64,
+        _ctx: &TriggerContext,
+    ) {
         // Time usage: ValueDrivers usually take absolute time or relative?
         // Let's use `time` (which is usually `current_time` from render loop).
-        // If ValueDrivers need normalized 0-1, we might need context. 
+        // If ValueDrivers need normalized 0-1, we might need context.
         // But `ValueDriver::Sine` needs continuous time.
-        
+
         match modifier {
             Modifier::Move(p) => {
                 let x = DriverManager::evaluate(&p.x, time);
                 let y = DriverManager::evaluate(&p.y, time);
                 transform.x = Some(transform.x.unwrap_or(0.0) + x);
                 transform.y = Some(transform.y.unwrap_or(0.0) + y);
-            },
+            }
             Modifier::Scale(p) => {
                 let sx = DriverManager::evaluate(&p.x, time);
                 let sy = DriverManager::evaluate(&p.y, time);
                 // Multiplicative or additive? Usually multiplicative for scale.
-                // But Driver returns a value. 
+                // But Driver returns a value.
                 // E.g. Sine(1.0, 0.1) -> varies 0.9 to 1.1.
                 // So we multiply.
                 transform.scale_x = Some(transform.scale_x.unwrap_or(1.0) * sx);
                 transform.scale_y = Some(transform.scale_y.unwrap_or(1.0) * sy);
-            },
+            }
             Modifier::Rotate(p) => {
                 let angle = DriverManager::evaluate(&p.angle, time);
                 transform.rotation = Some(transform.rotation.unwrap_or(0.0) + angle);
                 // pivot not handled in Transform struct yet
-            },
+            }
             Modifier::Color(p) => {
                 if let Some(_c) = &p.fill {
                     // For now, override fill using simple string
                     // ValueDriver not used for string yet
                     // But maybe we want color blending?
-                    // Spec says `fill: Option<String>`. 
+                    // Spec says `fill: Option<String>`.
                     // This creates a fixed color override for now.
                     // Future: ValueDriver for Color components?
                 }
-            },
+            }
             Modifier::Fade(p) => {
                 let alpha = DriverManager::evaluate(&p.value, time);
                 transform.opacity = Some(transform.opacity.unwrap_or(1.0) * alpha);
-            },
+            }
             Modifier::Blur(sigma) => {
                 transform.blur = Some(*sigma);
-            },
+            }
             Modifier::Jitter(p) => {
                 let amt = DriverManager::evaluate(&p.amount, time);
                 let speed = DriverManager::evaluate(&p.speed, time);
                 // Pseudo random based on time * speed
                 let off_x = (time as f32 * speed).sin() * amt;
                 let off_y = (time as f32 * speed * 1.5).cos() * amt;
-                
+
                 transform.x = Some(transform.x.unwrap_or(0.0) + off_x);
                 transform.y = Some(transform.y.unwrap_or(0.0) + off_y);
-            },
+            }
             Modifier::Wave(p) => {
                 let freq = DriverManager::evaluate(&p.freq, time);
                 let amp = DriverManager::evaluate(&p.amp, time);
-                 // Wave usually needs position index (spatial).
-                 // But Modifier receives Context?
-                 // Wait, Modifier applies to Transform. Transform is for a single char?
-                 // If so, `time` + `char_index` * offset?
-                 // But `process_layers` iterates CHARS.
-                 // We need to bake `char_index` into the evaluation if "Wave" means "Standard Text Wave".
-                 // BUT `ValueDriver` takes `time`.
-                 // If the Agent defines `y: Sine`, it moves the whole object up/down.
-                 // To achieve "Wave", the Agent must use a Selector or the Modifier must be "Spatial".
-                 // `Modifier::Wave` is explicitly explicit for this.
-                 
-                 // If `ctx` has index, we use it.
-                 let idx = _ctx.char_index.unwrap_or(0) as f32;
-                 // speed?
-                 let speed = DriverManager::evaluate(&p.speed, time);
-                 
-                 let phase = idx * 0.5; // arbitary spatial freq
-                 let y = (time as f32 * speed + phase * freq).sin() * amp;
-                 
-                 transform.y = Some(transform.y.unwrap_or(0.0) + y);
-            },
+                // Wave usually needs position index (spatial).
+                // But Modifier receives Context?
+                // Wait, Modifier applies to Transform. Transform is for a single char?
+                // If so, `time` + `char_index` * offset?
+                // But `process_layers` iterates CHARS.
+                // We need to bake `char_index` into the evaluation if "Wave" means "Standard Text Wave".
+                // BUT `ValueDriver` takes `time`.
+                // If the Agent defines `y: Sine`, it moves the whole object up/down.
+                // To achieve "Wave", the Agent must use a Selector or the Modifier must be "Spatial".
+                // `Modifier::Wave` is explicitly explicit for this.
+
+                // If `ctx` has index, we use it.
+                let idx = _ctx.char_index.unwrap_or(0) as f32;
+                // speed?
+                let speed = DriverManager::evaluate(&p.speed, time);
+
+                let phase = idx * 0.5; // arbitary spatial freq
+                let y = (time as f32 * speed + phase * freq).sin() * amp;
+
+                transform.y = Some(transform.y.unwrap_or(0.0) + y);
+            }
             Modifier::Appear(p) => {
-                 // Logic likely similar to Typewriter but driven by `progress`.
-                 let progress = DriverManager::evaluate(&p.progress, time);
-                 match p.mode {
-                     AppearMode::Fade => {
-                         transform.opacity = Some(progress.clamp(0.0, 1.0));
-                     },
-                     _ => {}
-                 }
-            },
+                // Logic likely similar to Typewriter but driven by `progress`.
+                let progress = DriverManager::evaluate(&p.progress, time);
+                match p.mode {
+                    AppearMode::Fade => {
+                        transform.opacity = Some(progress.clamp(0.0, 1.0));
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
 
-    fn apply_modifier_to_render(transform: &mut RenderTransform, modifier: &Modifier, time: f64, _ctx: &TriggerContext) {
+    fn apply_modifier_to_render(
+        transform: &mut RenderTransform,
+        modifier: &Modifier,
+        time: f64,
+        _ctx: &TriggerContext,
+    ) {
         match modifier {
             Modifier::Move(p) => {
                 let x = DriverManager::evaluate(&p.x, time);
                 let y = DriverManager::evaluate(&p.y, time);
                 transform.x += x;
                 transform.y += y;
-            },
+            }
             Modifier::Scale(p) => {
                 let sx = DriverManager::evaluate(&p.x, time);
                 let sy = DriverManager::evaluate(&p.y, time);
                 transform.scale_x *= sx;
                 transform.scale_y *= sy;
-            },
+            }
             Modifier::Rotate(p) => {
                 let angle = DriverManager::evaluate(&p.angle, time);
                 transform.rotation += angle;
-            },
+            }
             Modifier::Color(_p) => {
                 // Not supported in Transform/RenderTransform for now
-            },
+            }
             Modifier::Fade(p) => {
                 let alpha = DriverManager::evaluate(&p.value, time);
                 transform.opacity *= alpha;
-            },
+            }
             Modifier::Blur(sigma) => {
                 transform.blur = *sigma;
-            },
+            }
             Modifier::Jitter(p) => {
                 let amt = DriverManager::evaluate(&p.amount, time);
                 let speed = DriverManager::evaluate(&p.speed, time);
@@ -1040,25 +1053,25 @@ impl EffectEngine {
                 let off_y = (time as f32 * speed * 1.5).cos() * amt;
                 transform.x += off_x;
                 transform.y += off_y;
-            },
+            }
             Modifier::Wave(p) => {
                 let freq = DriverManager::evaluate(&p.freq, time);
                 let amp = DriverManager::evaluate(&p.amp, time);
-                 let idx = _ctx.char_index.unwrap_or(0) as f32;
-                 let speed = DriverManager::evaluate(&p.speed, time);
-                 let phase = idx * 0.5;
-                 let y = (time as f32 * speed + phase * freq).sin() * amp;
-                 transform.y += y;
-            },
+                let idx = _ctx.char_index.unwrap_or(0) as f32;
+                let speed = DriverManager::evaluate(&p.speed, time);
+                let phase = idx * 0.5;
+                let y = (time as f32 * speed + phase * freq).sin() * amp;
+                transform.y += y;
+            }
             Modifier::Appear(p) => {
-                 let progress = DriverManager::evaluate(&p.progress, time);
-                 match p.mode {
-                     AppearMode::Fade => {
-                         transform.opacity = progress.clamp(0.0, 1.0);
-                     },
-                     _ => {}
-                 }
-            },
+                let progress = DriverManager::evaluate(&p.progress, time);
+                match p.mode {
+                    AppearMode::Fade => {
+                        transform.opacity = progress.clamp(0.0, 1.0);
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
     }
@@ -1900,11 +1913,29 @@ mod tests_global_detection {
     fn test_global_allowlist_selectors() {
         let safe_mods = vec![make_move()];
 
-        assert!(EffectEngine::is_layer_global(&make_layer(Selector::All, safe_mods.clone())));
-        assert!(EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Document), safe_mods.clone())));
-        assert!(EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Line), safe_mods.clone())));
-        assert!(EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Char), safe_mods.clone())));
-        assert!(EffectEngine::is_layer_global(&make_layer(Selector::TimeRange { start: 0.0, end: 1.0 }, safe_mods.clone())));
+        assert!(EffectEngine::is_layer_global(&make_layer(
+            Selector::All,
+            safe_mods.clone()
+        )));
+        assert!(EffectEngine::is_layer_global(&make_layer(
+            Selector::Scope(ScopeType::Document),
+            safe_mods.clone()
+        )));
+        assert!(EffectEngine::is_layer_global(&make_layer(
+            Selector::Scope(ScopeType::Line),
+            safe_mods.clone()
+        )));
+        assert!(EffectEngine::is_layer_global(&make_layer(
+            Selector::Scope(ScopeType::Char),
+            safe_mods.clone()
+        )));
+        assert!(EffectEngine::is_layer_global(&make_layer(
+            Selector::TimeRange {
+                start: 0.0,
+                end: 1.0
+            },
+            safe_mods.clone()
+        )));
     }
 
     #[test]
@@ -1912,17 +1943,34 @@ mod tests_global_detection {
         let safe_mods = vec![make_move()];
 
         // Pattern depends on index
-        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Pattern { n: 2, offset: 0 }, safe_mods.clone())));
+        assert!(!EffectEngine::is_layer_global(&make_layer(
+            Selector::Pattern { n: 2, offset: 0 },
+            safe_mods.clone()
+        )));
 
         // Word/Syllable excluded for safety
-        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Word), safe_mods.clone())));
-        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Syllable), safe_mods.clone())));
+        assert!(!EffectEngine::is_layer_global(&make_layer(
+            Selector::Scope(ScopeType::Word),
+            safe_mods.clone()
+        )));
+        assert!(!EffectEngine::is_layer_global(&make_layer(
+            Selector::Scope(ScopeType::Syllable),
+            safe_mods.clone()
+        )));
 
         // Text content
-        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Text { contains: "A".into() }, safe_mods.clone())));
+        assert!(!EffectEngine::is_layer_global(&make_layer(
+            Selector::Text {
+                contains: "A".into()
+            },
+            safe_mods.clone()
+        )));
 
         // Tag
-        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Tag("tag".into()), safe_mods.clone())));
+        assert!(!EffectEngine::is_layer_global(&make_layer(
+            Selector::Tag("tag".into()),
+            safe_mods.clone()
+        )));
     }
 
     #[test]
@@ -1930,11 +1978,20 @@ mod tests_global_detection {
         // Safe selector
         let sel = Selector::All;
 
-        assert!(EffectEngine::is_layer_global(&make_layer(sel.clone(), vec![make_move()])));
+        assert!(EffectEngine::is_layer_global(&make_layer(
+            sel.clone(),
+            vec![make_move()]
+        )));
         // Wave is unsafe
-        assert!(!EffectEngine::is_layer_global(&make_layer(sel.clone(), vec![make_wave()])));
+        assert!(!EffectEngine::is_layer_global(&make_layer(
+            sel.clone(),
+            vec![make_wave()]
+        )));
 
         // Mixed
-        assert!(!EffectEngine::is_layer_global(&make_layer(sel.clone(), vec![make_move(), make_wave()])));
+        assert!(!EffectEngine::is_layer_global(&make_layer(
+            sel.clone(),
+            vec![make_move(), make_wave()]
+        )));
     }
 }

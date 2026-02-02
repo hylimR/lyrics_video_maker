@@ -39,7 +39,7 @@ pub fn scan_system_fonts() -> Vec<FontInfo> {
         dirs.push(PathBuf::from("/System/Library/Fonts"));
         dirs.push(PathBuf::from("/Library/Fonts"));
         if let Ok(home) = std::env::var("HOME") {
-             dirs.push(PathBuf::from(home).join("Library/Fonts"));
+            dirs.push(PathBuf::from(home).join("Library/Fonts"));
         }
     }
 
@@ -135,7 +135,3 @@ pub fn scan_system_fonts() -> Vec<FontInfo> {
 
     fonts
 }
-
-
-
-

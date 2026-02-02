@@ -1,4 +1,4 @@
-use klyric_renderer::{Renderer, KLyricDocumentV2, model::*};
+use klyric_renderer::{model::*, KLyricDocumentV2, Renderer};
 
 #[test]
 fn test_render_buffer_integrity() {
@@ -40,7 +40,7 @@ fn test_render_buffer_integrity() {
 
         // Strict check for Red
         if r < 250 || g > 5 || b > 5 || a < 250 {
-             panic!("Pixel {} mismatch: expected red, got {:?}", i, chunk);
+            panic!("Pixel {} mismatch: expected red, got {:?}", i, chunk);
         }
     }
 }
