@@ -33,3 +33,7 @@ Action: Implemented a local cache (`cached_shadow_hex`, `cached_stroke_hex`) ins
 ## 2026-02-02 - [Performance] Clone Overhead in Particle Hot Loop
 Learning: `CharBounds` was implicitly cloned (memcpy via `Clone` trait, explicitly called) in the `render_line` hot loop for every character with an active particle effect. For high character counts (e.g. 1000 chars), this explicit method call adds unnecessary overhead compared to simple stack copying.
 Action: Derived `Copy` for the `CharBounds` struct (16 bytes) and removed the explicit `.clone()` call. This allows the compiler to optimize the passing of bounds (likely in registers) and removes the semantic overhead of cloning.
+
+## 2026-02-02 - [Performance] Allocation in Expression Hot Loop
+Learning: `FastEvaluationContext::set_index` and `set_progress` were constructing new `Value` enum variants (allocating `Some` and moving data) for every character/op in the render loop. Since `Value` is ~32 bytes, this resulted in significant memory write traffic.
+Action: Optimized `set_index` and `set_progress` to update existing enum variants in-place using pattern matching. Added `get_index_raw` to bypass string matching in `TypewriterLimit` checks.
