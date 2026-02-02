@@ -2,18 +2,19 @@
 
 **Date:** 2024-05-30
 **Scope:** `crates/klyric-renderer`, `crates/klyric-gui`
-**Review Focus:** Particle Optimization (Commit #136) & "Bolt" Follow-up
+**Review Focus:** Particle Optimization (Commit #141) & "Bolt" Follow-up
 
 ## Executive Summary
 
-The codebase is in a healthy state. The recent particle optimizations (Commit #136) and "Bolt" optimizations have been reviewed and verified. These changes significantly reduce allocation overhead and improve rendering performance for the native target. The architecture remains sound, though the WASM target remains broken as expected.
+The codebase is in a healthy state. The recent particle optimizations (Commit #141) and "Bolt" optimizations have been reviewed and verified. These changes significantly reduce allocation overhead and improve rendering performance for the native target. The architecture remains sound, though the WASM target remains broken as expected.
 
 ## 1. Rendering Engine (`klyric-renderer`)
 
 ### Particle Optimization Review
-The recent optimization in `ParticleRenderSystem::update_existing_emitter` (merged in commit #136) was reviewed:
+The recent optimizations in `ParticleRenderSystem` (merged in commit #141) were reviewed:
 
-*   **Redundant Lookups:** The new `update_existing_emitter` method consolidates existence check, bounds update, and override application into a single `HashMap` lookup, replacing the previous 3-lookup pattern.
+*   **CharBounds Pass-by-Value:** `CharBounds` now derives `Copy` and is passed by value in hot loops, eliminating cloning overhead.
+*   **Redundant Lookups:** The `update_existing_emitter` method consolidates existence check, bounds update, and override application into a single `HashMap` lookup.
 *   **Integration:** `LineRenderer::render_line` correctly utilizes this method, further reducing overhead in the hot loop.
 
 ### "Bolt" Optimization Review
