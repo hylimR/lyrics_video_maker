@@ -41,6 +41,9 @@ pub struct FastEvaluationContext {
     count: Option<Value>,
     char_width: Option<Value>,
     char_height: Option<Value>,
+    // Cached constants to return references to
+    pi: Value,
+    e: Value,
 }
 
 impl FastEvaluationContext {
@@ -54,6 +57,8 @@ impl FastEvaluationContext {
             count: ctx.count.map(|v| Value::Int(v as i64)),
             char_width: ctx.char_width.map(Value::Float),
             char_height: ctx.char_height.map(Value::Float),
+            pi: Value::Float(std::f64::consts::PI),
+            e: Value::Float(std::f64::consts::E),
         }
     }
 
@@ -79,7 +84,8 @@ impl Context for FastEvaluationContext {
             "count" => self.count.as_ref(),
             "char_width" => self.char_width.as_ref(),
             "char_height" => self.char_height.as_ref(),
-            "PI" | "math::consts::PI" => Some(&Value::Float(std::f64::consts::PI)),
+            "PI" | "math::consts::PI" => Some(&self.pi),
+            "E" | "math::consts::E" => Some(&self.e),
             _ => None,
         }
     }
@@ -217,5 +223,17 @@ mod tests {
         // sin(t * PI)
         let val = ExpressionEvaluator::evaluate("math::sin(t * math::consts::PI)", &ctx).unwrap();
         assert!((val - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_constants() {
+        let ctx = EvaluationContext::default();
+        // Test PI
+        let val_pi = ExpressionEvaluator::evaluate("PI", &ctx).unwrap();
+        assert!((val_pi - std::f64::consts::PI).abs() < 0.0001);
+
+        // Test E
+        let val_e = ExpressionEvaluator::evaluate("E", &ctx).unwrap();
+        assert!((val_e - std::f64::consts::E).abs() < 0.0001);
     }
 }
