@@ -89,6 +89,10 @@ pub struct LineRenderScratch {
     /// Key: (typeface_id, font_size_bits, glyph_id)
     /// Value: (Path, PathMeasure). We must store Path because PathMeasure refers to it.
     pub path_measure_cache: HashMap<(u32, u64, u16), (skia_safe::Path, skia_safe::PathMeasure)>,
+    /// [Bolt Optimization] Transient cache for StrokeReveal segments to avoid re-segmenting duplicate glyphs.
+    /// Key: (typeface_id, font_size_bits, glyph_id, progress_bits)
+    /// Value: Option<Path>. Stores the result of measure.segment() for the current line's progress.
+    pub segment_cache: HashMap<(u32, u64, u16, u64), Option<skia_safe::Path>>,
 }
 
 impl LineRenderScratch {
@@ -100,6 +104,7 @@ impl LineRenderScratch {
             active_particle_indices: Vec::with_capacity(8),
             local_layer_indices: Vec::with_capacity(4),
             path_measure_cache: HashMap::new(),
+            segment_cache: HashMap::new(),
         }
     }
 }
@@ -181,6 +186,7 @@ impl<'a> LineRenderer<'a> {
 
         // [Bolt Optimization] Use scratch buffers for active effects to avoid per-frame allocation
         scratch.active_transform_indices.clear();
+        scratch.segment_cache.clear();
         for (i, resolved) in effects.transform_effects.iter().enumerate() {
             if EffectEngine::should_trigger(&resolved.effect, &line_ctx) {
                 let p = EffectEngine::calculate_progress(self.time, &resolved.effect, &line_ctx);
@@ -474,20 +480,38 @@ impl<'a> LineRenderer<'a> {
                              };
                              let key = (tf_id, glyph.font_size.to_bits(), glyph.glyph_id);
 
-                             // Safety: PathMeasure refers to SkPath object. We must keep the SkPath object alive.
-                             // We store (Path, PathMeasure) in the cache.
-                             let (_, measure) = scratch.path_measure_cache.entry(key).or_insert_with(|| {
-                                 let p = path.clone();
-                                 let m = skia_safe::PathMeasure::new(&p, false, None);
-                                 (p, m)
-                             });
+                             // [Bolt Optimization] Check per-line segment cache (Duplicate glyph optimization)
+                             let progress_bits = progress.to_bits();
+                             let segment_key = (tf_id, glyph.font_size.to_bits(), glyph.glyph_id, progress_bits);
 
-                             let length = measure.length();
-                             if let Some(partial_path) = measure.segment(0.0, length * progress as f32, true) {
-                                 modified_path_storage = Some(partial_path);
-                                 modified_path_storage.as_ref().unwrap()
+                             if let Some(cached_opt) = scratch.segment_cache.get(&segment_key) {
+                                 if let Some(p) = cached_opt {
+                                     modified_path_storage = Some(p.clone());
+                                     modified_path_storage.as_ref().unwrap()
+                                 } else {
+                                     path
+                                 }
                              } else {
-                                 path
+                                 // Safety: PathMeasure refers to SkPath object. We must keep the SkPath object alive.
+                                 // We store (Path, PathMeasure) in the cache.
+                                 let (_, measure) = scratch.path_measure_cache.entry(key).or_insert_with(|| {
+                                     let p = path.clone();
+                                     let m = skia_safe::PathMeasure::new(&p, false, None);
+                                     (p, m)
+                                 });
+
+                                 let length = measure.length();
+                                 let segment_result = measure.segment(0.0, length * progress as f32, true);
+
+                                 // Store in cache (Clone if present)
+                                 scratch.segment_cache.insert(segment_key, segment_result.clone());
+
+                                 if let Some(partial_path) = segment_result {
+                                     modified_path_storage = Some(partial_path);
+                                     modified_path_storage.as_ref().unwrap()
+                                 } else {
+                                     path
+                                 }
                              }
                          }
                      } else {
