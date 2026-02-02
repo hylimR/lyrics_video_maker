@@ -29,3 +29,7 @@ Action: Replaced `save/restore` blocks with `translate/translate(-)` pairs in th
 ## 2026-02-02 - [Performance] Redundant Shadow/Stroke Parsing in Layout
 Learning: `LayoutEngine::layout_line` re-parsed hex color strings for every character in a line, even if they shared the same override values (e.g. strict importers or bulk edits). While less critical than render loops, this added O(N) string parsing overhead to layout updates.
 Action: Implemented a local cache (`cached_shadow_hex`, `cached_stroke_hex`) inside the layout loop to reuse parsed `skia_safe::Color` values for consecutive characters with identical hex strings.
+
+## 2026-02-02 - [Performance] Clone Overhead in Particle Hot Loop
+Learning: `CharBounds` was implicitly cloned (memcpy via `Clone` trait, explicitly called) in the `render_line` hot loop for every character with an active particle effect. For high character counts (e.g. 1000 chars), this explicit method call adds unnecessary overhead compared to simple stack copying.
+Action: Derived `Copy` for the `CharBounds` struct (16 bytes) and removed the explicit `.clone()` call. This allows the compiler to optimize the passing of bounds (likely in registers) and removes the semantic overhead of cloning.

@@ -30,7 +30,8 @@ impl std::str::FromStr for EffectPreset {
 }
 
 /// Character/syllable bounds for spawning particles
-#[derive(Debug, Clone)]
+/// [Bolt Optimization] Derived Copy to avoid cloning in hot loops (16 bytes)
+#[derive(Debug, Clone, Copy)]
 pub struct CharBounds {
     pub x: f32,
     pub y: f32,

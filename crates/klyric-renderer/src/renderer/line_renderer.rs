@@ -798,9 +798,10 @@ impl<'a> LineRenderer<'a> {
                         // We set context progress just in case overrides need it
                         fast_ctx.set_progress(progress);
 
+                        // [Bolt Optimization] Pass bounds by Copy to avoid clone overhead
                         if self.particle_system.update_existing_emitter(
                             key,
-                            bounds_rect.clone(),
+                            bounds_rect,
                             effect.particle_config.as_ref(),
                             effect.particle_override.as_ref(),
                             Some(&resolved_effect.compiled_expressions),
