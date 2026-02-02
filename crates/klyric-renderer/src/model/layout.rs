@@ -329,6 +329,28 @@ impl RenderTransform {
         }
     }
 
+    /// Create a RenderTransform by overlaying a sparse transform on top of an existing base RenderTransform.
+    /// This is an optimized version of `new` that avoids re-resolving base values.
+    /// [Bolt Optimization]
+    pub fn overlay_transform(&self, t: &Transform) -> Self {
+        Self {
+            x: self.x + t.x_val(),
+            y: self.y + t.y_val(),
+            rotation: self.rotation + t.rotation_val(),
+            scale: self.scale * t.scale_val(),
+            scale_x: self.scale_x * t.scale_x_val(),
+            scale_y: self.scale_y * t.scale_y_val(),
+            opacity: self.opacity * t.opacity_val(),
+            // Logic matches `new`: char transform anchor overrides logic.
+            // t.anchor_x_val() returns t.anchor_x.unwrap_or(0.5).
+            anchor_x: t.anchor_x_val(),
+            anchor_y: t.anchor_y_val(),
+            blur: self.blur + t.blur_val(),
+            glitch_offset: self.glitch_offset + t.glitch_offset_val(),
+            hue_shift: self.hue_shift + t.hue_shift_val(),
+        }
+    }
+
     /// Apply a sparse delta transform (e.g. from prefix optimization)
     pub fn apply_delta(&mut self, delta: &Transform) {
         if let Some(v) = delta.x {

@@ -41,3 +41,8 @@ Action: Optimized `set_index` and `set_progress` to update existing enum variant
 ## 2026-02-02 - [Performance] Redundant Constant Ops in Mixed Effect Lists
 Learning: `EffectEngine::compile_active_effects` used an "all-or-nothing" optimization. If a single dynamic effect (Expression) was present, ALL constant effects were pushed to the render ops vector, causing redundant iteration in the hot loop.
 Action: Implemented granular filtering using `dynamic_seen_mask`. Constant effects are now only pushed to the ops vector if they need to override a preceding dynamic effect for the same property. This reduces the ops vector size in mixed scenarios (e.g. Fade + Wiggle).
+
+## 2026-02-02 - [Performance/Bugfix] RenderTransform Overlay and Mixed Effects
+Learning: The "Bolt" optimization for hoisting constant effects introduced a bug where mixed effects (Constant + Dynamic on different properties) caused the constant effects to be ignored. The optimization logic assumed that if dynamic ops were present, they covered everything, or that the hoisted constants would be applied separately (which they weren't).
+Action: Fixed the bug in `LineRenderer::render_line` by explicitly applying the hoisted constant mask even when dynamic ops are present.
+Optimization: Introduced `RenderTransform::overlay_transform` to optimize the creation of character transforms. This replaces `RenderTransform::new`, avoiding ~12 `unwrap_or` checks per character by using the pre-resolved line transform values directly. This saves ~1.4 million branches/sec at 60fps for 2000 characters.
