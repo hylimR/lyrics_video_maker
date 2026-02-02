@@ -21,3 +21,7 @@ Action: Added `pi` and `e` fields to the struct to store these constants once. U
 ## 2024-05-28 - [Performance] Redundant HashMap Lookups in Particle System
 Learning: The particle system performed 3 separate HashMap lookups per character per frame for active emitters: `has_emitter`, `update_bounds`, and `apply_overrides`. For a typical scene with 500 characters, this is 1500 lookups/frame (90k/sec).
 Action: Consolidated these operations into a single `update_existing_emitter` method using the `HashMap` Entry API (or explicit `get_mut`), reducing the cost to 1 lookup per character per frame (3x reduction in map overhead).
+
+## 2024-05-30 - [Performance] Canvas Save/Restore Overhead for Simple Translations
+Learning: `skia_safe::Canvas::save()` and `restore()` involve stack allocation and clip state management. For simple translations (like shadows and glitch offsets) that don't involve rotation, scale, or clipping, using paired `translate()` calls (translate forward, draw, translate back) is significantly cheaper and avoids the stack overhead.
+Action: Replaced `save/restore` blocks with `translate/translate(-)` pairs in the Shadow and Glitch rendering paths in `LineRenderer::render_line`. This is safe because these blocks only perform translation and do not modify other canvas states.
