@@ -378,6 +378,22 @@ impl RenderTransform {
             && (self.scale_x - 1.0).abs() < 0.001
             && (self.scale_y - 1.0).abs() < 0.001
     }
+
+    /// Combines another RenderTransform into this one (additive/multiplicative).
+    /// Used for applying pre-calculated global layer transforms.
+    pub fn combine(&mut self, other: &RenderTransform) {
+        self.x += other.x;
+        self.y += other.y;
+        self.rotation += other.rotation;
+        self.scale *= other.scale;
+        self.scale_x *= other.scale_x;
+        self.scale_y *= other.scale_y;
+        self.opacity *= other.opacity;
+        self.blur += other.blur;
+        self.glitch_offset += other.glitch_offset;
+        self.hue_shift += other.hue_shift;
+        // Anchors are not accumulated
+    }
 }
 
 #[cfg(test)]

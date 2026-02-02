@@ -794,6 +794,92 @@ impl EffectEngine {
         final_transform
     }
 
+    /// Check if a layer is global (independent of character index).
+    /// Returns true if the layer applies uniformly to all characters in a line.
+    fn is_layer_global(layer: &EffectLayer) -> bool {
+        // Check selector (Allowlist approach)
+        match &layer.selector {
+            Selector::All => {}
+            Selector::Scope(ScopeType::Document) => {}
+            Selector::Scope(ScopeType::Line) => {}
+            Selector::Scope(ScopeType::Char) => {}
+            Selector::TimeRange { .. } => {}
+            // Pattern, Word, Syllable, Text, Tag are potentially index-dependent or context-sensitive
+            _ => return false,
+        }
+
+        // Check modifiers (Allowlist approach)
+        for modifier in &layer.modifiers {
+            match modifier {
+                Modifier::Move(_) => {}
+                Modifier::Scale(_) => {}
+                Modifier::Rotate(_) => {}
+                Modifier::Fade(_) => {}
+                Modifier::Blur(_) => {}
+                Modifier::Jitter(_) => {}
+                Modifier::Perspect(_) => {}
+                Modifier::Color(_) => {} // Safe (no-op or global)
+                // Wave, Appear, Spacing, Emit are potentially index-dependent
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    /// Compute global transform from invariant layers.
+    /// Returns the accumulated transform delta and populates `local_indices` with layers that must be applied per-character.
+    pub fn compute_global_layer_transform(
+        current_time: f64,
+        layers: &[EffectLayer],
+        ctx: &TriggerContext,
+        local_indices: &mut Vec<usize>,
+    ) -> RenderTransform {
+        let mut acc_transform = RenderTransform::default();
+
+        for (i, layer) in layers.iter().enumerate() {
+            if Self::is_layer_global(layer) {
+                if Self::matches_selector(&layer.selector, ctx) {
+                    for modifier in &layer.modifiers {
+                        Self::apply_modifier_to_render(
+                            &mut acc_transform,
+                            modifier,
+                            current_time,
+                            ctx,
+                        );
+                    }
+                }
+            } else {
+                local_indices.push(i);
+            }
+        }
+
+        acc_transform
+    }
+
+    /// Apply specific layers by index to a RenderTransform.
+    pub fn apply_specific_layers_to_render(
+        current_time: f64,
+        mut transform: RenderTransform,
+        layers: &[EffectLayer],
+        indices: &[usize],
+        ctx: &TriggerContext,
+    ) -> RenderTransform {
+        for &idx in indices {
+            let layer = &layers[idx];
+            if Self::matches_selector(&layer.selector, ctx) {
+                for modifier in &layer.modifiers {
+                    Self::apply_modifier_to_render(
+                        &mut transform,
+                        modifier,
+                        current_time,
+                        ctx,
+                    );
+                }
+            }
+        }
+        transform
+    }
+
     fn matches_selector(selector: &Selector, ctx: &TriggerContext) -> bool {
         match selector {
             Selector::All => true,
@@ -1780,5 +1866,75 @@ mod tests {
         } else {
             panic!("Expected Expression");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_global_detection {
+    use super::*;
+    use crate::model::modifiers::*;
+
+    fn make_layer(selector: Selector, modifiers: Vec<Modifier>) -> EffectLayer {
+        EffectLayer {
+            selector,
+            modifiers,
+        }
+    }
+
+    fn make_move() -> Modifier {
+        Modifier::Move(MoveParams {
+            x: ValueDriver::Default,
+            y: ValueDriver::Default,
+        })
+    }
+
+    fn make_wave() -> Modifier {
+        Modifier::Wave(WaveParams {
+            freq: ValueDriver::Default,
+            amp: ValueDriver::Default,
+            speed: ValueDriver::Default,
+        })
+    }
+
+    #[test]
+    fn test_global_allowlist_selectors() {
+        let safe_mods = vec![make_move()];
+
+        assert!(EffectEngine::is_layer_global(&make_layer(Selector::All, safe_mods.clone())));
+        assert!(EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Document), safe_mods.clone())));
+        assert!(EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Line), safe_mods.clone())));
+        assert!(EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Char), safe_mods.clone())));
+        assert!(EffectEngine::is_layer_global(&make_layer(Selector::TimeRange { start: 0.0, end: 1.0 }, safe_mods.clone())));
+    }
+
+    #[test]
+    fn test_global_blocklist_selectors() {
+        let safe_mods = vec![make_move()];
+
+        // Pattern depends on index
+        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Pattern { n: 2, offset: 0 }, safe_mods.clone())));
+
+        // Word/Syllable excluded for safety
+        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Word), safe_mods.clone())));
+        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Scope(ScopeType::Syllable), safe_mods.clone())));
+
+        // Text content
+        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Text { contains: "A".into() }, safe_mods.clone())));
+
+        // Tag
+        assert!(!EffectEngine::is_layer_global(&make_layer(Selector::Tag("tag".into()), safe_mods.clone())));
+    }
+
+    #[test]
+    fn test_global_modifiers() {
+        // Safe selector
+        let sel = Selector::All;
+
+        assert!(EffectEngine::is_layer_global(&make_layer(sel.clone(), vec![make_move()])));
+        // Wave is unsafe
+        assert!(!EffectEngine::is_layer_global(&make_layer(sel.clone(), vec![make_wave()])));
+
+        // Mixed
+        assert!(!EffectEngine::is_layer_global(&make_layer(sel.clone(), vec![make_move(), make_wave()])));
     }
 }
