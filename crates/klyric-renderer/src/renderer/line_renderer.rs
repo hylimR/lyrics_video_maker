@@ -675,25 +675,18 @@ impl<'a> LineRenderer<'a> {
                              height: h * final_transform.scale,
                          };
 
-                         // [Bolt Optimization] Update existing emitter in-place (Zero Allocation Path)
-                         if self.particle_system.has_emitter(key) {
-                             self.particle_system.update_emitter_bounds(key, bounds_rect);
+                         // [Bolt Optimization] Update existing emitter (Single Lookup)
+                         // We set context progress just in case overrides need it
+                         fast_ctx.set_progress(progress);
 
-                             // Only apply overrides if base config exists (matching legacy behavior) and overrides are present
-                             if let Some(base_config) = &effect.particle_config {
-                                 if let Some(overrides) = &effect.particle_override {
-                                     // Reuse context (fixing width/height usage)
-                                     fast_ctx.set_progress(progress);
-
-                                     self.particle_system.apply_emitter_overrides(
-                                         key,
-                                         base_config,
-                                         overrides,
-                                         Some(&resolved_effect.compiled_expressions),
-                                         &fast_ctx
-                                     );
-                                 }
-                             }
+                         if self.particle_system.update_existing_emitter(
+                             key,
+                             bounds_rect.clone(),
+                             effect.particle_config.as_ref(),
+                             effect.particle_override.as_ref(),
+                             Some(&resolved_effect.compiled_expressions),
+                             &fast_ctx
+                         ) {
                              continue;
                          }
 
