@@ -87,6 +87,10 @@ pub struct LineRenderScratch {
     pub active_disintegrate_indices: Vec<(usize, f64, u64)>,
     pub active_particle_indices: Vec<(usize, f64, u64)>,
     pub local_layer_indices: Vec<usize>,
+    /// [Bolt Optimization] Hoisted RenderTransform for constant effects
+    pub active_hoisted_transform: RenderTransform,
+    /// [Bolt Optimization] Bitmask of fields set in hoisted transform
+    pub active_hoisted_mask: u16,
     /// [Bolt Optimization] Cache for PathMeasure to avoid re-scanning paths every frame.
     /// Key: (typeface_id, font_size_bits, glyph_id)
     /// Value: (Path, PathMeasure). We must store Path because PathMeasure refers to it.
@@ -105,6 +109,8 @@ impl LineRenderScratch {
             active_disintegrate_indices: Vec::with_capacity(4),
             active_particle_indices: Vec::with_capacity(8),
             local_layer_indices: Vec::with_capacity(4),
+            active_hoisted_transform: RenderTransform::default(),
+            active_hoisted_mask: 0,
             path_measure_cache: HashMap::new(),
             segment_cache: HashMap::new(),
         }
@@ -219,6 +225,8 @@ impl<'a> LineRenderer<'a> {
             &scratch.active_transform_indices,
             &line_ctx,
             &mut scratch.compiled_ops,
+            &mut scratch.active_hoisted_transform,
+            &mut scratch.active_hoisted_mask,
         );
 
         // [Bolt Optimization] Hoist Disintegration Effect Resolution
@@ -393,11 +401,21 @@ impl<'a> LineRenderer<'a> {
                     fast_ctx.set_index(glyph.char_index);
 
                     // Apply compiled effects
-                    final_transform = EffectEngine::apply_compiled_ops(
-                        final_transform,
-                        &scratch.compiled_ops,
-                        &mut fast_ctx,
-                    );
+                    // [Bolt Optimization] Fast Path: Check if we can use hoisted constant transform
+                    if scratch.compiled_ops.is_empty() {
+                        if scratch.active_hoisted_mask != 0 {
+                            final_transform.apply_mask(
+                                &scratch.active_hoisted_transform,
+                                scratch.active_hoisted_mask,
+                            );
+                        }
+                    } else {
+                        final_transform = EffectEngine::apply_compiled_ops(
+                            final_transform,
+                            &scratch.compiled_ops,
+                            &mut fast_ctx,
+                        );
+                    }
 
                     // Need TriggerContext for layers/other effects
                     let ctx = TriggerContext {

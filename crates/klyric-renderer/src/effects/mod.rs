@@ -35,6 +35,23 @@ pub enum RenderProperty {
 }
 
 impl RenderProperty {
+    pub fn mask_bit(&self) -> u16 {
+        match self {
+            Self::Opacity => 1 << 0,
+            Self::Scale => 1 << 1,
+            Self::ScaleX => 1 << 2,
+            Self::ScaleY => 1 << 3,
+            Self::X => 1 << 4,
+            Self::Y => 1 << 5,
+            Self::Rotation => 1 << 6,
+            Self::Blur => 1 << 7,
+            Self::GlitchOffset => 1 << 8,
+            Self::AnchorX => 1 << 9,
+            Self::AnchorY => 1 << 10,
+            Self::HueShift => 1 << 11,
+        }
+    }
+
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "opacity" => Some(Self::Opacity),
@@ -173,9 +190,13 @@ impl EffectEngine {
         active_indices: &[(usize, f64)],
         ctx: &TriggerContext,
         ops: &mut Vec<CompiledRenderOp>,
+        hoisted_transform: &mut RenderTransform,
+        hoisted_mask: &mut u16,
     ) {
         ops.clear();
         ops.reserve(active_indices.len() * 2);
+        *hoisted_mask = 0;
+        let mut has_dynamic = false;
 
         for (idx, eased_progress) in active_indices {
             let resolved_effect = &effects_source[*idx];
@@ -188,16 +209,21 @@ impl EffectEngine {
                                 AnimatedValue::Range { from, to } => {
                                     // Pre-calculate lerp once per frame
                                     let val = Self::lerp(*from, *to, *eased_progress);
+                                    let val_f32 = val as f32;
                                     ops.push(CompiledRenderOp {
                                         prop,
-                                        value: RenderValueOp::Constant(val as f32),
+                                        value: RenderValueOp::Constant(val_f32),
                                     });
+                                    // [Bolt Optimization] Update hoisted
+                                    apply_property_enum(hoisted_transform, prop, val_f32);
+                                    *hoisted_mask |= prop.mask_bit();
                                 }
                                 AnimatedValue::Expression(expr_str) => {
                                     // Look up compiled expression
                                     if let Some(node) =
                                         resolved_effect.compiled_expressions.get(expr_str)
                                     {
+                                        has_dynamic = true;
                                         ops.push(CompiledRenderOp {
                                             prop,
                                             value: RenderValueOp::Expression(
@@ -206,9 +232,6 @@ impl EffectEngine {
                                             ),
                                         });
                                     } else {
-                                        // Fallback if not compiled? Should ideally not happen if setup correctly.
-                                        // Since we can't easily parse here without returning error or allocating,
-                                        // we just skip or log.
                                         log::trace!("Skipping uncompiled expression: {}", expr_str);
                                     }
                                 }
@@ -217,6 +240,7 @@ impl EffectEngine {
                     }
                 }
                 EffectType::Typewriter => {
+                    has_dynamic = true;
                     // Pre-calculate visible limit logic
                     let total_chars = ctx.char_count.unwrap_or(1) as f64;
                     let visible_limit = *eased_progress * total_chars;
@@ -268,98 +292,95 @@ impl EffectEngine {
 
                     // Emit Constant ops for all keyframe properties
                     if let (Some(s), Some(e)) = (start_kf.opacity, end_kf.opacity) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::Opacity,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::Opacity, val);
+                        *hoisted_mask |= RenderProperty::Opacity.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale, end_kf.scale) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::Scale,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::Scale, val);
+                        *hoisted_mask |= RenderProperty::Scale.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_x, end_kf.scale_x) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::ScaleX,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::ScaleX, val);
+                        *hoisted_mask |= RenderProperty::ScaleX.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.scale_y, end_kf.scale_y) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::ScaleY,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::ScaleY, val);
+                        *hoisted_mask |= RenderProperty::ScaleY.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.rotation, end_kf.rotation) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::Rotation,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::Rotation, val);
+                        *hoisted_mask |= RenderProperty::Rotation.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.x, end_kf.x) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::X,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::X, val);
+                        *hoisted_mask |= RenderProperty::X.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.y, end_kf.y) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::Y,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::Y, val);
+                        *hoisted_mask |= RenderProperty::Y.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.blur, end_kf.blur) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::Blur,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::Blur, val);
+                        *hoisted_mask |= RenderProperty::Blur.mask_bit();
                     }
                     if let (Some(s), Some(e)) = (start_kf.glitch_offset, end_kf.glitch_offset) {
+                        let val = Self::lerp(s as f64, e as f64, segment_eased) as f32;
                         ops.push(CompiledRenderOp {
                             prop: RenderProperty::GlitchOffset,
-                            value: RenderValueOp::Constant(Self::lerp(
-                                s as f64,
-                                e as f64,
-                                segment_eased,
-                            ) as f32),
+                            value: RenderValueOp::Constant(val),
                         });
+                        apply_property_enum(hoisted_transform, RenderProperty::GlitchOffset, val);
+                        *hoisted_mask |= RenderProperty::GlitchOffset.mask_bit();
                     }
                 }
                 _ => {}
             }
+        }
+
+        // [Bolt Optimization] If no dynamic ops (Expression, Typewriter) are present,
+        // clear the ops vector to signal the renderer to use the fast path (hoisted transform only).
+        if !has_dynamic {
+            ops.clear();
         }
     }
 
@@ -1781,13 +1802,20 @@ mod tests {
         let effects_source = vec![resolved];
         let active_indices = vec![(0, 0.5)];
         let mut ops = Vec::new();
-        EffectEngine::compile_active_effects(&effects_source, &active_indices, &ctx, &mut ops);
-        assert_eq!(ops.len(), 1);
-        assert_eq!(ops[0].prop, RenderProperty::Opacity);
-        match &ops[0].value {
-            RenderValueOp::Constant(v) => assert!(approx_eq(*v as f64, 0.5, 1e-6)),
-            _ => panic!("Expected Constant"),
-        }
+        let mut hoisted = RenderTransform::default();
+        let mut mask = 0;
+        EffectEngine::compile_active_effects(
+            &effects_source,
+            &active_indices,
+            &ctx,
+            &mut ops,
+            &mut hoisted,
+            &mut mask,
+        );
+        // Constant ops are now hoisted and cleared from ops
+        assert!(ops.is_empty());
+        assert_eq!(mask, RenderProperty::Opacity.mask_bit());
+        assert!(approx_eq(hoisted.opacity as f64, 0.5, 1e-6));
     }
 
     #[test]
@@ -1817,7 +1845,17 @@ mod tests {
         let effects_source = vec![resolved];
         let active_indices = vec![(0, 0.5)];
         let mut ops = Vec::new();
-        EffectEngine::compile_active_effects(&effects_source, &active_indices, &ctx, &mut ops);
+        let mut hoisted = RenderTransform::default();
+        let mut mask = 0;
+        EffectEngine::compile_active_effects(
+            &effects_source,
+            &active_indices,
+            &ctx,
+            &mut ops,
+            &mut hoisted,
+            &mut mask,
+        );
+        // Typewriter is dynamic, so ops preserved
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::Opacity);
         match &ops[0].value {
@@ -1856,7 +1894,17 @@ mod tests {
         let effects_source = vec![resolved];
         let active_indices = vec![(0, 0.5)];
         let mut ops = Vec::new();
-        EffectEngine::compile_active_effects(&effects_source, &active_indices, &ctx, &mut ops);
+        let mut hoisted = RenderTransform::default();
+        let mut mask = 0;
+        EffectEngine::compile_active_effects(
+            &effects_source,
+            &active_indices,
+            &ctx,
+            &mut ops,
+            &mut hoisted,
+            &mut mask,
+        );
+        // Expression => Dynamic => Ops should be present
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].prop, RenderProperty::X);
 
@@ -1878,6 +1926,56 @@ mod tests {
         } else {
             panic!("Expected Expression");
         }
+    }
+
+    #[test]
+    fn test_hoist_constants() {
+        let ctx = make_context(0.0, 10.0);
+        let mut props = HashMap::new();
+        props.insert(
+            "opacity".to_string(),
+            AnimatedValue::Range { from: 0.0, to: 1.0 },
+        );
+        let effect = Effect {
+            effect_type: EffectType::Transition,
+            trigger: EffectTrigger::Enter,
+            duration: Some(2.0),
+            delay: 0.0,
+            easing: Easing::Linear,
+            properties: props,
+            mode: None,
+            direction: None,
+            keyframes: Vec::new(),
+            preset: None,
+            particle_config: None,
+            iterations: 1,
+            particle_override: None,
+        };
+
+        let resolved = resolve(effect);
+
+        // progress = 0.5
+        let effects_source = vec![resolved];
+        let active_indices = vec![(0, 0.5)];
+        let mut ops = Vec::new();
+        let mut hoisted = RenderTransform::default();
+        let mut mask = 0;
+
+        EffectEngine::compile_active_effects(
+            &effects_source,
+            &active_indices,
+            &ctx,
+            &mut ops,
+            &mut hoisted,
+            &mut mask,
+        );
+
+        // Constant only => ops should be cleared (Fast Path)
+        assert!(ops.is_empty());
+        // Mask should be set
+        assert_eq!(mask, RenderProperty::Opacity.mask_bit());
+        // Hoisted transform should have value
+        assert!(approx_eq(hoisted.opacity as f64, 0.5, 1e-6));
     }
 }
 
