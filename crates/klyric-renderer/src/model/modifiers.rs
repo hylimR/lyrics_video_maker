@@ -182,3 +182,85 @@ pub enum ScopeType {
     Char,
     Syllable,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_modifier_deserialization() {
+        let json = r#"{
+            "type": "Move",
+            "params": {
+                "x": { "mode": "Fixed", "val": 10.0 },
+                "y": { "mode": "Fixed", "val": 20.0 }
+            }
+        }"#;
+
+        let modifier: Modifier = serde_json::from_str(json).unwrap();
+        match modifier {
+            Modifier::Move(params) => {
+                match params.x {
+                    ValueDriver::Fixed { val } => assert_eq!(val, 10.0),
+                    _ => panic!("Expected Fixed"),
+                }
+                match params.y {
+                    ValueDriver::Fixed { val } => assert_eq!(val, 20.0),
+                    _ => panic!("Expected Fixed"),
+                }
+            }
+            _ => panic!("Expected Move"),
+        }
+    }
+
+    #[test]
+    fn test_value_driver_deserialization() {
+        let json_linear = r#"{
+            "mode": "Linear",
+            "start": 0.0,
+            "end": 100.0,
+            "ease": "QuadIn"
+        }"#;
+
+        let driver: ValueDriver = serde_json::from_str(json_linear).unwrap();
+        match driver {
+            ValueDriver::Linear { start, end, ease } => {
+                assert_eq!(start, 0.0);
+                assert_eq!(end, 100.0);
+                match ease {
+                    DriverEasing::QuadIn => {}
+                    _ => panic!("Expected QuadIn"),
+                }
+            }
+            _ => panic!("Expected Linear"),
+        }
+    }
+
+    #[test]
+    fn test_selector_deserialization() {
+        let json_scope = r#"{
+            "mode": "Scope",
+            "args": "Line"
+        }"#;
+
+        let selector: Selector = serde_json::from_str(json_scope).unwrap();
+        match selector {
+            Selector::Scope(ScopeType::Line) => {}
+            _ => panic!("Expected Scope(Line)"),
+        }
+
+        let json_pattern = r#"{
+            "mode": "Pattern",
+            "args": { "n": 2, "offset": 1 }
+        }"#;
+
+        let selector_pattern: Selector = serde_json::from_str(json_pattern).unwrap();
+        match selector_pattern {
+            Selector::Pattern { n, offset } => {
+                assert_eq!(n, 2);
+                assert_eq!(offset, 1);
+            }
+            _ => panic!("Expected Pattern"),
+        }
+    }
+}

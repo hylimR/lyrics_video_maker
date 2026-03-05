@@ -207,3 +207,79 @@ pub enum Easing {
     EaseOutBounce,
     EaseInOutBounce,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_effect_deserialization_defaults() {
+        let json = r#"{
+            "type": "transition"
+        }"#;
+
+        let effect: Effect = serde_json::from_str(json).unwrap();
+        assert_eq!(effect.effect_type, EffectType::Transition);
+        assert_eq!(effect.trigger, EffectTrigger::Enter);
+        assert_eq!(effect.iterations, 1);
+        assert_eq!(effect.delay, 0.0);
+        assert_eq!(effect.easing, Easing::Linear);
+        assert!(effect.duration.is_none());
+    }
+
+    #[test]
+    fn test_animated_value_deserialization() {
+        let json_range = r#"{"from": 0.0, "to": 1.0}"#;
+        let value: AnimatedValue = serde_json::from_str(json_range).unwrap();
+        match value {
+            AnimatedValue::Range { from, to } => {
+                assert_eq!(from, 0.0);
+                assert_eq!(to, 1.0);
+            }
+            _ => panic!("Expected Range"),
+        }
+
+        let json_expr = r#""progress * 100""#;
+        let value: AnimatedValue = serde_json::from_str(json_expr).unwrap();
+        match value {
+            AnimatedValue::Expression(expr) => {
+                assert_eq!(expr, "progress * 100");
+            }
+            _ => panic!("Expected Expression"),
+        }
+    }
+
+    #[test]
+    fn test_keyframe_deserialization() {
+        let json = r#"{
+            "time": 0.5,
+            "opacity": 0.8,
+            "color": "#FF0000",
+            "easing": "easeInOutSine"
+        }"#;
+
+        let kf: Keyframe = serde_json::from_str(json).unwrap();
+        assert_eq!(kf.time, 0.5);
+        assert_eq!(kf.opacity, Some(0.8));
+        assert_eq!(kf.color.as_deref(), Some("#FF0000"));
+        assert_eq!(kf.easing, Some(Easing::EaseInOutSine));
+        assert!(kf.scale.is_none());
+    }
+
+    #[test]
+    fn test_effect_enums_deserialization() {
+        let json_karaoke_mode = r#""wipe""#;
+        let mode: KaraokeMode = serde_json::from_str(json_karaoke_mode).unwrap();
+        match mode {
+            KaraokeMode::Wipe => {}
+            _ => panic!("Expected Wipe"),
+        }
+
+        let json_direction = r#""ttb""#;
+        let dir: Direction = serde_json::from_str(json_direction).unwrap();
+        match dir {
+            Direction::Ttb => {}
+            _ => panic!("Expected Ttb"),
+        }
+    }
+}

@@ -58,3 +58,61 @@ impl Default for Resolution {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_project_deserialization_defaults() {
+        let json = r#"{
+            "title": "Minimal Project",
+            "duration": 60.0,
+            "resolution": { "width": 1280, "height": 720 }
+        }"#;
+
+        let proj: Project = serde_json::from_str(json).unwrap();
+        assert_eq!(proj.title, "Minimal Project");
+        assert_eq!(proj.duration, 60.0);
+        assert_eq!(proj.fps, 30); // Default applied
+        assert!(proj.artist.is_none());
+        assert!(proj.album.is_none());
+        assert!(proj.audio.is_none());
+        assert!(proj.created.is_none());
+        assert!(proj.modified.is_none());
+    }
+
+    #[test]
+    fn test_project_deserialization_full() {
+        let json = r#"{
+            "title": "Full Project",
+            "artist": "Test Artist",
+            "album": "Test Album",
+            "duration": 200.5,
+            "resolution": { "width": 3840, "height": 2160 },
+            "fps": 60,
+            "audio": "audio.mp3",
+            "created": "2023-01-01T00:00:00Z",
+            "modified": "2023-01-02T00:00:00Z"
+        }"#;
+
+        let proj: Project = serde_json::from_str(json).unwrap();
+        assert_eq!(proj.title, "Full Project");
+        assert_eq!(proj.artist.as_deref(), Some("Test Artist"));
+        assert_eq!(proj.album.as_deref(), Some("Test Album"));
+        assert_eq!(proj.duration, 200.5);
+        assert_eq!(proj.resolution.width, 3840);
+        assert_eq!(proj.resolution.height, 2160);
+        assert_eq!(proj.fps, 60);
+        assert_eq!(proj.audio.as_deref(), Some("audio.mp3"));
+        assert_eq!(proj.created.as_deref(), Some("2023-01-01T00:00:00Z"));
+        assert_eq!(proj.modified.as_deref(), Some("2023-01-02T00:00:00Z"));
+    }
+
+    #[test]
+    fn test_resolution_default() {
+        let res = Resolution::default();
+        assert_eq!(res.width, 1920);
+        assert_eq!(res.height, 1080);
+    }
+}

@@ -208,6 +208,83 @@ impl Stroke {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_style_deserialization_defaults() {
+        let json = r#"{}"#;
+        let style: Style = serde_json::from_str(json).unwrap();
+        assert!(style.extends.is_none());
+        assert!(style.font.is_none());
+        assert!(style.colors.is_none());
+        assert!(style.stroke.is_none());
+        assert!(style.shadow.is_none());
+        assert!(style.glow.is_none());
+        assert!(style.transform.is_none());
+        assert!(style.effects.is_none());
+        assert!(style.layers.is_none());
+    }
+
+    #[test]
+    fn test_font_defaults() {
+        let font = Font::default();
+        assert_eq!(font.family_or_default(), "Noto Sans SC");
+        assert_eq!(font.size_or_default(), 72.0);
+        assert_eq!(font.weight_or_default(), 700);
+        match font.style_or_default() {
+            FontStyle::Normal => {}
+            _ => panic!("Expected Normal font style"),
+        }
+        assert_eq!(font.letter_spacing_or_default(), 0.0);
+    }
+
+    #[test]
+    fn test_stroke_defaults() {
+        let stroke = Stroke::default();
+        assert_eq!(stroke.width_or_default(), 0.0);
+        assert_eq!(stroke.color_or_default(), "");
+    }
+
+    #[test]
+    fn test_shadow_defaults() {
+        let shadow = Shadow::default();
+        assert_eq!(shadow.x_or_default(), 2.0);
+        assert_eq!(shadow.y_or_default(), 2.0);
+        assert_eq!(shadow.blur_or_default(), 4.0);
+        assert_eq!(shadow.color_or_default(), "");
+    }
+
+    #[test]
+    fn test_glow_defaults() {
+        let glow = Glow::default();
+        assert_eq!(glow.blur_or_default(), 8.0);
+        assert_eq!(glow.intensity_or_default(), 0.5);
+        assert_eq!(glow.color_or_default(), "");
+    }
+
+    #[test]
+    fn test_fill_stroke_custom_deserialization_string() {
+        let json = r#""#FFFFFF""#;
+        let fs: FillStroke = serde_json::from_str(json).unwrap();
+        assert_eq!(fs.fill.as_deref(), Some("#FFFFFF"));
+        assert!(fs.stroke.is_none());
+    }
+
+    #[test]
+    fn test_fill_stroke_custom_deserialization_object() {
+        let json = r#"{
+            "fill": "#FF0000",
+            "stroke": "#00FF00",
+            "ignored_field": "test"
+        }"#;
+        let fs: FillStroke = serde_json::from_str(json).unwrap();
+        assert_eq!(fs.fill.as_deref(), Some("#FF0000"));
+        assert_eq!(fs.stroke.as_deref(), Some("#00FF00"));
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Shadow {
