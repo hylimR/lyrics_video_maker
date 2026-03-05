@@ -318,11 +318,9 @@ impl RenderTransform {
             scale_x: line.scale_x_val() * char_t.scale_x_val(),
             scale_y: line.scale_y_val() * char_t.scale_y_val(),
             opacity: line.opacity_val() * char_t.opacity_val(),
-            // Anchor is usually not additive, char overrides line if present, but here we just follow line renderer which was taking char_val.
-            // Wait, LineRenderer was: anchor_x: Some(char_transform_ref.anchor_x_val())
-            // It completely ignored line_transform for anchor!
-            anchor_x: char_t.anchor_x_val(),
-            anchor_y: char_t.anchor_y_val(),
+            // Anchor is usually not additive, char overrides line if present.
+            anchor_x: char_t.anchor_x.unwrap_or_else(|| line.anchor_x_val()),
+            anchor_y: char_t.anchor_y.unwrap_or_else(|| line.anchor_y_val()),
             blur: line.blur_val() + char_t.blur_val(),
             glitch_offset: line.glitch_offset_val() + char_t.glitch_offset_val(),
             hue_shift: line.hue_shift_val() + char_t.hue_shift_val(),
@@ -342,9 +340,8 @@ impl RenderTransform {
             scale_y: self.scale_y * t.scale_y_val(),
             opacity: self.opacity * t.opacity_val(),
             // Logic matches `new`: char transform anchor overrides logic.
-            // t.anchor_x_val() returns t.anchor_x.unwrap_or(0.5).
-            anchor_x: t.anchor_x_val(),
-            anchor_y: t.anchor_y_val(),
+            anchor_x: t.anchor_x.unwrap_or(self.anchor_x),
+            anchor_y: t.anchor_y.unwrap_or(self.anchor_y),
             blur: self.blur + t.blur_val(),
             glitch_offset: self.glitch_offset + t.glitch_offset_val(),
             hue_shift: self.hue_shift + t.hue_shift_val(),
